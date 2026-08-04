@@ -1,0 +1,12 @@
+Package: com.xyy.awemeliquidbar
+Name: AwemeLiquidBar
+Version: 1.0.37
+Architecture: iphoneos-arm
+Description: Selectable Clear/regular Liquid Glass for top and right controls, with restored icon modes, actual-size original-colour PNG rendering, and original-bar visibility mirroring.
+Maintainer: xyy
+Author: xyy
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 15.0)
+Conflicts: com.xyy.awemeliquidbar.r2force, com.xyy.awemeliquidbar.homenativebuttons
+Replaces: com.xyy.awemeliquidbar.r2force, com.xyy.awemeliquidbar.homenativebuttons
+Provides: com.xyy.awemeliquidbar.homenativebuttons

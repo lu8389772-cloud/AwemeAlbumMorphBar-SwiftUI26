@@ -1,0 +1,12 @@
+AwemeLiquidBar 1.0.37 release test protocol
+
+1. Settings title and installed package version both show 1.0.37.
+2. Confirm “顶部与右侧按钮色调模式” is available on both iOS 26 and iOS 27 and defaults OFF after a clean install.
+3. With the switch OFF, menu/Search/right-side controls use the existing pure Clear Glass material.
+4. With the switch ON, those same controls rebuild with regular/tinted Liquid Glass; Automatic SF Symbol foreground is left to the system material.
+5. Toggle the switch while the Home feed is visible. Existing hosts must refresh immediately without restarting Douyin.
+6. Test Automatic, White, Black, Accent and Custom SF Symbol colour modes in both glass materials. Explicit modes must remain explicit.
+7. Enable custom PNG mode. PNG colours, alpha and aspect ratio must be identical in Clear and tinted glass modes. A 30 x 30 PNG must remain 30 x 30; only artwork exceeding its doubled ceiling may be reduced.
+8. Selected Like remains pink and selected Favorite remains yellow in Automatic mode.
+9. Top and bottom Search remain mutually exclusive.
+10. The independent bottom bar, its iOS 27 force-dark option, authorization and route visibility mirroring remain unchanged.

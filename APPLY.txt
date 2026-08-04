@@ -1,0 +1,6 @@
+cd /var/mobile/AwemeAlbumMorphBar-SwiftUI26
+unzip -o /var/mobile/AwemeLiquidBar_1.0.37_preserve_actual_png_size_patch.zip -d .
+sh apply_patch_1.0.37.sh
+git add -A
+git commit -m "Preserve imported PNG actual size 1.0.37"
+git push origin main
