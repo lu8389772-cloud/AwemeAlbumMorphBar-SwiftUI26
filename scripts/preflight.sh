@@ -18,15 +18,15 @@ required = [
     'TAB_CONTROLLER_SOURCE_BIND_DISABLED',
     'albumMorphProbe(',
     'AWEPhotosExactGlassButtonHostView',
-    '.buttonStyle(.glass(.clear))',
-    '.buttonStyle(.glass)',
+    '.glassEffect(.clear.interactive(), in: Capsule())',
+    '.glassEffect(.regular.interactive(), in: Capsule())',
     'let tintedGlass: Bool',
     'lastTintedGlass',
-    '.buttonBorderShape(.circle)',
-    'private var resolvedIconLimit: CGFloat',
-    'preserveOriginalImage ? pointSize * 2.0 : pointSize',
+    '.contentShape(Capsule())',
+    'let designScale: CGFloat = 3.0',
+    'let maximumPixelEdge: CGFloat = 100.0',
     'private var resolvedIconSize: CGSize',
-    'PNG keeps its actual size and aspect ratio',
+    'Original-colour PNG: preserve pixel-authored size, ratio and alpha.',
 ]
 for token in required:
     if token not in s:
@@ -46,7 +46,7 @@ s = Path('Tweak.x').read_text()
 required = [
     'AWEApplyAlbumMorphResolvedAppearance',
     'ALBUM_MORPH_APPEARANCE',
-    'Native minimization is intentionally disabled in 1.0.37',
+    'Native minimization is intentionally disabled in 1.0.39',
     'AWEAlbumMorphProbeWrite',
     'AWEForceAlbumMorphRouteRecovery',
     'HEIGHT_SYNC_FIXED saved=',
@@ -57,8 +57,7 @@ required = [
     'kAWEAlbumMorphItemOrderDefaultsKey',
     'AWEPhotosExactGlassButtonHostView',
     'updateWithImage:image',
-    'const CGFloat diameter = 32.0;',
-    'const CGFloat diameter = 34.0;',
+    'const CGFloat diameter = 46.0;',
     '- (void)setTintColor:(UIColor *)tintColor',
     'PNG is a separate original-colour path.',
     'All SF Symbols remain templates.',
@@ -69,7 +68,7 @@ required = [
     '@"调整底栏按钮布局"',
     'initWithArrangedSubviews:@[masterRow, albumButtonsButton]',
     'configuration.baseForegroundColor = buttonForeground;',
-    'PNG 按图片实际宽高显示，小图不会自动放大',
+    'PNG 按源文件像素以 @3x 显示',
     'pngRow, pngHint, reloadPNG',
 ]
 for token in required:
@@ -134,17 +133,17 @@ objc = Path('Tweak.x').read_text()
 if 'foregroundColor.map { Color(uiColor: $0) } ?? Color.primary' in swift:
     raise SystemExit('automatic glass icon color is still overridden by Color.primary')
 for token in [
-    'private var resolvedIconLimit: CGFloat',
-    'preserveOriginalImage ? pointSize * 2.0 : pointSize',
+    'let designScale: CGFloat = 3.0',
+    'let maximumPixelEdge: CGFloat = 100.0',
     'private var resolvedIconSize: CGSize',
-    'PNG keeps its actual size and aspect ratio',
+    'Original-colour PNG: preserve pixel-authored size, ratio and alpha.',
     'else if let foregroundColor',
     'base.foregroundStyle(Color(uiColor: foregroundColor))',
 ]:
     if token not in swift:
         raise SystemExit(f'missing Swift icon-pipeline token: {token}')
-if objc.count('const CGFloat diameter = 32.0;') != 1:
-    raise SystemExit('right-side diameter token is missing or duplicated')
+if objc.count('const CGFloat diameter = 46.0;') != 2:
+    raise SystemExit('top/right 46 pt diameter tokens are missing or duplicated')
 for token in [
     'PNG is a separate original-colour path.',
     'All SF Symbols remain templates.',
@@ -236,54 +235,37 @@ from pathlib import Path
 swift = Path('AwemeAlbumMorphBar.swift').read_text()
 objc = Path('Tweak.x').read_text()
 for token in [
-    'private var resolvedIconLimit: CGFloat',
-    'preserveOriginalImage ? pointSize * 2.0 : pointSize',
-    'let limit = resolvedIconLimit',
-    'let downscale = min(limit / source.width, limit / source.height)',
-    'let scale = min(1.0, downscale)',
+    'let designScale: CGFloat = 3.0',
+    'let maximumPixelEdge: CGFloat = 100.0',
+    'let pixelDownscale = min(',
+    'let scale = min(1.0, pixelDownscale)',
+    '.glassEffect(.clear.interactive(), in: Capsule())',
+    '.glassEffect(.regular.interactive(), in: Capsule())',
+    '.contentShape(Capsule())',
+    'A 46x46 square Capsule is a true circle.',
 ]:
     if token not in swift:
-        raise SystemExit(f'missing doubled PNG range token: {token}')
+        raise SystemExit(f'missing 46 pt capsule/PNG token: {token}')
+if swift.count('.frame(width: controlSize, height: controlSize)') < 3:
+    raise SystemExit('fixed square glass/icon frames are missing')
+if objc.count('const CGFloat diameter = 46.0;') != 2:
+    raise SystemExit('top and right glass bodies must both be 46 pt')
 for token in [
-    'PNG 按图片实际宽高显示，小图不会自动放大',
+    '玻璃按钮本体固定为 46×46 pt',
+    'PNG 按源文件像素以 @3x 显示',
+    '任一边超过 100 px 时才等比例缩小',
     '透明留白也会计入尺寸',
-    'pngRow, pngHint, reloadPNG',
 ]:
     if token not in objc:
-        raise SystemExit(f'missing PNG sizing hint token: {token}')
-if '.frame(width: pointSize * 2.0' in swift:
-    raise SystemExit('PNG range must preserve aspect-ratio calculation, not force a square frame')
-if 'let scale = downscale' in swift:
-    raise SystemExit('PNG artwork is still unconditionally enlarged to the ceiling')
-print('Actual-size bounded original-PNG preflight passed')
-PY_PNG_RANGE
-
-python3 - <<'PY_TINTED_GLASS'
-from pathlib import Path
-swift = Path('AwemeAlbumMorphBar.swift').read_text()
-objc = Path('Tweak.x').read_text()
-for token in [
-    'let tintedGlass: Bool',
-    'if tintedGlass {',
+        raise SystemExit(f'missing 46 pt/PNG settings hint: {token}')
+for forbidden in [
     '.buttonStyle(.glass)',
     '.buttonStyle(.glass(.clear))',
-    'lastTintedGlass == tintedGlass',
+    '.glassEffect(.clear, in: Circle())',
+    '.glassEffect(.regular, in: Circle())',
+    'preserveOriginalImage ? pointSize * 2.0 : pointSize',
 ]:
-    if token not in swift:
-        raise SystemExit(f'missing selectable-glass Swift token: {token}')
-for token in [
-    'kAWEHomeTintedGlassDefaultsKey',
-    'static BOOL AWEHomeTintedGlassEnabled(void)',
-    'boolForKey:kAWEHomeTintedGlassDefaultsKey',
-    '@"顶部与右侧按钮色调模式"',
-    '- (void)tintedGlassSwitchChanged:(UISwitch *)sender',
-]:
-    if token not in objc:
-        raise SystemExit(f'missing selectable-glass Objective-C token: {token}')
-if objc.count('tintedGlass:AWEHomeTintedGlassEnabled()') != 2:
-    raise SystemExit('tinted glass mode must feed exactly the top and right-side hosts')
-section = objc[objc.find('static BOOL AWEHomeTintedGlassEnabled'):objc.find('static BOOL AWETopTelegramSwitcherEnabled')]
-if 'return AWEIsIOS27OrLater();' in section:
-    raise SystemExit('tinted glass mode must default OFF on iOS 27 as well')
-print('Selectable Clear/regular glass mode preflight passed')
-PY_TINTED_GLASS
+    if forbidden in swift:
+        raise SystemExit(f'old padded/non-stretchable implementation remains: {forbidden}')
+print('True 46 pt square-Capsule and @3x bounded PNG preflight passed')
+PY_PNG_RANGE

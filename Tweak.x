@@ -10,16 +10,18 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.37 — selectable clear/regular glass for top and right controls
+ AwemeLiquidBar 1.0.39 — true 46 pt square-capsule glass and pixel-authored PNG sizing
 
- Release delta from 1.0.35:
- - keeps pure Clear Glass as the default on both iOS 26 and iOS 27;
- - restores the previous regular/tinted SwiftUI Liquid Glass as an optional
-   setting for the top-left menu, fallback top Search, and right-side actions;
- - leaves Automatic SF Symbol foreground unset so the selected glass material
-   can resolve it, while explicit White/Black/Accent/Custom modes remain fixed;
- - preserves original-colour PNG rendering, doubled PNG display range, bottom
-   bar visibility mirroring, authorization, and iOS 27 bottom-bar force-dark.
+ Release delta from 1.0.37:
+ - replaces the padded GlassButtonStyle shell (private 56 x 46 interaction view)
+   with an explicit 46 x 46 SwiftUI glass body for all top/right controls;
+ - uses Capsule rather than Circle, so the square body is a circle at rest and
+   can become a native pill/oval when its frame is stretched;
+ - keeps Clear Glass as default and the optional regular/tinted material switch;
+ - interprets imported PNG files by source pixels as @3x artwork: 30 px renders
+   near 10 pt, 100 px near 33.3 pt, and only edges over 100 px are reduced;
+ - preserves icon colour modes, original-colour PNGs, search mutual exclusion,
+   original-bottom-bar visibility mirroring, authorization, and iOS 27 force-dark.
 
  Native-only delta from the verified 0.0.20a baseline:
  - preserves UIKit._UITabBarPlatterView, _UILiquidLensView, native item layout,
@@ -174,7 +176,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 @end
 
 /*
- 1.0.37: these helpers are used by the bottom-search configuration saver
+ 1.0.39: these helpers are used by the bottom-search configuration saver
  before the main forward-declaration block later in the file. Keep their
  static prototypes here so Clang never creates implicit int declarations.
 */
@@ -733,7 +735,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.37_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.39_interaction.log"] copy];
     });
     return path;
 }
@@ -782,7 +784,7 @@ static void AWEInteractionDiagnosticWrite(NSString *format, ...) {
     });
 }
 
-#pragma mark - 1.0.37 bounded route / scroll probe
+#pragma mark - 1.0.39 bounded route / scroll probe
 
 static dispatch_queue_t AWEAlbumMorphProbeQueue(void) {
     static dispatch_queue_t queue;
@@ -802,7 +804,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.37_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.39_probe.log"] copy];
     });
     return path;
 }
@@ -2684,7 +2686,7 @@ static void AWEEnsureHomeCustomIconsDirectory(void) {
          "comment.png（评论不区分选中状态）\n"
          "favorite.png\nfavorite_selected.png\n"
          "share.png（分享不区分选中状态）\n\n"
-         "PNG 按图片实际宽高显示，小图不会自动放大；仅当任一边超过最大范围（约为内置 SF 图标的 2 倍）时才等比例缩小。透明留白也会计入尺寸。\n\n"
+         "玻璃按钮本体固定为 46×46 pt。PNG 按源文件像素以 @3x 显示：30×30 px 约为 10×10 pt，100×100 px 约为 33.3×33.3 pt；小图不放大，任一边超过 100 px 时才等比例缩小。透明留白也会计入尺寸。\n\n"
          "只有点赞和收藏支持 selected 文件；缺少 selected 文件时继续使用普通文件，缺少普通文件时回退到内置 SF Symbol。\n";
     [guide writeToFile:guidePath atomically:YES
               encoding:NSUTF8StringEncoding error:nil];
@@ -6292,7 +6294,7 @@ static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
                                         AWEHomeActionKind kind,
                                         BOOL selected,
                                         CGPoint center) {
-    const CGFloat diameter = 32.0;
+    const CGFloat diameter = 46.0;
     const CGFloat symbolSize = (kind == AWEHomeActionKindShare) ? 20.0 : 21.0;
     NSString *symbolKey = AWEHomeActionSymbolKey(kind, selected);
     BOOL originalPNG = NO;
@@ -7708,7 +7710,7 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     return YES;
 }
 
-/* Native minimization is intentionally disabled in 1.0.37. The overlay
+/* Native minimization is intentionally disabled in 1.0.39. The overlay
    controller remains isolated from all Douyin UIScrollView instances. */
 
 static AWEHomeTopSlotView *AWEEnsureTopSlot(UIView *container,
@@ -7784,7 +7786,7 @@ static void AWEConfigureTopSlot(UIView *container,
     AWEHomeTopSlotView *slot = AWEEnsureTopSlot(container, kind);
     if (!slot) return;
 
-    const CGFloat diameter = 34.0;
+    const CGFloat diameter = 46.0;
     CGPoint center = kind == AWEHomeTopActionKindSearch
         ? CGPointMake(CGRectGetWidth(container.bounds) - 44.0,
                       CGRectGetMidY(container.bounds))
@@ -9135,7 +9137,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.37";
+    self.title = @"LiquidBar 设置 · 1.0.39";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -9623,7 +9625,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
     pngRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *pngHint = [UILabel new];
-    pngHint.text = @"PNG 按图片实际宽高显示，小图不会自动放大；仅当任一边超过最大范围（约为内置 SF 图标的 2 倍）时才等比例缩小。透明留白也会计入尺寸。";
+    pngHint.text = @"玻璃按钮本体固定为 46×46 pt。PNG 按源文件像素以 @3x 显示：30×30 px 约为 10×10 pt，100×100 px 约为 33.3×33.3 pt；小图不放大，任一边超过 100 px 时才等比例缩小。透明留白也会计入尺寸。";
     pngHint.font = [UIFont systemFontOfSize:11.5 weight:UIFontWeightRegular];
     pngHint.textColor = UIColor.tertiaryLabelColor;
     pngHint.numberOfLines = 0;
@@ -10158,7 +10160,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.37 image=%@ ==========" ,
+            @"========== START build=1.0.39 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -10215,7 +10217,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.37 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.39 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -10230,7 +10232,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.37_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.39_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -11722,7 +11724,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.37 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.39 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWETopTelegramSwitcherEnabledDefaultsKey];
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWEHomeForceDarkGlassDefaultsKey];

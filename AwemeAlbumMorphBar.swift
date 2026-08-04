@@ -12,27 +12,39 @@ private struct AWEPhotosExactGlassIconButton: View {
     let preserveOriginalImage: Bool
     let tintedGlass: Bool
 
-    private var resolvedIconLimit: CGFloat {
-        // Original-colour PNGs may use any size up to this ceiling.
-        // The ceiling is twice the SF Symbol point size, but smaller PNGs are
-        // never enlarged to it. SF Symbols retain their native point size.
-        preserveOriginalImage ? pointSize * 2.0 : pointSize
-    }
-
     private var resolvedIconSize: CGSize {
-        let limit = resolvedIconLimit
         guard preserveOriginalImage else {
-            return CGSize(width: limit, height: limit)
+            return CGSize(width: pointSize, height: pointSize)
         }
-        let source = image.size
-        guard source.width > 0.0, source.height > 0.0 else {
-            return CGSize(width: limit, height: limit)
+
+        // Imported PNG artwork is authored in source pixels. Interpret the
+        // file as an @3x asset: 30x30 px -> 10x10 pt, 100x100 px ->
+        // 33.33x33.33 pt. Small files keep their authored size; only artwork
+        // whose longest edge exceeds 100 px is reduced proportionally.
+        let pixelWidth: CGFloat
+        let pixelHeight: CGFloat
+        if let cgImage = image.cgImage {
+            pixelWidth = CGFloat(cgImage.width)
+            pixelHeight = CGFloat(cgImage.height)
+        } else {
+            pixelWidth = image.size.width * image.scale
+            pixelHeight = image.size.height * image.scale
         }
-        // Preserve the PNG's actual logical size whenever it already fits.
-        // Only oversized artwork is reduced to the configured ceiling.
-        let downscale = min(limit / source.width, limit / source.height)
-        let scale = min(1.0, downscale)
-        return CGSize(width: source.width * scale, height: source.height * scale)
+        guard pixelWidth > 0.0, pixelHeight > 0.0 else {
+            return .zero
+        }
+
+        let designScale: CGFloat = 3.0
+        let maximumPixelEdge: CGFloat = 100.0
+        let pixelDownscale = min(
+            maximumPixelEdge / pixelWidth,
+            maximumPixelEdge / pixelHeight
+        )
+        let scale = min(1.0, pixelDownscale)
+        return CGSize(
+            width: pixelWidth * scale / designScale,
+            height: pixelHeight * scale / designScale
+        )
     }
 
     @ViewBuilder
@@ -47,7 +59,7 @@ private struct AWEPhotosExactGlassIconButton: View {
             .frame(width: controlSize, height: controlSize)
 
         if preserveOriginalImage {
-            // PNG keeps its actual size and aspect ratio; no enlargement or template tint.
+            // Original-colour PNG: preserve pixel-authored size, ratio and alpha.
             base
         } else if let foregroundColor {
             // Explicit white/black/accent/custom modes tint only SF Symbols.
@@ -60,25 +72,27 @@ private struct AWEPhotosExactGlassIconButton: View {
 
     @ViewBuilder
     var body: some View {
+        // A 46x46 square Capsule is a true circle. Unlike Circle(), Capsule()
+        // can become a native pill/oval if its frame is later stretched. Apply
+        // glass directly so the material body is exactly 46x46 rather than the
+        // 56x46 private interaction shell produced by GlassButtonStyle.
         if tintedGlass {
-            Button(action: {}) {
-                icon
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
+            icon
+                .frame(width: controlSize, height: controlSize)
+                .contentShape(Capsule())
+                .glassEffect(.regular.interactive(), in: Capsule())
         } else {
-            Button(action: {}) {
-                icon
-            }
-            .buttonStyle(.glass(.clear))
-            .buttonBorderShape(.circle)
+            icon
+                .frame(width: controlSize, height: controlSize)
+                .contentShape(Capsule())
+                .glassEffect(.clear.interactive(), in: Capsule())
         }
     }
 }
 
 /// SwiftUI Liquid Glass host for the top and right-side controls.
-/// Clear mode uses `.glass(.clear)`; the optional tint mode restores `.glass`.
-/// No UIKit replacement material, custom border, or background fill is added.
+/// Clear mode uses interactive `.clear`; tint mode uses interactive `.regular`.
+/// The visible material body is a fixed 46x46 square Capsule.
 @available(iOS 26.0, *)
 @objc(AWEPhotosExactGlassButtonHostView)
 final class AWEPhotosExactGlassButtonHostView: UIView {

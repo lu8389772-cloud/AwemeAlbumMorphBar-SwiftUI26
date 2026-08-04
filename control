@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.37
+Version: 1.0.39
 Architecture: iphoneos-arm
-Description: Selectable Clear/regular Liquid Glass for top and right controls, with restored icon modes, actual-size original-colour PNG rendering, and original-bar visibility mirroring.
+Description: True 46 pt square-Capsule Liquid Glass for top/right controls, with selectable clear/tinted material and @3x 100 px bounded original-colour PNG sizing.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

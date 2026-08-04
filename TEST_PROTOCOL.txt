@@ -1,12 +1,15 @@
-AwemeLiquidBar 1.0.37 release test protocol
+AwemeLiquidBar 1.0.39 test protocol
 
-1. Settings title and installed package version both show 1.0.37.
-2. Confirm “顶部与右侧按钮色调模式” is available on both iOS 26 and iOS 27 and defaults OFF after a clean install.
-3. With the switch OFF, menu/Search/right-side controls use the existing pure Clear Glass material.
-4. With the switch ON, those same controls rebuild with regular/tinted Liquid Glass; Automatic SF Symbol foreground is left to the system material.
-5. Toggle the switch while the Home feed is visible. Existing hosts must refresh immediately without restarting Douyin.
-6. Test Automatic, White, Black, Accent and Custom SF Symbol colour modes in both glass materials. Explicit modes must remain explicit.
-7. Enable custom PNG mode. PNG colours, alpha and aspect ratio must be identical in Clear and tinted glass modes. A 30 x 30 PNG must remain 30 x 30; only artwork exceeding its doubled ceiling may be reduced.
-8. Selected Like remains pink and selected Favorite remains yellow in Automatic mode.
-9. Top and bottom Search remain mutually exclusive.
-10. The independent bottom bar, its iOS 27 force-dark option, authorization and route visibility mirroring remain unchanged.
+1. Confirm Settings title reports 1.0.39.
+2. With top/right tinted mode OFF, inspect menu/search/right controls: the material body should occupy a square 46 x 46 pt frame and appear circular.
+3. Stretch the host frame horizontally in FLEX: Capsule geometry should become a pill/oval instead of remaining a fixed Circle.
+4. Repeat with tinted mode ON and confirm the same 46 pt geometry.
+5. Import PNG test files:
+   - 30x30 px should render near 10x10 pt.
+   - 60x60 px should render near 20x20 pt.
+   - 100x100 px should render near 33.3x33.3 pt.
+   - 200x100 px should reduce to about 33.3x16.7 pt.
+6. Confirm PNG colour and transparent margins remain unchanged.
+7. Confirm SF Symbol Automatic/White/Black/Accent/Custom modes still work.
+8. Confirm top Search disappears when bottom Search is enabled and returns when disabled.
+9. Confirm bottom-bar visibility still mirrors the original Douyin bar across routes.
