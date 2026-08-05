@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.39
+Version: 1.0.40b
 Architecture: iphoneos-arm
-Description: True 46 pt square-Capsule Liquid Glass for top/right controls, with selectable clear/tinted material and @3x 100 px bounded original-colour PNG sizing.
+Description: Native iOS 26 four-item Liquid Glass source-to-menu test for the Douyin home top-left button, with Live, Shop, Following and Recommended actions.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

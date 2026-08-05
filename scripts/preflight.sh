@@ -46,7 +46,7 @@ s = Path('Tweak.x').read_text()
 required = [
     'AWEApplyAlbumMorphResolvedAppearance',
     'ALBUM_MORPH_APPEARANCE',
-    'Native minimization is intentionally disabled in 1.0.39',
+    'Native minimization is intentionally disabled in 1.0.40b',
     'AWEAlbumMorphProbeWrite',
     'AWEForceAlbumMorphRouteRecovery',
     'HEIGHT_SYNC_FIXED saved=',
@@ -229,6 +229,36 @@ for match in re.finditer(r'AWEInstallOrUpdateAlbumMorphBar\s*\((.*?)\)\s*;', s, 
         raise SystemExit('Album Morph install call still passes YES')
 print('Original-bar visibility mirroring preflight passed')
 PY_VISIBILITY
+
+python3 - <<'PY_NATIVE_MENU'
+from pathlib import Path
+s = Path('Tweak.x').read_text()
+required = [
+    '#pragma mark - Native top-left four-action Liquid Glass menu',
+    '[UIAction actionWithTitle:title',
+    '[UIMenu menuWithTitle:@"" children:children]',
+    'button.menu = menu;',
+    'button.showsMenuAsPrimaryAction = YES;',
+    'menu.preferredElementSize = UIMenuElementSizeLarge;',
+    '@{@"title": @"直播", @"symbol": @"play.rectangle"}',
+    '@{@"title": @"商城", @"symbol": @"storefront"}',
+    '@{@"title": @"关注", @"symbol": @"person.2"}',
+    '@{@"title": @"推荐", @"symbol": @"sparkles"}',
+]
+for token in required:
+    if token not in s:
+        raise SystemExit(f'missing native four-action menu token: {token}')
+for forbidden in [
+    'UIDeferredMenuElement',
+    'uncachedElementWithProvider:',
+    'completion(@[])',
+]:
+    if forbidden in s:
+        raise SystemExit(f'empty deferred-menu experiment remains: {forbidden}')
+if s.count('@{@"title": @"直播"') != 1 or s.count('@{@"title": @"商城"') < 1 or s.count('@{@"title": @"关注"') != 1 or s.count('@{@"title": @"推荐"') != 1:
+    raise SystemExit('native quick-menu definitions are missing or duplicated')
+print('Native four-action Liquid Glass menu preflight passed')
+PY_NATIVE_MENU
 
 python3 - <<'PY_PNG_RANGE'
 from pathlib import Path

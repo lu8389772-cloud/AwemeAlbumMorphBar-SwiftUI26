@@ -10,7 +10,19 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.39 — true 46 pt square-capsule glass and pixel-authored PNG sizing
+ AwemeLiquidBar 1.0.40b — native four-item top-left Liquid Glass menu
+
+ 1.0.40b experiment:
+ - turns the replacement top-left glass control itself into the UIKit menu source;
+ - embeds the existing 46 pt SwiftUI Liquid Glass body inside the real UIButton,
+   so UIKit snapshots the visible glass rather than a transparent hit proxy;
+ - assigns a native UIMenu containing four synchronous UIAction children and
+   enables showsMenuAsPrimaryAction, entering the same system-owned source-to-menu
+   morph path used by the latest WCGlass home-plus implementation;
+ - presents four full-width rows — 直播、商城、关注、推荐 — and attempts to
+   activate the matching visible Douyin top channel after selection;
+ - right-side actions, top Search, bottom bar, authorization and all 1.0.39
+   appearance behavior remain unchanged.
 
  Release delta from 1.0.37:
  - replaces the padded GlassButtonStyle shell (private 56 x 46 interaction view)
@@ -176,7 +188,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 @end
 
 /*
- 1.0.39: these helpers are used by the bottom-search configuration saver
+ 1.0.40b: these helpers are used by the bottom-search configuration saver
  before the main forward-declaration block later in the file. Keep their
  static prototypes here so Clang never creates implicit int declarations.
 */
@@ -226,6 +238,8 @@ static char kAWEHomeActionStackRetryGenerationKey;
 static char kAWEHomeActionStackApplyingKey;
 static char kAWEHomeGlassTintViewKey;
 static char kAWETopActionRetryGenerationKey;
+static char kAWETopMenuMorphInstalledKey;
+static char kAWETopMenuMorphForwardingKey;
 static char kAWETopMenuSlotKey;
 static char kAWETopSearchSlotKey;
 static char kAWETopSourceHiddenKey;
@@ -735,7 +749,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.39_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.40b_interaction.log"] copy];
     });
     return path;
 }
@@ -784,7 +798,7 @@ static void AWEInteractionDiagnosticWrite(NSString *format, ...) {
     });
 }
 
-#pragma mark - 1.0.39 bounded route / scroll probe
+#pragma mark - 1.0.40b bounded route / scroll probe
 
 static dispatch_queue_t AWEAlbumMorphProbeQueue(void) {
     static dispatch_queue_t queue;
@@ -804,7 +818,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.39_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.40b_probe.log"] copy];
     });
     return path;
 }
@@ -6910,6 +6924,331 @@ static BOOL AWEForwardTopActionOwner(UIView *owner,
 }
 
 
+#pragma mark - Native top-left four-action Liquid Glass menu
+
+/*
+ The early ForceLiquidGlassUnified source only restyled WeChat's already-open
+ MainFrameActionFloatView. The latest WCGlass binary instead binds a real
+ UIMenu to the source UIButton, builds UIAction children synchronously and
+ enables showsMenuAsPrimaryAction. This section follows the latter structure:
+ there is no delayed empty deferred provider and no forwarding of the
+ original sidebar tap while the menu is opening.
+*/
+
+static void AWEClearTopMenuMorph(AWEHomeTopSlotView *slot);
+static void AWEInstallTopMenuMorph(AWEHomeTopSlotView *slot);
+
+static NSString *AWETrimQuickMenuText(NSString *text) {
+    if (![text isKindOfClass:NSString.class]) return @"";
+    return [text stringByTrimmingCharactersInSet:
+        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+}
+
+static BOOL AWEViewDirectlyMatchesQuickMenuTitle(UIView *view,
+                                                  NSString *title) {
+    if (!view || !title.length) return NO;
+    if ([AWETrimQuickMenuText(view.accessibilityLabel) isEqualToString:title] ||
+        [AWETrimQuickMenuText(view.accessibilityValue) isEqualToString:title]) {
+        return YES;
+    }
+    if ([view isKindOfClass:UILabel.class]) {
+        if ([AWETrimQuickMenuText(((UILabel *)view).text)
+                isEqualToString:title]) return YES;
+    }
+    if ([view isKindOfClass:UIButton.class]) {
+        UIButton *button = (UIButton *)view;
+        if ([AWETrimQuickMenuText(button.currentTitle)
+                isEqualToString:title] ||
+            [AWETrimQuickMenuText(button.titleLabel.text)
+                isEqualToString:title]) return YES;
+    }
+    return NO;
+}
+
+static BOOL AWEViewHasUsableTapRecognizer(UIView *view) {
+    if (!view) return NO;
+    for (UIGestureRecognizer *recognizer in view.gestureRecognizers) {
+        if (!recognizer.enabled) continue;
+        NSString *name = NSStringFromClass(recognizer.class).lowercaseString;
+        if ([recognizer isKindOfClass:UITapGestureRecognizer.class] ||
+            [name containsString:@"tap"] ||
+            [name containsString:@"click"]) return YES;
+    }
+    return NO;
+}
+
+static BOOL AWEQuickMenuExcludedView(UIView *view) {
+    if (!view) return YES;
+    if ([view isKindOfClass:AWEHomeTopSlotView.class]) return YES;
+    NSString *name = NSStringFromClass(view.class).lowercaseString;
+    return [name containsString:@"contextmenu"] ||
+           [name containsString:@"menuplatter"] ||
+           [name containsString:@"menupresentation"] ||
+           [name containsString:@"popover"] ||
+           [name containsString:@"alertcontroller"];
+}
+
+static UIView *AWEQuickMenuActionOwnerForMatchedView(UIView *matched,
+                                                      UIWindow *window) {
+    if (!matched || !window) return nil;
+    UIView *fallback = matched;
+    UIView *cursor = matched;
+    for (NSUInteger depth = 0; cursor && cursor != window && depth < 8;
+         depth++, cursor = cursor.superview) {
+        if (AWEQuickMenuExcludedView(cursor)) continue;
+        if ([cursor isKindOfClass:UIControl.class] ||
+            AWEViewHasUsableTapRecognizer(cursor)) return cursor;
+        NSString *name = NSStringFromClass(cursor.class).lowercaseString;
+        if ([name containsString:@"button"] ||
+            [name containsString:@"tab"] ||
+            [name containsString:@"segment"] ||
+            [name containsString:@"channel"] ||
+            [name containsString:@"item"] ||
+            [name containsString:@"cell"]) {
+            fallback = cursor;
+        }
+    }
+    return fallback;
+}
+
+static NSInteger AWEQuickMenuCandidateScore(UIView *candidate,
+                                             UIWindow *window,
+                                             BOOL topOnly) {
+    if (!candidate || !window || candidate.hidden || candidate.alpha <= 0.02 ||
+        !candidate.window || AWEQuickMenuExcludedView(candidate)) return NSIntegerMin;
+    CGRect frame = [candidate convertRect:candidate.bounds toView:window];
+    if (CGRectIsEmpty(frame) || CGRectIsNull(frame) ||
+        !CGRectIntersectsRect(frame, window.bounds)) return NSIntegerMin;
+    CGFloat midY = CGRectGetMidY(frame);
+    CGFloat topLimit = MIN(240.0, CGRectGetHeight(window.bounds) * 0.32);
+    if (topOnly && midY > topLimit) return NSIntegerMin;
+
+    NSInteger score = 100;
+    if ([candidate isKindOfClass:UIControl.class]) score += 130;
+    if (AWEViewHasUsableTapRecognizer(candidate)) score += 110;
+    NSString *name = NSStringFromClass(candidate.class).lowercaseString;
+    if ([name containsString:@"tab"] || [name containsString:@"segment"] ||
+        [name containsString:@"channel"] || [name containsString:@"feed"]) {
+        score += 90;
+    }
+    if (midY <= topLimit) score += 220;
+    if (CGRectGetWidth(frame) >= 28.0 && CGRectGetWidth(frame) <= 240.0 &&
+        CGRectGetHeight(frame) >= 20.0 && CGRectGetHeight(frame) <= 110.0) {
+        score += 35;
+    }
+    return score;
+}
+
+static UIView *AWEBestQuickMenuDestinationView(UIWindow *window,
+                                                NSString *title,
+                                                BOOL topOnly) {
+    if (!window || !title.length) return nil;
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:window];
+    NSHashTable<UIView *> *seen = [NSHashTable weakObjectsHashTable];
+    UIView *best = nil;
+    NSInteger bestScore = NSIntegerMin;
+    NSUInteger visited = 0;
+
+    while (queue.count > 0 && visited < 1400) {
+        UIView *view = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        if (!view || [seen containsObject:view]) continue;
+        [seen addObject:view];
+        visited++;
+        if (view.hidden || view.alpha <= 0.01 || AWEQuickMenuExcludedView(view)) {
+            continue;
+        }
+        if (AWEViewDirectlyMatchesQuickMenuTitle(view, title)) {
+            UIView *owner = AWEQuickMenuActionOwnerForMatchedView(view, window);
+            NSInteger score = AWEQuickMenuCandidateScore(owner, window, topOnly);
+            if (score > bestScore) {
+                bestScore = score;
+                best = owner;
+            }
+        }
+        for (UIView *child in view.subviews) [queue addObject:child];
+    }
+    return best;
+}
+
+static BOOL AWETriggerQuickMenuDestinationView(UIView *target) {
+    if (!target) return NO;
+
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:target];
+    NSUInteger visited = 0;
+    while (queue.count > 0 && visited < 96) {
+        UIView *view = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        visited++;
+
+        if ([view isKindOfClass:UIControl.class]) {
+            UIControl *control = (UIControl *)view;
+            UIControlEvents event = 0;
+            for (id actionTarget in control.allTargets) {
+                if ([control actionsForTarget:actionTarget
+                              forControlEvent:UIControlEventPrimaryActionTriggered].count) {
+                    event = UIControlEventPrimaryActionTriggered;
+                    break;
+                }
+                if ([control actionsForTarget:actionTarget
+                              forControlEvent:UIControlEventTouchUpInside].count) {
+                    event = UIControlEventTouchUpInside;
+                }
+            }
+            if (event) {
+                [control sendActionsForControlEvents:event];
+                return YES;
+            }
+        }
+
+        for (UIGestureRecognizer *recognizer in view.gestureRecognizers) {
+            if (!recognizer.enabled) continue;
+            NSString *name = NSStringFromClass(recognizer.class).lowercaseString;
+            if (![recognizer isKindOfClass:UITapGestureRecognizer.class] &&
+                ![name containsString:@"tap"] && ![name containsString:@"click"]) {
+                continue;
+            }
+            NSInteger oldState = 0;
+            BOOL changed = AWESetIntegerIvar(recognizer,
+                "_state_DO_NOT_USE_DIRECTLY", UIGestureRecognizerStateEnded,
+                &oldState);
+            BOOL sent = AWEInvokeGestureRecognizer(recognizer);
+            if (changed) {
+                AWESetIntegerIvar(recognizer,
+                    "_state_DO_NOT_USE_DIRECTLY", oldState, NULL);
+            }
+            if (sent) return YES;
+        }
+        for (UIView *child in view.subviews) [queue addObject:child];
+    }
+
+    BOOL activated = NO;
+    @try { activated = [target accessibilityActivate]; }
+    @catch (__unused NSException *exception) { activated = NO; }
+    return activated;
+}
+
+static BOOL AWEActivateQuickMenuDestination(NSString *title) {
+    UIWindow *window = AWEActiveMainWindow();
+    if (!window || !title.length) return NO;
+
+    UIView *target = AWEBestQuickMenuDestinationView(window, title, YES);
+    if (!target && [title isEqualToString:@"商城"] &&
+        AWESecondTabIsShop() && gAWELastTabBar) {
+        BOOL forwarded = AWEForwardToOriginalButton((UIView *)gAWELastTabBar, 1);
+        AWEInteractionDiagnosticWrite(
+            @"TOP_MENU_ACTION title=%@ result=%d path=bottom-shop-fallback",
+            title, forwarded);
+        if (forwarded) return YES;
+    }
+    if (!target) target = AWEBestQuickMenuDestinationView(window, title, NO);
+    BOOL result = AWETriggerQuickMenuDestinationView(target);
+    AWEInteractionDiagnosticWrite(
+        @"TOP_MENU_ACTION title=%@ result=%d target=%@",
+        title, result, AWEInteractionObjectSummary(target));
+    return result;
+}
+
+static UIAction *AWECreateTopQuickMenuAction(AWEHomeTopSlotView *slot,
+                                              NSString *title,
+                                              NSString *symbolName) {
+    if (!slot || !title.length) return nil;
+    UIImageSymbolConfiguration *configuration =
+        [UIImageSymbolConfiguration configurationWithPointSize:18.0
+                                                         weight:UIImageSymbolWeightRegular
+                                                          scale:UIImageSymbolScaleMedium];
+    UIImage *image = [[UIImage systemImageNamed:symbolName]
+        imageWithConfiguration:configuration];
+    __weak AWEHomeTopSlotView *weakSlot = slot;
+    return [UIAction actionWithTitle:title
+                               image:image
+                          identifier:nil
+                             handler:^(__unused UIAction *action) {
+        AWEHomeTopSlotView *liveSlot = weakSlot;
+        if (!liveSlot || !liveSlot.window) return;
+        /* Let UIKit finish the selected-row collapse before touching Douyin's
+           own top tab hierarchy. The visible menu and its morph remain fully
+           system-owned. */
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                     (int64_t)(0.16 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            AWEActivateQuickMenuDestination(title);
+        });
+    }];
+}
+
+static UIMenu *AWECreateTopQuickMenu(AWEHomeTopSlotView *slot) {
+    if (!slot) return nil;
+    NSArray<NSDictionary<NSString *, NSString *> *> *definitions = @[
+        @{@"title": @"直播", @"symbol": @"play.rectangle"},
+        @{@"title": @"商城", @"symbol": @"storefront"},
+        @{@"title": @"关注", @"symbol": @"person.2"},
+        @{@"title": @"推荐", @"symbol": @"sparkles"}
+    ];
+    NSMutableArray<UIMenuElement *> *children = [NSMutableArray arrayWithCapacity:4];
+    for (NSDictionary<NSString *, NSString *> *definition in definitions) {
+        UIAction *action = AWECreateTopQuickMenuAction(
+            slot, definition[@"title"], definition[@"symbol"]);
+        if (action) [children addObject:action];
+    }
+    if (children.count != 4) return nil;
+    UIMenu *menu = [UIMenu menuWithTitle:@"" children:children];
+    if (@available(iOS 16.0, *)) {
+        /* WCGlass' current implementation explicitly calls
+           setPreferredElementSize:. Large gives the same full-width vertical
+           rows seen in its four-item home-plus menu. */
+        menu.preferredElementSize = UIMenuElementSizeLarge;
+    }
+    return menu;
+}
+
+static void AWEInstallTopMenuMorph(AWEHomeTopSlotView *slot) {
+    if (!slot || slot.topKind != AWEHomeTopActionKindMenu || !slot.hitButton) {
+        return;
+    }
+    if (@available(iOS 26.0, *)) {
+        UIButton *button = slot.hitButton;
+        BOOL installed = [objc_getAssociatedObject(
+            button, &kAWETopMenuMorphInstalledKey) boolValue];
+        if (installed && button.menu && button.showsMenuAsPrimaryAction &&
+            button.menu.children.count == 4) return;
+
+        UIMenu *menu = AWECreateTopQuickMenu(slot);
+        if (!menu) {
+            AWEClearTopMenuMorph(slot);
+            return;
+        }
+
+        button.menu = menu;
+        button.showsMenuAsPrimaryAction = YES;
+        button.accessibilityLabel = @"快捷菜单";
+        objc_setAssociatedObject(button,
+                                 &kAWETopMenuMorphInstalledKey,
+                                 @YES,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        AWEInteractionDiagnosticWrite(
+            @"TOP_MENU_NATIVE installed button=%@ glassHost=%@ children=%lu",
+            AWEInteractionObjectSummary(button),
+            AWEInteractionObjectSummary(slot.photosGlassHost),
+            (unsigned long)menu.children.count);
+    }
+}
+
+static void AWEClearTopMenuMorph(AWEHomeTopSlotView *slot) {
+    if (!slot || !slot.hitButton) return;
+    UIButton *button = slot.hitButton;
+    button.showsMenuAsPrimaryAction = NO;
+    button.menu = nil;
+    objc_setAssociatedObject(button,
+                             &kAWETopMenuMorphInstalledKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(slot,
+                             &kAWETopMenuMorphForwardingKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 
 void AWEAlbumMorphRegisterContentScrollView(UIViewController *controller,
                                              UIScrollView *scrollView) {
@@ -7710,7 +8049,7 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     return YES;
 }
 
-/* Native minimization is intentionally disabled in 1.0.39. The overlay
+/* Native minimization is intentionally disabled in 1.0.40b. The overlay
    controller remains isolated from all Douyin UIScrollView instances. */
 
 static AWEHomeTopSlotView *AWEEnsureTopSlot(UIView *container,
@@ -7820,6 +8159,23 @@ static void AWEConfigureTopSlot(UIView *container,
     slot.hidden = NO;
     slot.alpha = 1.0;
     slot.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+    slot.hitButton.frame = slot.bounds;
+
+    /* UIKit's menu transition snapshots the UIButton itself. The old layout
+       kept the glass host as a sibling underneath a transparent hit button,
+       which would give the menu animator an empty source preview. Embed the
+       visible glass inside the menu button only for the left-side morph. */
+    if (kind == AWEHomeTopActionKindMenu) {
+        if (slot.photosGlassHost &&
+            slot.photosGlassHost.superview != slot.hitButton) {
+            [slot.photosGlassHost removeFromSuperview];
+            [slot.hitButton insertSubview:slot.photosGlassHost atIndex:0];
+        }
+    } else if (slot.photosGlassHost &&
+               slot.photosGlassHost.superview != slot) {
+        [slot.photosGlassHost removeFromSuperview];
+        [slot insertSubview:slot.photosGlassHost atIndex:0];
+    }
 
     NSArray<NSString *> *fallbackNames = kind == AWEHomeTopActionKindSearch
         ? @[@"lasso.badge.sparkles", @"magnifyingglass"]
@@ -7840,7 +8196,7 @@ static void AWEConfigureTopSlot(UIView *container,
 
     if (@available(iOS 26.0, *)) {
         slot.photosGlassHost.hidden = NO;
-        slot.photosGlassHost.frame = slot.bounds;
+        slot.photosGlassHost.frame = slot.photosGlassHost.superview.bounds;
         [slot.photosGlassHost updateWithImage:image
                                     pointSize:iconPointSize
                                   controlSize:diameter
@@ -7850,10 +8206,10 @@ static void AWEConfigureTopSlot(UIView *container,
     } else {
         slot.hidden = YES;
     }
-    slot.hitButton.frame = slot.bounds;
     if (directSearchPassthrough) {
         /* The whole slot is visual-only; hit testing continues to the real
            AWEHPDiscoverFeedEntranceView underneath. */
+        AWEClearTopMenuMorph(slot);
         slot.hitButton.hidden = YES;
         slot.hitButton.userInteractionEnabled = NO;
         slot.userInteractionEnabled = NO;
@@ -7866,7 +8222,12 @@ static void AWEConfigureTopSlot(UIView *container,
         slot.userInteractionEnabled = owner != nil;
         slot.hitButton.hidden = owner == nil;
         slot.hitButton.userInteractionEnabled = owner != nil;
-        if (!slot.hitButton.hidden) [slot bringSubviewToFront:slot.hitButton];
+        if (!slot.hitButton.hidden) {
+            AWEInstallTopMenuMorph(slot);
+            [slot bringSubviewToFront:slot.hitButton];
+        } else {
+            AWEClearTopMenuMorph(slot);
+        }
     }
     [container bringSubviewToFront:slot];
 }
@@ -7881,6 +8242,7 @@ static void AWEHideTopSlot(UIView *container, AWEHomeTopActionKind kind) {
     if (!slot) return;
     AWERestoreTopSourceImage(slot);
     AWERestoreTopOwnerVisual(slot);
+    if (kind == AWEHomeTopActionKindMenu) AWEClearTopMenuMorph(slot);
     slot.userInteractionEnabled = NO;
     slot.hitButton.userInteractionEnabled = NO;
     slot.hitButton.hidden = YES;
@@ -9137,7 +9499,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.39";
+    self.title = @"LiquidBar 设置 · 1.0.40b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -10160,7 +10522,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.39 image=%@ ==========" ,
+            @"========== START build=1.0.40b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -10217,7 +10579,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.39 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.40b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -10232,7 +10594,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.39_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.40b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -11724,7 +12086,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.39 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.40b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWETopTelegramSwitcherEnabledDefaultsKey];
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWEHomeForceDarkGlassDefaultsKey];

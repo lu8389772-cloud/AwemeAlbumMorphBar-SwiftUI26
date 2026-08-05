@@ -1,6 +1,1 @@
-cd /var/mobile/AwemeLiquidBar-Cloud/AwemeLiquidBar_1.0.37_preserve_actual_png_size_project
-unzip -o /var/mobile/AwemeLiquidBar_1.0.39_true_46_capsule_pixel_png_patch.zip -d .
-sh apply_patch_1.0.39.sh
-git add -A
-git commit -m "Use true 46 pt capsule glass and pixel-authored PNG sizing 1.0.39"
-git push origin main
+This archive is a complete Theos project, not a patch. Put the zip in /var/mobile/, then replace the contents of the existing Git repository project directory with this complete project before git add/commit/push.
