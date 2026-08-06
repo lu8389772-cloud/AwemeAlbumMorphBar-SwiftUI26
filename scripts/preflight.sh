@@ -10,8 +10,8 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.43a']
-required_workflow = ['AwemeLiquidBar-1.0.43a-Xcode27-rootless']
+required_control = ['Version: 1.0.43b']
+required_workflow = ['AwemeLiquidBar-1.0.43b-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
@@ -76,5 +76,5 @@ for forbidden in [
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.43a consolidated preflight passed')
+print('AwemeLiquidBar 1.0.43b consolidated preflight passed')
 PY2
