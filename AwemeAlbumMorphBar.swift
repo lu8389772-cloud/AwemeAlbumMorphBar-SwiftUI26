@@ -383,7 +383,7 @@ final class AWEAlbumMorphTabController:
     private var pendingSelectionUntil: CFTimeInterval = 0
     private var compactMode = false
     private var verticalOffset: CGFloat = 0
-    private var fallbackCompactTranslation: CGFloat = 0
+    private var fallbackCompactScale: CGFloat = 1
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
 
@@ -652,23 +652,23 @@ final class AWEAlbumMorphTabController:
         }
     }
 
-    private func currentFallbackCompactTravel() -> CGFloat {
+    private func currentFallbackCompactScale() -> CGFloat {
         let liveHeight = max(tabBar.bounds.height, tabBar.frame.height)
-        guard liveHeight > 1 else { return 0 }
-        // Leave a restrained grab edge visible. The calculation is based on
-        // the current native height, so changing bar height/offset cannot make
-        // the compact and expanded coordinates drift apart.
-        return max(0, liveHeight - 22.0)
+        guard liveHeight > 1 else { return 1 }
+        // Scale the live native tab bar instead of translating it below the
+        // screen. This is inherently independent of custom height and offset.
+        return 0.82
     }
 
     private func applyFallbackCompactTransform(animated: Bool) {
-        let targetTravel = compactMode ? currentFallbackCompactTravel() : 0
-        fallbackCompactTranslation = targetTravel
+        let scale = compactMode ? currentFallbackCompactScale() : 1
+        fallbackCompactScale = scale
+        let liveHeight = max(tabBar.bounds.height, tabBar.frame.height)
+        let keepBottomAligned = compactMode ? (1 - scale) * liveHeight * 0.5 : 0
+        let target = CGAffineTransform(translationX: 0, y: keepBottomAligned)
+            .scaledBy(x: scale, y: scale)
         let changes = {
-            self.tabBar.transform = CGAffineTransform(
-                translationX: 0,
-                y: targetTravel
-            )
+            self.tabBar.transform = target
         }
         if animated {
             UIView.animate(
@@ -791,6 +791,7 @@ final class AWEAlbumMorphTabController:
         view.isHidden = false
         view.alpha = 1.0
         applyStableVerticalOffset()
+        applyFallbackCompactTransform(animated: false)
     }
 
     @objc(setCompactMode:animated:)
@@ -805,7 +806,7 @@ final class AWEAlbumMorphTabController:
         applyFallbackCompactTransform(animated: animated)
         albumMorphProbe(
             "SET_COMPACT_FALLBACK compact=\(compact) animated=\(animated) " +
-            "travel=\(String(format: "%.2f", fallbackCompactTranslation)) " +
+            "scale=\(String(format: "%.3f", fallbackCompactScale)) " +
             "height=\(String(format: "%.2f", tabBar.frame.height))"
         )
     }

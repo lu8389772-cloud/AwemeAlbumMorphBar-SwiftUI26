@@ -10,24 +10,24 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.43b']
-required_workflow = ['AwemeLiquidBar-1.0.43b-Xcode27-rootless']
+required_control = ['Version: 1.0.43c']
+required_workflow = ['AwemeLiquidBar-1.0.43c-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
     'setResolvedInterfaceStyleRaw',
     'setVerticalOffset(_ offset: CGFloat)',
-    'currentFallbackCompactTravel()',
+    'currentFallbackCompactScale()',
     'applyFallbackCompactTransform(animated:',
     'setCompactMode(_ compact: Bool, animated: Bool)',
     'let designScale: CGFloat = 3.0',
     'let maximumPixelEdge: CGFloat = 100.0',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.43a',
+    'AwemeLiquidBar 1.0.43c',
     'AWEApplyAlbumMorphResolvedAppearance',
     'AWERefreshRegisteredAdaptiveGlassButtons',
-    'AWEReadLocalBackdropLuminance',
+    'AWEAdaptiveButtonResolvedLocalStyle',
     'AWERefreshOneAdaptiveButtonContrast',
     'kAWEAdaptiveGlassAutomaticContrastKey',
     'AWESoftClearEdgeColor',
@@ -45,7 +45,7 @@ required_objc = [
     'AWERefreshProfileAvatarGlass',
     'const CGFloat diameter = 54.0;',
     'AWEAlbumMorphCollapseGestureDelegate',
-    'AWEAlbumMorphRequestNativeMinimized',
+    'CGAffineTransformMakeScale(0.01, 0.01)',
     'AWEHideAlbumMorphTintProbe',
     'MIN(22.0, height * 0.5)',
     '纯透明材质（无额外描边，局部黑白自适应）',
@@ -76,5 +76,5 @@ for forbidden in [
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.43b consolidated preflight passed')
+print('AwemeLiquidBar 1.0.43c consolidated preflight passed')
 PY2

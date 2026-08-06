@@ -1,4 +1,4 @@
-# AwemeLiquidBar 1.0.43b
+# AwemeLiquidBar 1.0.43c
 
 Consolidated interaction, dynamic routing and performance update based on 1.0.42a.
 

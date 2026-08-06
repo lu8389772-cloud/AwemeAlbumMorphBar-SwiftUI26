@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.43a — local contrast + interactive controls + dynamic compact bar
+ AwemeLiquidBar 1.0.43c — material-owned contrast + safe compact scale + hidden tint probe
 
  Consolidated delta from 1.0.41c:
  - iOS 26 now defaults top/right controls to the lower-overhead system-adaptive
@@ -6319,56 +6319,28 @@ static BOOL AWEAdaptiveButtonIsEffectivelyVisible(UIButton *button) {
     return CGRectIntersectsRect(frame, button.window.bounds);
 }
 
-static BOOL AWEReadLocalBackdropLuminance(UIButton *button,
-                                          CGFloat *luminanceOut) {
-    if (!AWEAdaptiveButtonIsEffectivelyVisible(button)) return NO;
-    UIWindow *window = button.window;
-    CGPoint point = [button convertPoint:
-        CGPointMake(CGRectGetMidX(button.bounds), CGRectGetMidY(button.bounds))
-        toView:window];
-    if (!isfinite(point.x) || !isfinite(point.y)) return NO;
+static UIUserInterfaceStyle AWEGlassInternalInterfaceStyle(
+    UIView *glass, UIUserInterfaceStyle fallbackStyle);
 
-    enum { sampleWidth = 3, sampleHeight = 3, sampleBytesPerPixel = 4 };
-    const size_t width = sampleWidth, height = sampleHeight;
-    uint8_t pixels[sampleWidth * sampleHeight * sampleBytesPerPixel] = {0};
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(
-        pixels, width, height, 8, width * 4, colorSpace,
-        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-    CGColorSpaceRelease(colorSpace);
-    if (!context) return NO;
-
-    BOOL oldHidden = button.hidden;
-    float oldOpacity = button.layer.opacity;
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    button.hidden = YES;
-    button.layer.opacity = 0.0f;
-    CGContextTranslateCTM(context,
-        1.0 - point.x,
-        1.0 - point.y);
-    [window.layer renderInContext:context];
-    button.hidden = oldHidden;
-    button.layer.opacity = oldOpacity;
-    [CATransaction commit];
-    CGContextRelease(context);
-
-    CGFloat red = 0.0, green = 0.0, blue = 0.0, weight = 0.0;
-    for (size_t index = 0; index < width * height; index++) {
-        const uint8_t *pixel = pixels + index * 4;
-        CGFloat alpha = pixel[3] / 255.0;
-        if (alpha <= 0.05) continue;
-        red += (pixel[0] / 255.0) * alpha;
-        green += (pixel[1] / 255.0) * alpha;
-        blue += (pixel[2] / 255.0) * alpha;
-        weight += alpha;
+/*
+ Clear glass already resolves a local light/dark material internally. Reading
+ that resolved material is both more reliable and much cheaper than rendering
+ the whole Douyin window into a bitmap (video/Metal layers are not faithfully
+ captured by renderInContext and were the reason automatic icons stayed white).
+ */
+static UIUserInterfaceStyle AWEAdaptiveButtonResolvedLocalStyle(UIButton *button) {
+    UIUserInterfaceStyle fallback = button.traitCollection.userInterfaceStyle;
+    if (fallback != UIUserInterfaceStyleLight &&
+        fallback != UIUserInterfaceStyleDark) {
+        fallback = gAWEAlbumMorphLastAppliedStyle;
     }
-    if (weight <= 0.01) return NO;
-    red /= weight; green /= weight; blue /= weight;
-    if (luminanceOut) {
-        *luminanceOut = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    if (fallback != UIUserInterfaceStyleLight &&
+        fallback != UIUserInterfaceStyleDark) {
+        fallback = UIScreen.mainScreen.traitCollection.userInterfaceStyle;
     }
-    return YES;
+    if (fallback != UIUserInterfaceStyleLight &&
+        fallback != UIUserInterfaceStyleDark) fallback = UIUserInterfaceStyleDark;
+    return AWEGlassInternalInterfaceStyle(button, fallback);
 }
 
 static void AWEApplyAutomaticContrastForeground(UIButton *button,
@@ -6376,13 +6348,24 @@ static void AWEApplyAutomaticContrastForeground(UIButton *button,
     if (!button || !button.configuration) return;
     NSNumber *previous = objc_getAssociatedObject(
         button, &kAWEAdaptiveGlassForegroundLightKey);
-    if (previous && previous.boolValue == foregroundLight) return;
+    if (previous && previous.boolValue == foregroundLight &&
+        button.imageView.image != nil && button.imageView.alpha > 0.01) return;
+
     UIColor *color = foregroundLight ? UIColor.whiteColor : UIColor.blackColor;
     UIButtonConfiguration *configuration = [button.configuration copy];
+    UIImage *image = configuration.image;
+    if (image) {
+        configuration.image = [image imageWithRenderingMode:
+            UIImageRenderingModeAlwaysTemplate];
+    }
     configuration.baseForegroundColor = color;
     button.configuration = configuration;
     button.tintColor = color;
     button.imageView.tintColor = color;
+    button.imageView.hidden = NO;
+    button.imageView.alpha = 1.0;
+    [button setNeedsUpdateConfiguration];
+    [button setNeedsLayout];
     objc_setAssociatedObject(button, &kAWEAdaptiveGlassForegroundLightKey,
                              @(foregroundLight), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
@@ -6390,14 +6373,9 @@ static void AWEApplyAutomaticContrastForeground(UIButton *button,
 static void AWERefreshAutomaticContrastForButton(UIButton *button) {
     if (!button || ![objc_getAssociatedObject(
             button, &kAWEAdaptiveGlassAutomaticContrastKey) boolValue]) return;
-    CGFloat luminance = 0.0;
-    if (!AWEReadLocalBackdropLuminance(button, &luminance)) return;
-    NSNumber *stored = objc_getAssociatedObject(
-        button, &kAWEAdaptiveGlassForegroundLightKey);
-    BOOL foregroundLight = stored ? stored.boolValue : YES;
-    /* Hysteresis prevents flashing around mid-gray video frames. */
-    if (luminance >= 0.62) foregroundLight = NO;
-    else if (luminance <= 0.46) foregroundLight = YES;
+    UIUserInterfaceStyle localStyle = AWEAdaptiveButtonResolvedLocalStyle(button);
+    /* Dark material needs a light glyph; light material needs a dark glyph. */
+    BOOL foregroundLight = localStyle != UIUserInterfaceStyleLight;
     AWEApplyAutomaticContrastForeground(button, foregroundLight);
     objc_setAssociatedObject(button, &kAWEAdaptiveGlassLastSampleTimeKey,
                              @(CACurrentMediaTime()),
@@ -6421,7 +6399,11 @@ static void AWERefreshOneAdaptiveButtonContrast(void) {
 
 static void AWEApplyResolvedGlassStyleToAdaptiveButton(UIButton *button) {
     if (!button) return;
-    UIUserInterfaceStyle style = gAWEAlbumMorphLastAppliedStyle;
+    BOOL transparent = [objc_getAssociatedObject(
+        button, &kAWEAdaptiveGlassTransparentKey) boolValue];
+    UIUserInterfaceStyle style = transparent
+        ? UIUserInterfaceStyleUnspecified
+        : gAWEAlbumMorphLastAppliedStyle;
     if (style != UIUserInterfaceStyleLight &&
         style != UIUserInterfaceStyleDark) {
         style = UIUserInterfaceStyleUnspecified;
@@ -7213,7 +7195,7 @@ static void AWERestoreTopSourceImage(AWEHomeTopSlotView *slot) {
 }
 
 static UIUserInterfaceStyle AWEGlassInternalInterfaceStyle(
-    UIVisualEffectView *glass,
+    UIView *glass,
     UIUserInterfaceStyle fallbackStyle) {
     if (!glass) return fallbackStyle;
     NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithArray:glass.subviews];
@@ -7230,11 +7212,26 @@ static UIUserInterfaceStyle AWEGlassInternalInterfaceStyle(
                             [name containsString:@"backdrop"] ||
                             [name containsString:@"material"] ||
                             [name containsString:@"visualeffect"] ||
-                            [name containsString:@"contentview"];
+                            [name containsString:@"contentview"] ||
+                            [name containsString:@"platter"] ||
+                            [name containsString:@"lens"];
         if (!materialNode) continue;
         UIUserInterfaceStyle style = view.traitCollection.userInterfaceStyle;
-        if (style == UIUserInterfaceStyleDark) dark++;
-        else if (style == UIUserInterfaceStyleLight) light++;
+        if (style == UIUserInterfaceStyleDark) dark += 2;
+        else if (style == UIUserInterfaceStyleLight) light += 2;
+
+        BOOL valid = NO;
+        BOOL colorIsLight = AWEColorPrefersLightForeground(
+            view.backgroundColor, view.traitCollection, &valid);
+        if (!valid && view.layer.backgroundColor) {
+            UIColor *layerColor = [UIColor colorWithCGColor:view.layer.backgroundColor];
+            colorIsLight = AWEColorPrefersLightForeground(
+                layerColor, view.traitCollection, &valid);
+        }
+        if (valid) {
+            if (colorIsLight) light++;
+            else dark++;
+        }
     }
     if (dark > light) return UIUserInterfaceStyleDark;
     if (light > dark) return UIUserInterfaceStyleLight;
@@ -7275,47 +7272,49 @@ static UIVisualEffectView *AWEEnsureAlbumMorphTintProbe(UIWindow *sourceWindow) 
         gAWEAlbumMorphTintProbeWindow = sourceWindow;
     }
 
-    UIView *referenceBar = gAWEAlbumMorphSuppressedOriginalBar;
     /*
-     Keep the proven 4 x 4, fully rendered probe from 1.0.41a so the bottom
-     UITabBar still resolves Clear/Tinted and light/dark correctly.  Only move
-     it away from the exposed center gap: at roughly 24%% of the bar width it
-     sits beneath the existing left platter/selection lens, so no separate
-     glass dot is visible and the sampled backdrop remains representative of
-     the actual bottom controls.
+     Keep a fully rendered 4 x 4 material internally, but composite it at
+     1/100 scale underneath the real left bottom platter. This preserves the
+     1.0.41a material resolution while making the source-window probe
+     physically sub-pixel and therefore invisible on every route.
     */
-    CGRect probeFrame = CGRectMake(
-        CGRectGetWidth(rootView.bounds) * 0.24 - 2.0,
-        CGRectGetHeight(rootView.bounds) - 38.0,
-        4.0, 4.0);
-    if (referenceBar && referenceBar.window == sourceWindow) {
+    CGRect probeFrame = CGRectMake(44.0, CGRectGetHeight(rootView.bounds) - 52.0,
+                                   4.0, 4.0);
+    UITabBar *overlayBar = gAWEAlbumMorphController.tabBar;
+    if (overlayBar.window && !CGRectIsEmpty(overlayBar.bounds)) {
         @try {
-            CGRect barFrame = [referenceBar convertRect:referenceBar.bounds
-                                                  toView:rootView];
-            if (!CGRectIsEmpty(barFrame)) {
-                CGFloat coveredX = CGRectGetMinX(barFrame) +
-                    CGRectGetWidth(barFrame) * 0.24;
-                probeFrame = CGRectMake(
-                    coveredX - 2.0,
-                    CGRectGetMidY(barFrame) - 2.0,
-                    4.0, 4.0);
-            }
+            CGRect screenFrame = [overlayBar convertRect:overlayBar.bounds toView:nil];
+            CGRect rootFrame = [rootView convertRect:screenFrame fromView:nil];
+            CGFloat coveredX = CGRectGetMinX(rootFrame) +
+                MIN(72.0, MAX(34.0, CGRectGetWidth(rootFrame) * 0.16));
+            probeFrame = CGRectMake(coveredX - 2.0,
+                                    CGRectGetMidY(rootFrame) - 2.0,
+                                    4.0, 4.0);
         } @catch (__unused NSException *exception) {}
     }
 
+    CGPoint probeCenter = CGPointMake(CGRectGetMidX(probeFrame),
+                                      CGRectGetMidY(probeFrame));
+    CGRect probeBounds = CGRectMake(0.0, 0.0, 4.0, 4.0);
     BOOL frameChanged =
-        fabs(CGRectGetMinX(gAWEAlbumMorphTintProbe.frame) - CGRectGetMinX(probeFrame)) > 0.25 ||
-        fabs(CGRectGetMinY(gAWEAlbumMorphTintProbe.frame) - CGRectGetMinY(probeFrame)) > 0.25 ||
-        fabs(CGRectGetWidth(gAWEAlbumMorphTintProbe.frame) - CGRectGetWidth(probeFrame)) > 0.25 ||
-        fabs(CGRectGetHeight(gAWEAlbumMorphTintProbe.frame) - CGRectGetHeight(probeFrame)) > 0.25;
-    if (frameChanged) gAWEAlbumMorphTintProbe.frame = probeFrame;
-    gAWEAlbumMorphTintProbe.layer.cornerRadius = 2.0;
-    gAWEAlbumMorphTintProbe.hidden = NO;
-    gAWEAlbumMorphTintProbe.alpha = 1.0;
-    gAWEAlbumMorphTintProbe.layer.opacity = 1.0f;
-    if (needsRebuild) {
-        [rootView bringSubviewToFront:gAWEAlbumMorphTintProbe];
+        fabs(gAWEAlbumMorphTintProbe.center.x - probeCenter.x) > 0.25 ||
+        fabs(gAWEAlbumMorphTintProbe.center.y - probeCenter.y) > 0.25 ||
+        fabs(CGRectGetWidth(gAWEAlbumMorphTintProbe.bounds) - 4.0) > 0.25 ||
+        fabs(CGRectGetHeight(gAWEAlbumMorphTintProbe.bounds) - 4.0) > 0.25;
+    if (frameChanged) {
+        gAWEAlbumMorphTintProbe.bounds = probeBounds;
+        gAWEAlbumMorphTintProbe.center = probeCenter;
     }
+    gAWEAlbumMorphTintProbe.layer.cornerRadius = 2.0;
+    gAWEAlbumMorphTintProbe.transform = CGAffineTransformMakeScale(0.01, 0.01);
+    gAWEAlbumMorphTintProbe.accessibilityElementsHidden = YES;
+    BOOL barActuallyVisible = gAWEAlbumMorphVisible &&
+        gAWEAlbumMorphOverlayWindow && !gAWEAlbumMorphOverlayWindow.hidden &&
+        overlayBar.window && !overlayBar.hidden;
+    gAWEAlbumMorphTintProbe.hidden = !barActuallyVisible;
+    gAWEAlbumMorphTintProbe.alpha = barActuallyVisible ? 1.0 : 0.0;
+    gAWEAlbumMorphTintProbe.layer.opacity = barActuallyVisible ? 1.0f : 0.0f;
+    if (needsRebuild) [rootView bringSubviewToFront:gAWEAlbumMorphTintProbe];
     if (needsRebuild || frameChanged) {
         [gAWEAlbumMorphTintProbe setNeedsLayout];
         [gAWEAlbumMorphTintProbe layoutIfNeeded];
@@ -7377,7 +7376,14 @@ static void AWERefreshAlbumMorphTintFromSystemProbe(void) {
 
 @implementation AWEAlbumMorphTintDisplayLinkTarget
 - (void)alb_tickAlbumMorphTint:(CADisplayLink *)displayLink {
-    if (!gAWEAlbumMorphVisible) {
+    if (!gAWEAlbumMorphVisible || !gAWEAlbumMorphOverlayWindow ||
+        gAWEAlbumMorphOverlayWindow.hidden ||
+        !gAWEAlbumMorphController.tabBar.window) {
+        if (gAWEAlbumMorphTintProbe) {
+            gAWEAlbumMorphTintProbe.hidden = YES;
+            gAWEAlbumMorphTintProbe.alpha = 0.0;
+            gAWEAlbumMorphTintProbe.layer.opacity = 0.0f;
+        }
         displayLink.paused = YES;
         return;
     }
@@ -7443,9 +7449,13 @@ static void AWEHideAlbumMorphTintProbe(void) {
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
        shouldReceiveTouch:(UITouch *)touch {
-    (void)gestureRecognizer; (void)touch;
-    return AWEAlbumMorphCollapseEnabled() && gAWEAlbumMorphVisible &&
-           !gAWESettingsVisible;
+    if (!AWEAlbumMorphCollapseEnabled() || !gAWEAlbumMorphVisible ||
+        gAWESettingsVisible) return NO;
+    UIView *view = gestureRecognizer.view;
+    CGPoint point = [touch locationInView:view];
+    CGFloat height = CGRectGetHeight(view.bounds);
+    /* Do not steal top-navigation or bottom-tab gestures. */
+    return point.y > 110.0 && point.y < height - 118.0;
 }
 - (void)alb_handleCollapsePan:(UIPanGestureRecognizer *)recognizer {
     if (!AWEAlbumMorphCollapseEnabled() || !gAWEAlbumMorphVisible ||
@@ -7454,43 +7464,49 @@ static void AWEHideAlbumMorphTintProbe(void) {
         self.handledCurrentGesture = NO;
         return;
     }
-    if (recognizer.state == UIGestureRecognizerStateEnded ||
-        recognizer.state == UIGestureRecognizerStateCancelled ||
-        recognizer.state == UIGestureRecognizerStateFailed) {
-        self.handledCurrentGesture = NO;
-        return;
-    }
-    if (recognizer.state != UIGestureRecognizerStateChanged ||
+    if (recognizer.state != UIGestureRecognizerStateEnded ||
         self.handledCurrentGesture) return;
 
     CGPoint translation = [recognizer translationInView:recognizer.view];
     CGPoint velocity = [recognizer velocityInView:recognizer.view];
-    if (fabs(translation.y) < fabs(translation.x) * 1.18) return;
+    if (fabs(translation.y) < fabs(translation.x) * 1.25) return;
     BOOL requestCompact = !gAWEAlbumMorphCompact &&
-        (translation.y <= -20.0 || velocity.y <= -420.0);
+        (translation.y <= -34.0 || velocity.y <= -620.0);
     BOOL requestExpand = gAWEAlbumMorphCompact &&
-        (translation.y >= 20.0 || velocity.y >= 420.0);
+        (translation.y >= 34.0 || velocity.y >= 620.0);
     if (!requestCompact && !requestExpand) return;
 
     BOOL compact = requestCompact;
     self.handledCurrentGesture = YES;
     gAWEAlbumMorphCompact = compact;
-    int32_t nativeResult = AWEAlbumMorphRequestNativeMinimized(
-        gAWEAlbumMorphController, compact ? 1 : 0, 1);
-    if (!nativeResult) {
-        [gAWEAlbumMorphController setCompactMode:compact animated:YES];
-    }
+    /* The overlay controller is not the host feed's tab controller, so private
+       minimize selectors can report success without moving the visible bar.
+       Use the stable native-tab-bar scale path instead; it never writes a
+       fixed frame and therefore remains correct for every user height/offset. */
+    [gAWEAlbumMorphController setCompactMode:compact animated:YES];
     AWEAlbumMorphProbeWrite(
-        @"COLLAPSE_GESTURE compact=%d native=%d translation=%@ velocity=%@ height=%.2f offset=%.2f",
-        compact, nativeResult, NSStringFromCGPoint(translation),
-        NSStringFromCGPoint(velocity),
+        @"COLLAPSE_GESTURE compact=%d translation=%@ velocity=%@ height=%.2f offset=%.2f",
+        compact, NSStringFromCGPoint(translation), NSStringFromCGPoint(velocity),
         CGRectGetHeight(gAWEAlbumMorphController.tabBar.frame),
         AWEStoredVerticalOffset());
 }
 @end
 
 static void AWEInstallAlbumMorphCollapseGesture(UIWindow *sourceWindow) {
-    if (!sourceWindow || !AWEAlbumMorphCollapseEnabled()) return;
+    if (!sourceWindow || !AWEAlbumMorphCollapseEnabled()) {
+        if (gAWEAlbumMorphCollapseGesture.view) {
+            [gAWEAlbumMorphCollapseGesture.view
+                removeGestureRecognizer:gAWEAlbumMorphCollapseGesture];
+        }
+        gAWEAlbumMorphCollapseGesture = nil;
+        gAWEAlbumMorphCollapseGestureWindow = nil;
+        gAWEAlbumMorphCollapseGestureDelegate = nil;
+        if (gAWEAlbumMorphController && gAWEAlbumMorphCompact) {
+            gAWEAlbumMorphCompact = NO;
+            [gAWEAlbumMorphController setCompactMode:NO animated:NO];
+        }
+        return;
+    }
     if (gAWEAlbumMorphCollapseGestureWindow == sourceWindow &&
         gAWEAlbumMorphCollapseGesture.view == sourceWindow) return;
     if (gAWEAlbumMorphCollapseGesture.view) {
@@ -7515,13 +7531,9 @@ static void AWEInstallAlbumMorphCollapseGesture(UIWindow *sourceWindow) {
 }
 
 static void AWEExpandAlbumMorphBarWithoutAnimation(void) {
-    if (!gAWEAlbumMorphController || !gAWEAlbumMorphCompact) return;
+    if (!gAWEAlbumMorphController) return;
     gAWEAlbumMorphCompact = NO;
-    int32_t nativeResult = AWEAlbumMorphRequestNativeMinimized(
-        gAWEAlbumMorphController, 0, 0);
-    if (!nativeResult) {
-        [gAWEAlbumMorphController setCompactMode:NO animated:NO];
-    }
+    [gAWEAlbumMorphController setCompactMode:NO animated:NO];
 }
 
 static BOOL AWEForwardTopActionOwner(UIView *owner,
