@@ -8,12 +8,13 @@ from pathlib import Path
 swift = Path('AwemeAlbumMorphBar.swift').read_text()
 objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
+workflow = Path('.github/workflows/build.yml').read_text()
 
-for token in [
-    'Version: 1.0.41b',
-]:
+for token in ['Version: 1.0.42a']:
     if token not in control:
         raise SystemExit(f'missing control token: {token}')
+if 'AwemeLiquidBar-1.0.42a-Xcode27-rootless' not in workflow:
+    raise SystemExit('workflow artifact name not updated')
 
 for token in [
     'tabBarMinimizeBehavior = .never',
@@ -27,8 +28,8 @@ for token in [
         raise SystemExit(f'missing Swift stable token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.41b',
-    'Native minimization is intentionally disabled in 1.0.41b',
+    'AwemeLiquidBar 1.0.42a',
+    'Native minimization is intentionally disabled in 1.0.42a',
     'AWEApplyAlbumMorphResolvedAppearance',
     'gAWEAlbumMorphLastAppliedStyle',
     'AWERefreshRegisteredAdaptiveGlassButtons',
@@ -36,10 +37,17 @@ for token in [
     'AWEConfigureAdaptiveSystemGlassIconButton',
     '@"glassButtonConfiguration"',
     '@"clearGlassButtonConfiguration"',
+    'AWEHomeTransparentGlassEnabled',
+    'AWESoftClearEdgeColor',
+    'AWEHomeExplicitForegroundForSource',
+    'kAWEImageAverageColorCacheKey',
     'configuration.baseBackgroundColor = nil;',
     'configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;',
     'configuration.contentInsets = NSDirectionalEdgeInsetsZero;',
-    'button.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;',
+    'button.overrideUserInterfaceStyle = style;',
+    'AWEApplyTopCategoryVisualSuppression',
+    'AWEHideTopCategoryTitleView',
+    'CGRectGetWidth(barFrame) * 0.24',
     'slot.systemGlassButton',
     'const CGFloat diameter = 46.0;',
     'PNG is a separate original-colour path.',
@@ -53,9 +61,9 @@ for token in [
     '@{@"title": @"商城", @"symbol": @"storefront"}',
     '@{@"title": @"关注", @"symbol": @"person.2"}',
     '@{@"title": @"推荐", @"symbol": @"sparkles"}',
-    '@"顶部与右侧按钮色调模式（系统自适应）"',
-    'gAWEAlbumMorphTintProbe.alpha = 0.02;',
-    'covered left platter',
+    'iOS 26 默认：系统自适应材质',
+    '纯透明材质（灰色柔边，渲染开销较高）',
+    'AWEIconDefinitionUsesUnifiedBottomColour',
 ]:
     if token not in objc:
         raise SystemExit(f'missing Objective-C token: {token}')
@@ -66,15 +74,19 @@ if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
 if objc.count('{') != objc.count('}'):
     raise SystemExit('Objective-C brace count mismatch')
+if objc.count('UIImage *symbol = AWEConfiguredRoleImage(') != 1:
+    raise SystemExit('right-side symbol declaration count invalid')
 
 for forbidden in [
     'UIDeferredMenuElement',
     'completion(@[])',
+    'preferredElementSize = UIMenuElementSizeLarge',
     'slot.photosGlassHost.hidden = NO;',
     'AWEInstallOrUpdateAlbumMorphBar((UIView *)gAWELastTabBar, YES)',
+    'AwemeLiquidBar_1.0.41c',
 ]:
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.41b local-backdrop glass preflight passed')
+print('AwemeLiquidBar 1.0.42a consolidated preflight passed')
 PY

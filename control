@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.41b
+Version: 1.0.42a
 Architecture: iphoneos-arm
-Description: Locally adaptive iOS 26 Liquid Glass controls for Douyin top and right buttons, preserving the four-item native menu morph and removing the visible bottom probe dot.
+Description: Defaults iOS 26 custom controls to low-overhead system-adaptive Liquid Glass, adds an independent softened clear-glass switch, keeps iOS 27 force-dark compatibility, simplifies bottom icon colour ownership, compacts the native four-item menu, and reduces repeated rendering work.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

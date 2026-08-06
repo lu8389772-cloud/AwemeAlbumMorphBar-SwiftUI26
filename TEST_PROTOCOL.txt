@@ -1,6 +1,9 @@
-1. Open Douyin Home with a bright video and confirm the top-left and right-side buttons resolve locally against the bright background.
-2. Switch to a dark/black video and confirm the same buttons independently change without waiting for or copying the bottom bar branch.
-3. Test transparent mode and tint mode. Both should remain soft and should not gain a fixed manual fill.
-4. Configure only two regular bottom tabs plus the independent search capsule. Confirm the previous tiny Liquid Glass dot in the center gap is gone.
-5. Tap the top-left button and confirm the native source-to-menu morph still opens 直播、商城、关注、推荐.
-6. Confirm custom PNG dimensions, selected like/favorite colours, top-search passthrough and right-side actions remain unchanged.
+1. Open Douyin Home on iOS 26. With “纯透明材质” OFF, confirm top/search/right controls use the system-adaptive material and change with the system Clear/Tinted preference.
+2. Confirm the bottom bar still adapts between bright and dark content and no center probe dot is visible.
+3. Turn “纯透明材质” ON. On a dark video, confirm the two top buttons have a restrained gray translucent rim instead of a bright white rim; right-side rims should remain lighter.
+4. In transparent mode, move between bright and dark videos and confirm automatic top/right SF Symbols switch white/black with Douyin's local original icon tint.
+5. Set a top/right icon to white, black, accent, and custom colour; each explicit setting must override automatic foreground in both material modes.
+6. On iOS 27, verify the existing “底栏强制深色” switch keeps its previous stored state and still works independently.
+7. Open the new bottom-bar icon center. Confirm normal and selected symbol names can be chosen separately, with no per-icon colour selector; selected colour follows the global accent.
+8. Tap the top-left button. Confirm the native morph and 直播 / 商城 / 关注 / 推荐 actions remain functional, the menu is narrower than the previous forced-large version, and the top category labels remain hidden.
+9. Scroll through several videos for five minutes in adaptive mode and compare heat/battery load with 1.0.41a/1.0.41c. Then briefly test transparent mode separately, which is expected to remain more GPU-intensive.

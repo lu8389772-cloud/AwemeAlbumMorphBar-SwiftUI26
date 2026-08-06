@@ -1,13 +1,15 @@
-# AwemeLiquidBar 1.0.41b
+# AwemeLiquidBar 1.0.42a
 
-Based on the verified 1.0.41a system-button build. The successful top-left native menu morph and its four rows remain unchanged: 直播、商城、关注、推荐.
+Consolidated iOS 26 material, menu and efficiency update based on the stable 1.0.41c branch.
 
-## Changes
+## Main changes
 
-- Top-left, top-search and right-side buttons keep real system `UIButtonConfiguration` Liquid Glass.
-- Transparent mode remains `clearGlassButtonConfiguration`.
-- Tint mode remains `glassButtonConfiguration`.
-- Each independent button now keeps `overrideUserInterfaceStyle = .unspecified` and resolves against its own local video background instead of inheriting the bottom bar probe's Light/Dark branch.
-- No custom material tint, fill or manual button alpha is introduced; Clear and Tinted modes remain restrained.
-- The bottom-bar system tint probe is reduced from a visible 4×4 center point to a 1×1, 2%-opacity point parked under the covered left platter. This removes the small Liquid Glass dot that appeared in the center gap with two regular tabs.
-- Fixed 46×46 pt controls, pixel-authored PNG sizing, icon colour modes and menu actions remain unchanged.
+- The iOS 26 default for the custom top-left, top-search and right-side controls is now the verified 1.0.41a **system-adaptive** Liquid Glass path. It follows the system Clear/Tinted preference and the probe-resolved light/dark branch.
+- **Pure transparent material** is now a separate opt-in switch. It uses native `clearGlassButtonConfiguration`, with a gray translucent perimeter over the two top buttons and a lighter perimeter on the right action column to suppress the harsh white rim.
+- The existing iOS 27 force-dark preference key and stored ON/OFF state are unchanged and remain independent of the new iOS 26 default.
+- In transparent mode, automatic SF Symbol foreground follows Douyin's local original icon tint; explicit white/black/accent/custom colour modes still take priority.
+- New-bottom-bar icon editing keeps independent normal and selected SF Symbol choices, but removes per-icon colour controls. Unselected colour is system-owned and selected colour is the global accent.
+- The top-left four-item menu retains 直播 / 商城 / 关注 / 推荐 and the native source-to-menu morph. The forced large row size was removed so UIKit uses its more compact automatic menu width. Redundant top category titles remain hidden.
+- Rendering work is reduced by caching unchanged button configurations and image colour samples, limiting probe sampling and continuous stack scans to 8 Hz, pausing the probe off-screen, and coalescing delayed refreshes.
+
+The 4 x 4 bottom material probe remains fully rendered beneath the left platter so the system-adaptive bottom bar stays reliable without exposing the center dot.
