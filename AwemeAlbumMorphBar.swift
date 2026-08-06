@@ -3,6 +3,18 @@ import QuartzCore
 import SwiftUI
 
 
+private extension CGAffineTransform {
+    func isApproximatelyEqual(to other: CGAffineTransform, tolerance: CGFloat = 0.01) -> Bool {
+        abs(a - other.a) < tolerance &&
+        abs(b - other.b) < tolerance &&
+        abs(c - other.c) < tolerance &&
+        abs(d - other.d) < tolerance &&
+        abs(tx - other.tx) < tolerance &&
+        abs(ty - other.ty) < tolerance
+    }
+}
+
+
 @available(iOS 26.0, *)
 private struct AWEPhotosExactGlassIconButton: View {
     let image: UIImage
@@ -227,7 +239,9 @@ private final class AWEAlbumMorphProxyCell: UICollectionViewCell {
 }
 
 /// Transparent selected child retained by the real UITabBarController. UIKit
-/// remains visually inert; minimization is disabled in the stable baseline.
+/// remains visually inert. Scroll recognition is handled by the source-window
+/// gesture bridge, while this controller owns only the native/fallback compact
+/// transition so custom vertical offsets never rewrite UIKit's tab-bar frame.
 @available(iOS 26.0, *)
 private final class AWEAlbumMorphProxyController: UICollectionViewController {
     let originalIndex: Int?
@@ -369,6 +383,7 @@ final class AWEAlbumMorphTabController:
     private var pendingSelectionUntil: CFTimeInterval = 0
     private var compactMode = false
     private var verticalOffset: CGFloat = 0
+    private var fallbackCompactTranslation: CGFloat = 0
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
 
@@ -574,6 +589,7 @@ final class AWEAlbumMorphTabController:
         pendingSelectionUntil = 0
         suppressCallbacks = false
         applyStableVerticalOffset()
+        applyFallbackCompactTransform(animated: false)
         albumMorphProbe(
             "VISIBLE_ITEMS_APPLIED items=\(visibleItemIdentifiers.joined(separator: ",")) " +
             "selected=\(resolvedIndex) tabFrame=\(tabBar.frame)"
@@ -620,23 +636,51 @@ final class AWEAlbumMorphTabController:
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyStableVerticalOffset()
+        if compactMode {
+            // Recompute from UIKit's current height instead of retaining a
+            // coordinate captured before the user adjusted the bar position.
+            applyFallbackCompactTransform(animated: false)
+        }
     }
 
     private func applyStableVerticalOffset() {
         guard isViewLoaded else { return }
-        let height = tabBar.frame.height
-        guard height > 0 else { return }
-
-        let targetY = view.bounds.maxY - height + verticalOffset
-        guard abs(tabBar.frame.minY - targetY) > 0.25 else { return }
-
+        let target = CGAffineTransform(translationX: 0, y: verticalOffset)
+        guard !view.transform.isApproximatelyEqual(to: target) else { return }
         UIView.performWithoutAnimation {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            var frame = tabBar.frame
-            frame.origin.y = targetY
-            tabBar.frame = frame
-            CATransaction.commit()
+            self.view.transform = target
+        }
+    }
+
+    private func currentFallbackCompactTravel() -> CGFloat {
+        let liveHeight = max(tabBar.bounds.height, tabBar.frame.height)
+        guard liveHeight > 1 else { return 0 }
+        // Leave a restrained grab edge visible. The calculation is based on
+        // the current native height, so changing bar height/offset cannot make
+        // the compact and expanded coordinates drift apart.
+        return max(0, liveHeight - 22.0)
+    }
+
+    private func applyFallbackCompactTransform(animated: Bool) {
+        let targetTravel = compactMode ? currentFallbackCompactTravel() : 0
+        fallbackCompactTranslation = targetTravel
+        let changes = {
+            self.tabBar.transform = CGAffineTransform(
+                translationX: 0,
+                y: targetTravel
+            )
+        }
+        if animated {
+            UIView.animate(
+                withDuration: 0.38,
+                delay: 0,
+                usingSpringWithDamping: 0.88,
+                initialSpringVelocity: 0.18,
+                options: [.allowUserInteraction, .beginFromCurrentState],
+                animations: changes
+            )
+        } else {
+            UIView.performWithoutAnimation(changes)
         }
     }
 
@@ -644,14 +688,17 @@ final class AWEAlbumMorphTabController:
     func setVerticalOffset(_ offset: CGFloat) {
         let clamped = min(max(offset, -16.0), 24.0)
         guard abs(verticalOffset - clamped) > 0.01 ||
-                abs(tabBar.frame.minY - (view.bounds.maxY - tabBar.frame.height + clamped)) > 0.25 else {
+                abs(view.transform.ty - clamped) > 0.25 else {
             return
         }
         verticalOffset = clamped
         applyStableVerticalOffset()
+        if compactMode {
+            applyFallbackCompactTransform(animated: false)
+        }
         albumMorphProbe(
-            "VERTICAL_OFFSET_FIXED value=\(String(format: "%.2f", clamped)) " +
-            "tabFrame=\(tabBar.frame)"
+            "VERTICAL_OFFSET_DYNAMIC value=\(String(format: "%.2f", clamped)) " +
+            "viewTY=\(view.transform.ty) tabFrame=\(tabBar.frame)"
         )
     }
 
@@ -748,11 +795,18 @@ final class AWEAlbumMorphTabController:
 
     @objc(setCompactMode:animated:)
     func setCompactMode(_ compact: Bool, animated: Bool) {
-        // ABI compatibility only. Minimization is intentionally disabled.
-        compactMode = false
+        guard compactMode != compact else {
+            if compact {
+                applyFallbackCompactTransform(animated: false)
+            }
+            return
+        }
+        compactMode = compact
+        applyFallbackCompactTransform(animated: animated)
         albumMorphProbe(
-            "SET_COMPACT_DISABLED requested=\(compact) animated=\(animated) " +
-            "tabFrame=\(tabBar.frame)"
+            "SET_COMPACT_FALLBACK compact=\(compact) animated=\(animated) " +
+            "travel=\(String(format: "%.2f", fallbackCompactTranslation)) " +
+            "height=\(String(format: "%.2f", tabBar.frame.height))"
         )
     }
 

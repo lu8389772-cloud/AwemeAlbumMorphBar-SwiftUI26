@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.42a
+Version: 1.0.43a
 Architecture: iphoneos-arm
-Description: Defaults iOS 26 custom controls to low-overhead system-adaptive Liquid Glass, adds an independent softened clear-glass switch, keeps iOS 27 force-dark compatibility, simplifies bottom icon colour ownership, compacts the native four-item menu, and reduces repeated rendering work.
+Description: Adds local black-white contrast for clear glass icons, restores interactive right-side glass controls, dynamically mirrors visible top channels into the native menu, hides the selected underline and off-screen probe, adds profile glass, and re-enables height-aware bottom-bar collapse with lower-overhead sampling.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

@@ -1,15 +1,17 @@
-# AwemeLiquidBar 1.0.42a
+# AwemeLiquidBar 1.0.43a
 
-Consolidated iOS 26 material, menu and efficiency update based on the stable 1.0.41c branch.
+Consolidated interaction, dynamic routing and performance update based on 1.0.42a.
 
 ## Main changes
 
-- The iOS 26 default for the custom top-left, top-search and right-side controls is now the verified 1.0.41a **system-adaptive** Liquid Glass path. It follows the system Clear/Tinted preference and the probe-resolved light/dark branch.
-- **Pure transparent material** is now a separate opt-in switch. It uses native `clearGlassButtonConfiguration`, with a gray translucent perimeter over the two top buttons and a lighter perimeter on the right action column to suppress the harsh white rim.
-- The existing iOS 27 force-dark preference key and stored ON/OFF state are unchanged and remain independent of the new iOS 26 default.
-- In transparent mode, automatic SF Symbol foreground follows Douyin's local original icon tint; explicit white/black/accent/custom colour modes still take priority.
-- New-bottom-bar icon editing keeps independent normal and selected SF Symbol choices, but removes per-icon colour controls. Unselected colour is system-owned and selected colour is the global accent.
-- The top-left four-item menu retains 直播 / 商城 / 关注 / 推荐 and the native source-to-menu morph. The forced large row size was removed so UIKit uses its more compact automatic menu width. Redundant top category titles remain hidden.
-- Rendering work is reduced by caching unchanged button configurations and image colour samples, limiting probe sampling and continuous stack scans to 8 Hz, pausing the probe off-screen, and coalescing delayed refreshes.
+- Clear-glass automatic SF Symbol colour no longer reads Douyin's permanently white artwork. A low-rate, per-control local backdrop sampler switches the icon between black and white with hysteresis. Explicit white, black, accent and custom colours still have higher priority.
+- The custom gray perimeter is removed completely. UIKit owns the Liquid Glass body and its source-to-menu deformation without a rigid circular overlay.
+- Right-side like, comment, favorite and share replacements are real interactive glass UIButtons again. Their native press response and elastic deformation remain active, while completed taps are forwarded to Douyin's original controls.
+- The top-left menu reads the currently available top channel items at runtime, preserves their current order and labels (including account-specific local channels), excludes externally hidden items, and falls back to 直播 / 商城 / 关注 / 推荐 only when scanning fails.
+- Top category text remains pixel-hidden for routing, and the exact `AWEFeedMultiTabSelectedContainerView` underline is suppressed after its own layout so the selected marker cannot reappear.
+- The profile avatar receives a 54 pt system Liquid Glass backplate using the same adaptive/clear material choice as the right action column, without a custom outline.
+- Upward-swipe collapse is re-enabled through a simultaneous source-window pan bridge. Native private minimization selectors are tried first; the fallback computes travel from the live tab-bar height on every layout, so adjusted height and vertical offset do not produce stale coordinates.
+- The 4 x 4 system-material probe remains only while the Album Morph bottom bar is actually visible. It is hidden and its 4–8 Hz display link is paused on chat and other non-bottom-bar pages.
+- Multiline chat input capsules grow vertically while keeping the single-line 22 pt continuous corner radius instead of turning the whole field into an oversized pill.
 
-The 4 x 4 bottom material probe remains fully rendered beneath the left platter so the system-adaptive bottom bar stays reliable without exposing the center dot.
+The local contrast sampler processes at most one visible clear-glass button per low-rate tick. Dynamic menu reconstruction is signature-cached, and existing bounded scans remain coalesced.

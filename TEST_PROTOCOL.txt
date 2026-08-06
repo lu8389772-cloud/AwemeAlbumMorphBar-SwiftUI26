@@ -1,9 +1,9 @@
-1. Open Douyin Home on iOS 26. With “纯透明材质” OFF, confirm top/search/right controls use the system-adaptive material and change with the system Clear/Tinted preference.
-2. Confirm the bottom bar still adapts between bright and dark content and no center probe dot is visible.
-3. Turn “纯透明材质” ON. On a dark video, confirm the two top buttons have a restrained gray translucent rim instead of a bright white rim; right-side rims should remain lighter.
-4. In transparent mode, move between bright and dark videos and confirm automatic top/right SF Symbols switch white/black with Douyin's local original icon tint.
-5. Set a top/right icon to white, black, accent, and custom colour; each explicit setting must override automatic foreground in both material modes.
-6. On iOS 27, verify the existing “底栏强制深色” switch keeps its previous stored state and still works independently.
-7. Open the new bottom-bar icon center. Confirm normal and selected symbol names can be chosen separately, with no per-icon colour selector; selected colour follows the global accent.
-8. Tap the top-left button. Confirm the native morph and 直播 / 商城 / 关注 / 推荐 actions remain functional, the menu is narrower than the previous forced-large version, and the top category labels remain hidden.
-9. Scroll through several videos for five minutes in adaptive mode and compare heat/battery load with 1.0.41a/1.0.41c. Then briefly test transparent mode separately, which is expected to remain more GPU-intensive.
+1. Enable pure transparent material and leave each top/right SF Symbol colour on Automatic. Move between clearly bright and dark videos; verify icons change black/white locally without relying on Douyin's original white icons. Then confirm explicit white, black, accent and custom choices override Automatic.
+2. Press and hold the left menu and each right-side action button. Confirm UIKit's native press enlargement / elastic oval deformation remains, with no rigid gray circular outline. Release a normal tap and verify the original Douyin action still fires.
+3. Open the top-left menu with different accounts or channel configurations. Confirm it mirrors the currently visible labels/order, keeps a real local-city label when present, excludes externally hidden channels, and still routes each action.
+4. Select several original top channels through the menu. Confirm all title pixels and the 24 x 9 selected underline stay hidden after selection, rotation and video changes.
+5. Confirm the avatar has a roughly 54 x 54 system Liquid Glass backplate, follows adaptive/clear material settings, and does not block the profile tap.
+6. With bottom-bar collapse enabled, swipe upward anywhere on the home feed and downward to restore. Test after changing the bar's vertical offset/height; compact travel must follow the live height and must not jump to an old coordinate.
+7. Enter chat or another page where the custom bottom bar is absent. Confirm no 4 x 4 probe dot remains. Return home and verify adaptive bottom material resumes.
+8. In chat, type multiple lines. Confirm the input field grows vertically while retaining restrained 22 pt continuous corners rather than becoming a half-height capsule.
+9. Scroll videos for at least five minutes in adaptive mode and then clear mode. Check that no repeated button rebuilding, rapid icon flicker or abnormal heat increase appears. Local contrast may intentionally settle within roughly one second because sampling is rate-limited.

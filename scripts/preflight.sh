@@ -3,90 +3,78 @@ set -euo pipefail
 
 swiftc -frontend -parse AwemeAlbumMorphBar.swift
 
-python3 - <<'PY'
+python3 - <<'PY2'
 from pathlib import Path
 swift = Path('AwemeAlbumMorphBar.swift').read_text()
 objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-for token in ['Version: 1.0.42a']:
-    if token not in control:
-        raise SystemExit(f'missing control token: {token}')
-if 'AwemeLiquidBar-1.0.42a-Xcode27-rootless' not in workflow:
-    raise SystemExit('workflow artifact name not updated')
-
-for token in [
+required_control = ['Version: 1.0.43a']
+required_workflow = ['AwemeLiquidBar-1.0.43a-Xcode27-rootless']
+required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
     'setResolvedInterfaceStyleRaw',
     'setVerticalOffset(_ offset: CGFloat)',
+    'currentFallbackCompactTravel()',
+    'applyFallbackCompactTransform(animated:',
+    'setCompactMode(_ compact: Bool, animated: Bool)',
     'let designScale: CGFloat = 3.0',
     'let maximumPixelEdge: CGFloat = 100.0',
-]:
-    if token not in swift:
-        raise SystemExit(f'missing Swift stable token: {token}')
-
-for token in [
-    'AwemeLiquidBar 1.0.42a',
-    'Native minimization is intentionally disabled in 1.0.42a',
+]
+required_objc = [
+    'AwemeLiquidBar 1.0.43a',
     'AWEApplyAlbumMorphResolvedAppearance',
-    'gAWEAlbumMorphLastAppliedStyle',
     'AWERefreshRegisteredAdaptiveGlassButtons',
-    'AWECreateAdaptiveGlassIconConfiguration',
+    'AWEReadLocalBackdropLuminance',
+    'AWERefreshOneAdaptiveButtonContrast',
+    'kAWEAdaptiveGlassAutomaticContrastKey',
+    'AWESoftClearEdgeColor',
+    'view.layer.borderWidth = 0.0;',
     'AWEConfigureAdaptiveSystemGlassIconButton',
     '@"glassButtonConfiguration"',
     '@"clearGlassButtonConfiguration"',
     'AWEHomeTransparentGlassEnabled',
-    'AWESoftClearEdgeColor',
-    'AWEHomeExplicitForegroundForSource',
-    'kAWEImageAverageColorCacheKey',
-    'configuration.baseBackgroundColor = nil;',
-    'configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;',
-    'configuration.contentInsets = NSDirectionalEdgeInsetsZero;',
-    'button.overrideUserInterfaceStyle = style;',
-    'AWEApplyTopCategoryVisualSuppression',
-    'AWEHideTopCategoryTitleView',
-    'CGRectGetWidth(barFrame) * 0.24',
-    'slot.systemGlassButton',
-    'const CGFloat diameter = 46.0;',
-    'PNG is a separate original-colour path.',
-    'All SF Symbols remain templates.',
-    'AWEBottomBarSearchIsVisible',
-    'AWESuppressTopSearchForBottomSearch',
-    '#pragma mark - Native top-left four-action Liquid Glass menu',
+    'AWEDynamicTopQuickMenuDefinitions',
+    'AWEViewEffectivelyVisibleInsideTopContainer',
     'button.menu = menu;',
     'button.showsMenuAsPrimaryAction = YES;',
-    '@{@"title": @"直播", @"symbol": @"play.rectangle"}',
-    '@{@"title": @"商城", @"symbol": @"storefront"}',
-    '@{@"title": @"关注", @"symbol": @"person.2"}',
-    '@{@"title": @"推荐", @"symbol": @"sparkles"}',
-    'iOS 26 默认：系统自适应材质',
-    '纯透明材质（灰色柔边，渲染开销较高）',
-    'AWEIconDefinitionUsesUnifiedBottomColour',
-]:
-    if token not in objc:
-        raise SystemExit(f'missing Objective-C token: {token}')
+    '%hook AWEFeedMultiTabSelectedContainerView',
+    'AWEForceExactTopIndicatorSuppression',
+    'AWERefreshProfileAvatarGlass',
+    'const CGFloat diameter = 54.0;',
+    'AWEAlbumMorphCollapseGestureDelegate',
+    'AWEAlbumMorphRequestNativeMinimized',
+    'AWEHideAlbumMorphTintProbe',
+    'MIN(22.0, height * 0.5)',
+    '纯透明材质（无额外描边，局部黑白自适应）',
+]
+for token in required_control:
+    if token not in control: raise SystemExit(f'missing control token: {token}')
+for token in required_workflow:
+    if token not in workflow: raise SystemExit(f'missing workflow token: {token}')
+for token in required_swift:
+    if token not in swift: raise SystemExit(f'missing Swift token: {token}')
+for token in required_objc:
+    if token not in objc: raise SystemExit(f'missing Objective-C token: {token}')
 
 if objc.count('const CGFloat diameter = 46.0;') != 2:
     raise SystemExit('top/right 46 pt diameter count is not 2')
 if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
-if objc.count('{') != objc.count('}'):
-    raise SystemExit('Objective-C brace count mismatch')
-if objc.count('UIImage *symbol = AWEConfiguredRoleImage(') != 1:
-    raise SystemExit('right-side symbol declaration count invalid')
-
+for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','bracket')]:
+    if objc.count(left) != objc.count(right):
+        raise SystemExit(f'Objective-C {name} count mismatch')
 for forbidden in [
     'UIDeferredMenuElement',
     'completion(@[])',
     'preferredElementSize = UIMenuElementSizeLarge',
-    'slot.photosGlassHost.hidden = NO;',
-    'AWEInstallOrUpdateAlbumMorphBar((UIView *)gAWELastTabBar, YES)',
-    'AwemeLiquidBar_1.0.41c',
+    '纯透明材质（灰色柔边',
+    'AwemeLiquidBar_1.0.42a_interaction.log',
 ]:
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.42a consolidated preflight passed')
-PY
+print('AwemeLiquidBar 1.0.43a consolidated preflight passed')
+PY2

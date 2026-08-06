@@ -1,1 +1,1 @@
-This is the complete AwemeLiquidBar 1.0.42a project. Replace the current repository contents with this project, keep the existing .git directory, then commit and push. Do not apply the patch after copying the complete project.
+This is the complete AwemeLiquidBar 1.0.43a project. Put the ZIP in /var/mobile, replace the current repository contents while preserving its .git directory, then commit and push. Do not apply the separate patch after copying the complete project.
