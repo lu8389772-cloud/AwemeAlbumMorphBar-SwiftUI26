@@ -11271,7 +11271,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         masterCard, accentCard, positionCard, gestureCard, chatCard, wanCard, homeVisualCard
     ];
     self.themePrimaryLabels = @[
-        masterTitle, headline, positionTitle, collapseLabel, gestureTitle, chatTitle,
+        masterTitle, headline, positionTitle, gestureTitle, chatTitle,
         capsuleLabel, separateLabel, wanTitle, albumStyleLabel, hideTitlesLabel,
         forceDarkBottomBarLabel, topLabel, pngLabel, diagnosticLabel
     ];
