@@ -637,9 +637,8 @@ final class AWEAlbumMorphTabController:
         super.viewDidLayoutSubviews()
         applyStableVerticalOffset()
         if compactMode {
-            // Recompute from UIKit's current height instead of retaining a
-            // coordinate captured before the user adjusted the bar position.
-            applyFallbackCompactTransform(animated: false)
+            compactMode = false
+            tabBar.transform = .identity
         }
     }
 
@@ -648,6 +647,7 @@ final class AWEAlbumMorphTabController:
         let target = CGAffineTransform(translationX: 0, y: verticalOffset)
         guard !view.transform.isApproximatelyEqual(to: target) else { return }
         UIView.performWithoutAnimation {
+            self.view.transform = .identity
             self.view.transform = target
         }
     }
@@ -686,7 +686,7 @@ final class AWEAlbumMorphTabController:
 
     @objc(setVerticalOffset:)
     func setVerticalOffset(_ offset: CGFloat) {
-        let clamped = min(max(offset, -16.0), 24.0)
+        let clamped = min(max(offset, -24.0), 80.0)
         guard abs(verticalOffset - clamped) > 0.01 ||
                 abs(view.transform.ty - clamped) > 0.25 else {
             return

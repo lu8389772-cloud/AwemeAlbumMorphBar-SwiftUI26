@@ -10,8 +10,8 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.44a']
-required_workflow = ['AwemeLiquidBar-1.0.44a-Xcode27-rootless']
+required_control = ['Version: 1.0.45a']
+required_workflow = ['AwemeLiquidBar-1.0.45a-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
@@ -21,11 +21,14 @@ required_swift = [
     'let maximumPixelEdge: CGFloat = 100.0',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.44a',
-    'LiquidBar 设置 · 1.0.44a',
+    'AwemeLiquidBar 1.0.45a',
+    'LiquidBar 设置 · 1.0.45a',
     'static BOOL AWEAlbumMorphCollapseEnabled(void)',
     'return NO;',
     'AWETopLiquidGroupView',
+    'UISegmentedControl',
+    'contentVisible',
+    'AWEStartHomeChromeRecoverySampler',
     '顶部分类液态分组（默认）',
     '左上按钮展开分类菜单',
     'AWETopMenuMorphEnabled',
@@ -34,6 +37,8 @@ required_objc = [
     '- (void)setCenter:(CGPoint)center',
     'AWEPrepareAlbumMorphOverlayTransparency',
     'AWEApplyExactChatCapsuleMask(fill',
+    'continuousPill',
+    'kAWEAdaptiveGlassExplicitForegroundKey',
     'setContentSize:(CGSize)contentSize',
     'growingText.contentSize.async',
     'button.menu = menu;',
@@ -67,5 +72,5 @@ for forbidden in [
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.44a resilient top/group recovery preflight passed')
+print('AwemeLiquidBar 1.0.45a segmented resident recovery preflight passed')
 PY2

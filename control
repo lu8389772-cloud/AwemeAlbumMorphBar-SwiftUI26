@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.44a
+Version: 1.0.45a
 Architecture: iphoneos-arm
-Description: Adds a default native Liquid Glass top category group, keeps the optional source-to-menu morph, recovers top/right glass after comment/photo/feed transitions, delays overlay restoration to reduce white flashes, and makes the multiline chat background resize without clipping the left action.
+Description: Uses one native scrollable segmented top glass group, keeps the overlay window resident to suppress transition flashes, restores top/right glass after interactive feed transitions, preserves explicit icon colors, persists a wider absolute bar offset, and applies a live multiline composer pill without clipping controls.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks
