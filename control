@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.43d
+Version: 1.0.44a
 Architecture: iphoneos-arm
-Description: Disables the unstable compact gesture, restores pass-through Douyin right-action touches, keeps the avatar glass backplate, restores a full 4x4 corner-hidden tint probe, and fixes multiline composer radius targeting.
+Description: Adds a default native Liquid Glass top category group, keeps the optional source-to-menu morph, recovers top/right glass after comment/photo/feed transitions, delays overlay restoration to reduce white flashes, and makes the multiline chat background resize without clipping the left action.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

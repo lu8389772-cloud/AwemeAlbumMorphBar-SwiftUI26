@@ -1,4 +1,13 @@
-# AwemeLiquidBar 1.0.43d
+# AwemeLiquidBar 1.0.44a
+
+## 1.0.44a changes
+- Default top category Liquid Glass group with one background material and one moving selected capsule.
+- Optional native top-left UIMenu morph remains available as a separate switch.
+- Rebind/recovery passes after comment, photo preview, profile and partial feed paging transitions.
+- Conservative transparent-overlay restoration to reduce white flashes when closing sheets/pages.
+- Chat composer masks only the painted background, not the interactive container, and refreshes on frame/content/text changes.
+
+# AwemeLiquidBar 1.0.44a
 
 Focused stability rollback based on 1.0.43c.
 

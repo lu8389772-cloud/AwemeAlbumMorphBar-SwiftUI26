@@ -69,7 +69,7 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: AwemeLiquidBar-1.0.43d-Xcode27-rootless
+          name: AwemeLiquidBar-1.0.44a-Xcode27-rootless
           path: packages/*.deb
           if-no-files-found: error
           retention-days: 14

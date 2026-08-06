@@ -10,8 +10,8 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.43d']
-required_workflow = ['AwemeLiquidBar-1.0.43d-Xcode27-rootless']
+required_control = ['Version: 1.0.44a']
+required_workflow = ['AwemeLiquidBar-1.0.44a-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
@@ -21,20 +21,21 @@ required_swift = [
     'let maximumPixelEdge: CGFloat = 100.0',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.43d',
-    'LiquidBar 设置 · 1.0.43d',
+    'AwemeLiquidBar 1.0.44a',
+    'LiquidBar 设置 · 1.0.44a',
     'static BOOL AWEAlbumMorphCollapseEnabled(void)',
-    '1.0.43d retires the experimental collapse path completely',
-    'slot.userInteractionEnabled = NO;',
-    'glassButton.userInteractionEnabled = NO;',
-    'AWEHomeExplicitForegroundForSource',
-    'AWERefreshProfileAvatarGlass',
-    'const CGFloat diameter = 54.0;',
-    'CGRectMake(0.0, MAX(0.0, rootHeight - 4.0), 4.0, 4.0)',
-    'gAWEAlbumMorphTintProbe.transform = CGAffineTransformIdentity;',
-    'AWEApplyChatPillNearGrowingTextView',
-    'MIN(22.0, height * 0.5)',
-    'AWEDynamicTopQuickMenuDefinitions',
+    'return NO;',
+    'AWETopLiquidGroupView',
+    '顶部分类液态分组（默认）',
+    '左上按钮展开分类菜单',
+    'AWETopMenuMorphEnabled',
+    'AWEUpdateTopLiquidGroup',
+    'AWEScheduleHomeChromeRecovery',
+    '- (void)setCenter:(CGPoint)center',
+    'AWEPrepareAlbumMorphOverlayTransparency',
+    'AWEApplyExactChatCapsuleMask(fill',
+    'setContentSize:(CGSize)contentSize',
+    'growingText.contentSize.async',
     'button.menu = menu;',
     'button.showsMenuAsPrimaryAction = YES;',
     '%hook AWEFeedMultiTabSelectedContainerView',
@@ -60,11 +61,11 @@ for forbidden in [
     'UIDeferredMenuElement',
     'completion(@[])',
     'preferredElementSize = UIMenuElementSizeLarge',
-    'CGAffineTransformMakeScale(0.01, 0.01)',
+    'collapseLabel',
     '上滑收缩底栏（动态高度）',
 ]:
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.43d focused stability preflight passed')
+print('AwemeLiquidBar 1.0.44a resilient top/group recovery preflight passed')
 PY2
