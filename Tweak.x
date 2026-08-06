@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.46a — Telegram top switcher + resident masked bottom-bar transitions
+ AwemeLiquidBar 1.0.46b — Telegram top switcher + resident masked bottom-bar transitions
 
  Focused rollback/fix release:
  - completely disables the experimental upward-swipe compact path and removes
@@ -322,6 +322,8 @@ static NSString * const kAWEHomeTransparentGlassDefaultsKey =
     @"AwemeLiquidBarHomeTransparentGlassV1";
 static NSString * const kAWETopTelegramSwitcherEnabledDefaultsKey =
     @"AwemeLiquidBarTopTelegramSwitcherEnabled1.0.1";
+static NSString * const kAWETopTelegramVisibleCountDefaultsKey =
+    @"AwemeLiquidBarTopTelegramVisibleCount1.0.1";
 static NSString * const kAWETopMenuMorphEnabledDefaultsKey =
     @"AwemeLiquidBarTopMenuMorphEnabled1.0.1";
 static NSString * const kAWESymbolOverridesDefaultsKey =
@@ -411,7 +413,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    /* 1.0.46a retires the experimental collapse path completely.  Keep the
+    /* 1.0.46b retires the experimental collapse path completely.  Keep the
        historical preference key only so old installs do not crash while
        loading settings; no gesture or compact transform is allowed to run. */
     return NO;
@@ -725,7 +727,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.46a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.46b_interaction.log"] copy];
     });
     return path;
 }
@@ -794,7 +796,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.46a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.46b_probe.log"] copy];
     });
     return path;
 }
@@ -2763,6 +2765,15 @@ static BOOL AWETopTelegramSwitcherEnabled(void) {
     return [stored isKindOfClass:NSNumber.class]
         ? [(NSNumber *)stored boolValue]
         : YES;
+}
+
+static NSInteger AWETopTelegramVisibleCount(void) {
+    id stored = [NSUserDefaults.standardUserDefaults
+        objectForKey:kAWETopTelegramVisibleCountDefaultsKey];
+    NSInteger count = [stored isKindOfClass:NSNumber.class]
+        ? [(NSNumber *)stored integerValue]
+        : 3;
+    return MIN(4, MAX(1, count));
 }
 
 static BOOL AWETopMenuMorphEnabled(void) {
@@ -9627,6 +9638,7 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
 @property(nonatomic, strong) NSArray<UIButton *> *buttons;
 @property(nonatomic, assign) NSInteger selectedIndex;
 @property(nonatomic, assign) NSInteger windowStart;
+@property(nonatomic, assign) CFTimeInterval selectionAnimationDeadline;
 - (void)alb_categoryTapped:(UIButton *)sender;
 - (void)alb_swipedLeft:(UISwipeGestureRecognizer *)recognizer;
 - (void)alb_swipedRight:(UISwipeGestureRecognizer *)recognizer;
@@ -9635,7 +9647,8 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
 @implementation AWETopLiquidGroupView
 
 - (NSInteger)alb_visibleCount {
-    return MIN(4, (NSInteger)self.definitions.count);
+    return MIN(AWETopTelegramVisibleCount(),
+               (NSInteger)self.definitions.count);
 }
 
 - (void)alb_categoryTapped:(UIButton *)sender {
@@ -9669,15 +9682,32 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
     NSInteger maximumStart = MAX(0, (NSInteger)self.definitions.count - visibleCount);
     if (self.windowStart >= maximumStart) return;
     self.windowStart += 1;
+    if (visibleCount == 1) {
+        self.selectedIndex = self.windowStart;
+    }
     AWELayoutTopLiquidGroup(self, YES);
+    if (visibleCount == 1 && self.selectedIndex < (NSInteger)self.definitions.count) {
+        NSDictionary *definition = self.definitions[(NSUInteger)self.selectedIndex];
+        NSString *route = definition[@"route"] ?: definition[@"title"];
+        if (route.length) AWEActivateQuickMenuDestination(route);
+    }
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
 
 - (void)alb_swipedRight:(UISwipeGestureRecognizer *)recognizer {
     (void)recognizer;
+    NSInteger visibleCount = [self alb_visibleCount];
     if (self.windowStart <= 0) return;
     self.windowStart -= 1;
+    if (visibleCount == 1) {
+        self.selectedIndex = self.windowStart;
+    }
     AWELayoutTopLiquidGroup(self, YES);
+    if (visibleCount == 1 && self.selectedIndex < (NSInteger)self.definitions.count) {
+        NSDictionary *definition = self.definitions[(NSUInteger)self.selectedIndex];
+        NSString *route = definition[@"route"] ?: definition[@"title"];
+        if (route.length) AWEActivateQuickMenuDestination(route);
+    }
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
 
@@ -9760,8 +9790,10 @@ static AWETopLiquidGroupView *AWEEnsureTopLiquidGroup(UIView *container) {
             button.titleLabel.font = [UIFont systemFontOfSize:14.5
                                                        weight:UIFontWeightSemibold];
             button.titleLabel.adjustsFontSizeToFitWidth = YES;
-            button.titleLabel.minimumScaleFactor = 0.72;
-            button.titleLabel.lineBreakMode = NSLineBreakByClipping;
+            button.titleLabel.minimumScaleFactor = 0.84;
+            button.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+            button.titleLabel.numberOfLines = 1;
+            button.contentEdgeInsets = UIEdgeInsetsMake(0.0, 7.0, 0.0, 7.0);
             button.accessibilityIdentifier = [NSString stringWithFormat:
                 @"AwemeLiquidBar.TopCategory.%ld", (long)index];
             [button addTarget:group action:@selector(alb_categoryTapped:)
@@ -9801,13 +9833,13 @@ static void AWEHideTopLiquidGroup(UIView *container) {
 
 static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
                                     BOOL animated) {
-    if (!group || group.definitions.count < 2 || CGRectIsEmpty(group.bounds)) return;
+    if (!group || group.definitions.count < 1 || CGRectIsEmpty(group.bounds)) return;
     NSInteger total = (NSInteger)group.definitions.count;
-    NSInteger visibleCount = MIN(4, total);
+    NSInteger visibleCount = MIN(AWETopTelegramVisibleCount(), total);
     NSInteger maximumStart = MAX(0, total - visibleCount);
     group.windowStart = MIN(MAX(0, group.windowStart), maximumStart);
 
-    if (group.selectedIndex != NSNotFound) {
+    if (visibleCount > 1 && group.selectedIndex != NSNotFound) {
         if (group.selectedIndex < group.windowStart) {
             group.windowStart = group.selectedIndex;
         } else if (group.selectedIndex >= group.windowStart + visibleCount) {
@@ -9816,12 +9848,36 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
         group.windowStart = MIN(MAX(0, group.windowStart), maximumStart);
     }
 
+    if (!animated && CACurrentMediaTime() < group.selectionAnimationDeadline) {
+        return;
+    }
+    if (animated) {
+        group.selectionAnimationDeadline = CACurrentMediaTime() + 0.48;
+    }
+
     CGFloat inset = 4.0;
     CGRect contentBounds = CGRectInset(group.bounds, inset, inset);
     CGFloat itemWidth = CGRectGetWidth(contentBounds) / MAX(1, visibleCount);
+    UIUserInterfaceStyle style = gAWEAlbumMorphLastAppliedStyle;
+    if (style != UIUserInterfaceStyleLight &&
+        style != UIUserInterfaceStyleDark) {
+        style = group.traitCollection.userInterfaceStyle;
+    }
+    if (style != UIUserInterfaceStyleLight &&
+        style != UIUserInterfaceStyleDark) {
+        style = UIUserInterfaceStyleDark;
+    }
+    UIColor *labelColor = AWELabelColorResolvedForStyle(style);
+    UIColor *normalColor = [labelColor colorWithAlphaComponent:0.84];
+    UIColor *selectedColor = labelColor;
     UIColor *accent = AWEStoredAccentColor();
 
-    void (^changes)(void) = ^{
+    CGRect oldSelectionFrame = group.selectionGlass.frame;
+    BOOL hadVisibleSelection = group.selectionGlass.alpha > 0.01;
+    __block CGRect targetSelectionFrame = CGRectZero;
+    __block BOOL hasTargetSelection = NO;
+
+    [UIView performWithoutAnimation:^{
         group.backgroundGlass.frame = group.bounds;
         NSInteger visibleSelectionSlot = NSNotFound;
         for (NSInteger slot = 0; slot < 4; slot++) {
@@ -9841,36 +9897,53 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
                 CGRectGetHeight(contentBounds));
             [button setTitle:title forState:UIControlStateNormal];
             BOOL selected = definitionIndex == group.selectedIndex;
-            [button setTitleColor:selected ? accent : UIColor.secondaryLabelColor
-                         forState:UIControlStateNormal];
+            UIColor *titleColor = selected ? selectedColor : normalColor;
+            if (visibleCount == 1 && selected) {
+                titleColor = accent;
+            }
+            [button setTitleColor:titleColor forState:UIControlStateNormal];
+            button.titleLabel.alpha = 1.0;
             if (selected) visibleSelectionSlot = slot;
         }
 
-        if (visibleSelectionSlot != NSNotFound) {
-            CGRect selectedFrame = CGRectMake(
+        if (visibleCount > 1 && visibleSelectionSlot != NSNotFound) {
+            targetSelectionFrame = CGRectInset(CGRectMake(
                 CGRectGetMinX(contentBounds) + visibleSelectionSlot * itemWidth,
                 CGRectGetMinY(contentBounds), itemWidth,
-                CGRectGetHeight(contentBounds));
-            group.selectionGlass.frame = CGRectInset(selectedFrame, 1.5, 0.5);
-            group.selectionGlass.layer.cornerRadius =
-                CGRectGetHeight(group.selectionGlass.bounds) * 0.5;
-            group.selectionGlass.alpha = 1.0;
-        } else {
-            group.selectionGlass.alpha = 0.0;
+                CGRectGetHeight(contentBounds)), 1.5, 0.5);
+            hasTargetSelection = YES;
         }
-    };
+    }];
 
-    if (animated) {
-        [UIView animateWithDuration:0.32
+    if (!hasTargetSelection) {
+        [UIView performWithoutAnimation:^{
+            group.selectionGlass.alpha = 0.0;
+        }];
+    } else if (animated && hadVisibleSelection &&
+               !CGRectEqualToRect(oldSelectionFrame, targetSelectionFrame)) {
+        group.selectionGlass.frame = oldSelectionFrame;
+        group.selectionGlass.alpha = 1.0;
+        group.selectionGlass.layer.cornerRadius =
+            CGRectGetHeight(oldSelectionFrame) * 0.5;
+        [UIView animateWithDuration:0.38
                               delay:0.0
-             usingSpringWithDamping:0.88
-              initialSpringVelocity:0.12
+             usingSpringWithDamping:0.82
+              initialSpringVelocity:0.22
                             options:UIViewAnimationOptionAllowUserInteraction |
-                                    UIViewAnimationOptionBeginFromCurrentState
-                         animations:changes
-                         completion:nil];
+                                    UIViewAnimationOptionBeginFromCurrentState |
+                                    UIViewAnimationOptionCurveEaseInOut
+                         animations:^{
+            group.selectionGlass.frame = targetSelectionFrame;
+            group.selectionGlass.layer.cornerRadius =
+                CGRectGetHeight(targetSelectionFrame) * 0.5;
+        } completion:nil];
     } else {
-        [UIView performWithoutAnimation:changes];
+        [UIView performWithoutAnimation:^{
+            group.selectionGlass.frame = targetSelectionFrame;
+            group.selectionGlass.layer.cornerRadius =
+                CGRectGetHeight(targetSelectionFrame) * 0.5;
+            group.selectionGlass.alpha = 1.0;
+        }];
     }
 
     [group bringSubviewToFront:group.selectionGlass];
@@ -9903,7 +9976,7 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
             @{@"title": @"关注", @"route": @"关注", @"symbol": @"person.2", @"x": @2},
             @{@"title": @"推荐", @"route": @"推荐", @"symbol": @"sparkles", @"x": @3}
         ];
-    if (definitions.count < 2) {
+    if (definitions.count < 1 || !AWETopTelegramSwitcherEnabled()) {
         AWEHideTopLiquidGroup(container);
         return;
     }
@@ -9919,8 +9992,12 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
     CGFloat rightBoundary = topSearchVisible ? 82.0 : 14.0;
     CGFloat availableWidth = MAX(120.0,
         CGRectGetWidth(container.bounds) - leftBoundary - rightBoundary);
-    NSInteger visibleCount = MIN(4, (NSInteger)definitions.count);
-    CGFloat desiredWidth = MIN(availableWidth, MAX(150.0, visibleCount * 68.0));
+    NSInteger visibleCount = MIN(AWETopTelegramVisibleCount(),
+                                 (NSInteger)definitions.count);
+    CGFloat perItemWidth = visibleCount == 1 ? 96.0 : 74.0;
+    CGFloat desiredWidth = MIN(availableWidth,
+        MAX(visibleCount == 1 ? 92.0 : 148.0,
+            visibleCount * perItemWidth));
     CGFloat centerX = leftBoundary + availableWidth * 0.5;
     group.frame = CGRectMake(centerX - desiredWidth * 0.5,
                              CGRectGetMidY(container.bounds) - height * 0.5,
@@ -9929,7 +10006,12 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
     group.hidden = NO;
     group.userInteractionEnabled = YES;
     group.alpha = 1.0;
-    group.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+    UIUserInterfaceStyle groupStyle = gAWEAlbumMorphLastAppliedStyle;
+    if (groupStyle != UIUserInterfaceStyleLight &&
+        groupStyle != UIUserInterfaceStyleDark) {
+        groupStyle = UIUserInterfaceStyleUnspecified;
+    }
+    group.overrideUserInterfaceStyle = groupStyle;
 
     NSString *signature = [[definitions valueForKey:@"route"]
         componentsJoinedByString:@"|"];
@@ -10044,7 +10126,9 @@ static void AWERefreshTopActionContainer(UIView *container) {
            original artwork and original hit target together. */
         AWESuppressTopSearchForBottomSearch(
             container, searchOwner, searchSource);
-    } else if (AWETopGlassEnabled() && searchOwner) {
+    } else if (searchOwner) {
+        /* Search is an independent navigation entry. Disabling the top menu/
+           category glass must not remove the right-side search button. */
         AWEConfigureTopSlot(container, AWEHomeTopActionKindSearch,
                             searchOwner, searchSource);
     } else {
@@ -11419,6 +11503,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 @property (nonatomic, retain) UISwitch *customPNGModeSwitch;
 @property (nonatomic, retain) UISwitch *topGlassSwitch;
 @property (nonatomic, retain) UISwitch *topCategoryGroupSwitch;
+@property (nonatomic, retain) UISegmentedControl *topCategoryVisibleCountControl;
 @property (nonatomic, retain) UISwitch *topMenuMorphSwitch;
 @property (nonatomic, retain) UISwitch *transparentGlassSwitch;
 @property (nonatomic, retain) UISwitch *albumMorphStyleSwitch;
@@ -11442,7 +11527,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.46a";
+    self.title = @"LiquidBar 设置 · 1.0.46b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -11885,7 +11970,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     forceDarkBottomBarRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *topLabel = [UILabel new];
-    topLabel.text = @"顶部菜单/搜索液态玻璃";
+    topLabel.text = @"顶部菜单/分类液态玻璃（搜索独立保留）";
     topLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
     UISwitch *topSwitch = [UISwitch new];
     topSwitch.on = AWETopGlassEnabled();
@@ -11914,6 +11999,28 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     topCategoryGroupRow.axis = UILayoutConstraintAxisHorizontal;
     topCategoryGroupRow.alignment = UIStackViewAlignmentCenter;
     topCategoryGroupRow.distribution = UIStackViewDistributionEqualSpacing;
+
+    UILabel *topCategoryCountLabel = [UILabel new];
+    topCategoryCountLabel.text = @"顶部分组同时显示数量";
+    topCategoryCountLabel.font = [UIFont systemFontOfSize:14.0
+                                                  weight:UIFontWeightMedium];
+    UISegmentedControl *topCategoryCountControl =
+        [[UISegmentedControl alloc] initWithItems:@[@"1", @"2", @"3", @"4"]];
+    topCategoryCountControl.selectedSegmentIndex =
+        AWETopTelegramVisibleCount() - 1;
+    [topCategoryCountControl addTarget:self
+        action:@selector(topCategoryVisibleCountChanged:)
+        forControlEvents:UIControlEventValueChanged];
+    self.topCategoryVisibleCountControl = topCategoryCountControl;
+    UIStackView *topCategoryCountRow = [[UIStackView alloc]
+        initWithArrangedSubviews:@[topCategoryCountLabel,
+                                  topCategoryCountControl]];
+    topCategoryCountRow.axis = UILayoutConstraintAxisHorizontal;
+    topCategoryCountRow.alignment = UIStackViewAlignmentCenter;
+    topCategoryCountRow.spacing = 10.0;
+    [topCategoryCountLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                           forAxis:UILayoutConstraintAxisHorizontal];
+    [topCategoryCountControl.widthAnchor constraintEqualToConstant:168.0].active = YES;
 
     UILabel *topMenuMorphLabel = [UILabel new];
     topMenuMorphLabel.text = @"左上按钮展开分类菜单（开启时替代顶部分组）";
@@ -12018,7 +12125,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         albumStyleRow, newBarIconCenterButton,
         hideTitlesRow, forceDarkBottomBarRow,
-        topRow, topMenuMorphRow,
+        topRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
         adaptiveGlassHint, transparentGlassRow,
         pngRow, pngHint, reloadPNG,
         iconCenterButton, diagnosticRow, diagnosticButtons,
@@ -12472,6 +12579,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn forKey:kAWETopGlassEnabledDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
     AWERefreshAllConfiguredIcons();
+    AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
 }
 
 - (void)topCategoryGroupSwitchChanged:(UISwitch *)sender {
@@ -12482,6 +12590,15 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             forKey:kAWETopMenuMorphEnabledDefaultsKey];
         self.topMenuMorphSwitch.on = NO;
     }
+    [NSUserDefaults.standardUserDefaults synchronize];
+    AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
+    [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+}
+
+- (void)topCategoryVisibleCountChanged:(UISegmentedControl *)sender {
+    NSInteger count = MIN(4, MAX(1, sender.selectedSegmentIndex + 1));
+    [NSUserDefaults.standardUserDefaults setInteger:count
+        forKey:kAWETopTelegramVisibleCountDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
     AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
@@ -12549,7 +12666,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.46a image=%@ ==========" ,
+            @"========== START build=1.0.46b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -12606,7 +12723,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.46a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.46b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -12621,7 +12738,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.46a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.46b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14209,7 +14326,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.46a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.46b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

@@ -809,20 +809,27 @@ final class AWEAlbumMorphTabController:
         view.alpha = 1.0
 
         let changes = {
+            // The visible Liquid Glass platter is hosted by the controller's
+            // floating-bar container, not strictly inside UITabBar. Mask the
+            // whole resident controller view so steady hidden pages and
+            // interactive returns reveal exactly the uncovered screen width.
+            self.tabBar.mask = nil
             if clamped >= 0.999 {
-                self.tabBar.mask = nil
+                self.view.mask = nil
             } else {
                 self.visibilityMaskView.frame = CGRect(
                     x: 0,
                     y: 0,
-                    width: max(0, self.tabBar.bounds.width * clamped),
-                    height: self.tabBar.bounds.height
+                    width: max(0, self.view.bounds.width * clamped),
+                    height: self.view.bounds.height
                 )
-                if self.tabBar.mask !== self.visibilityMaskView {
-                    self.tabBar.mask = self.visibilityMaskView
+                if self.view.mask !== self.visibilityMaskView {
+                    self.view.mask = self.visibilityMaskView
                 }
             }
-            self.tabBar.isUserInteractionEnabled = clamped >= 0.82
+            let interactive = clamped >= 0.82
+            self.view.isUserInteractionEnabled = interactive
+            self.tabBar.isUserInteractionEnabled = interactive
         }
 
         if animated {

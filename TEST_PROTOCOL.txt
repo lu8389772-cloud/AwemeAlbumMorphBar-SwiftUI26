@@ -1,15 +1,8 @@
-AwemeLiquidBar 1.0.46a device test
+AwemeLiquidBar 1.0.46b device test
 
-1. Top categories
-- Disable the left-button menu morph: one top glass platter should show up to four category titles.
-- Swipe the group left/right when the account has more than four categories.
-- Enable the left-button menu morph: when the menu has children, the top group must disappear.
-
-2. Bottom-bar transitions
-- Open comments, open an image from comments, return, and close comments.
-- Enter another creator profile and interactively swipe back at 25%, 50%, and 100%.
-- The bar must remain warm, reveal in proportion to return progress, and never flash white or disappear/reappear.
-
-3. Chat composer
-- On a fresh install/update, the experimental composer switches are off.
-- The original Douyin input background, left action, text frame, multiline growth, and shrink behavior must remain untouched.
+1. In settings choose top group count 1, 2, 3 and 4; confirm text is readable.
+2. In count=1 mode confirm no selected background pill is shown.
+3. Tap/swipe edge categories; selected pill should travel smoothly without jumping.
+4. Enter messages/chat/comment/profile: the bottom bar must be fully masked.
+5. Interactive-swipe back: the bottom bar should reveal only the returned screen width.
+6. Disable top menu/category glass: right search remains visible unless bottom search is enabled.

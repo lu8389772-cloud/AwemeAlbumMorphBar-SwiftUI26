@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.46a
+Version: 1.0.46b
 Architecture: iphoneos-arm
-Description: Adds a Telegram-style four-channel top glass switcher with a single glass platter, ports the verified 1.0.10b resident mask transition architecture to the current bottom bar, keeps the tint resolver warm to prevent white return flashes, and disables the unstable chat composer experiment by default.
+Description: Adds a configurable one-to-four-item Telegram-style top switcher with readable adaptive titles and a smooth selected pill, keeps search independent from the top-menu toggle, and applies the resident return mask to the complete floating-bar controller so hidden and interactive-return states expose the correct width without glass rebuilding.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks
