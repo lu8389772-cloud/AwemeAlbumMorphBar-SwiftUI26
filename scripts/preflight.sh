@@ -10,45 +10,35 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.43c']
-required_workflow = ['AwemeLiquidBar-1.0.43c-Xcode27-rootless']
+required_control = ['Version: 1.0.43d']
+required_workflow = ['AwemeLiquidBar-1.0.43d-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
     'setResolvedInterfaceStyleRaw',
     'setVerticalOffset(_ offset: CGFloat)',
-    'currentFallbackCompactScale()',
-    'applyFallbackCompactTransform(animated:',
-    'setCompactMode(_ compact: Bool, animated: Bool)',
     'let designScale: CGFloat = 3.0',
     'let maximumPixelEdge: CGFloat = 100.0',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.43c',
-    'AWEApplyAlbumMorphResolvedAppearance',
-    'AWERefreshRegisteredAdaptiveGlassButtons',
-    'AWEAdaptiveButtonResolvedLocalStyle',
-    'AWERefreshOneAdaptiveButtonContrast',
-    'kAWEAdaptiveGlassAutomaticContrastKey',
-    'AWESoftClearEdgeColor',
-    'view.layer.borderWidth = 0.0;',
-    'AWEConfigureAdaptiveSystemGlassIconButton',
-    '@"glassButtonConfiguration"',
-    '@"clearGlassButtonConfiguration"',
-    'AWEHomeTransparentGlassEnabled',
+    'AwemeLiquidBar 1.0.43d',
+    'LiquidBar 设置 · 1.0.43d',
+    'static BOOL AWEAlbumMorphCollapseEnabled(void)',
+    '1.0.43d retires the experimental collapse path completely',
+    'slot.userInteractionEnabled = NO;',
+    'glassButton.userInteractionEnabled = NO;',
+    'AWEHomeExplicitForegroundForSource',
+    'AWERefreshProfileAvatarGlass',
+    'const CGFloat diameter = 54.0;',
+    'CGRectMake(0.0, MAX(0.0, rootHeight - 4.0), 4.0, 4.0)',
+    'gAWEAlbumMorphTintProbe.transform = CGAffineTransformIdentity;',
+    'AWEApplyChatPillNearGrowingTextView',
+    'MIN(22.0, height * 0.5)',
     'AWEDynamicTopQuickMenuDefinitions',
-    'AWEViewEffectivelyVisibleInsideTopContainer',
     'button.menu = menu;',
     'button.showsMenuAsPrimaryAction = YES;',
     '%hook AWEFeedMultiTabSelectedContainerView',
     'AWEForceExactTopIndicatorSuppression',
-    'AWERefreshProfileAvatarGlass',
-    'const CGFloat diameter = 54.0;',
-    'AWEAlbumMorphCollapseGestureDelegate',
-    'CGAffineTransformMakeScale(0.01, 0.01)',
-    'AWEHideAlbumMorphTintProbe',
-    'MIN(22.0, height * 0.5)',
-    '纯透明材质（无额外描边，局部黑白自适应）',
 ]
 for token in required_control:
     if token not in control: raise SystemExit(f'missing control token: {token}')
@@ -70,11 +60,11 @@ for forbidden in [
     'UIDeferredMenuElement',
     'completion(@[])',
     'preferredElementSize = UIMenuElementSizeLarge',
-    '纯透明材质（灰色柔边',
-    'AwemeLiquidBar_1.0.42a_interaction.log',
+    'CGAffineTransformMakeScale(0.01, 0.01)',
+    '上滑收缩底栏（动态高度）',
 ]:
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.43c consolidated preflight passed')
+print('AwemeLiquidBar 1.0.43d focused stability preflight passed')
 PY2

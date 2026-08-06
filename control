@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.43c
+Version: 1.0.43d
 Architecture: iphoneos-arm
-Description: Fixes clear-glass automatic icon contrast by reading each button's resolved material, replaces the unstable off-screen compact translation with a height-safe native-tab-bar scale, and makes the 4x4 system tint probe sub-pixel and route-safe.
+Description: Disables the unstable compact gesture, restores pass-through Douyin right-action touches, keeps the avatar glass backplate, restores a full 4x4 corner-hidden tint probe, and fixes multiline composer radius targeting.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

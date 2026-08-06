@@ -10,35 +10,28 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.43c — material-owned contrast + safe compact scale + hidden tint probe
+ AwemeLiquidBar 1.0.43d — stable right actions + fixed corner probe + multiline composer
 
- Consolidated delta from 1.0.41c:
- - iOS 26 now defaults top/right controls to the lower-overhead system-adaptive
-   glass path; the explicit Clear Glass material is an independent opt-in;
- - preserves the iOS 27 force-dark preference key and every previously enabled
-   value, regardless of the new iOS 26 material default;
- - removes the custom perimeter from explicit clear glass so press/morph states
-   never reveal a rigid circular outline;
- - automatic symbol foreground in explicit clear mode samples the local backdrop
-   in a low-rate round-robin pass with hysteresis;
- - fixed/accent/custom icon colours remain higher priority in both material modes;
- - bottom-bar icon editors keep separate normal/selected symbol choices but no
-   longer expose ineffective per-icon colour controls; selected colour continues
-   to come from the global accent colour;
- - builds the native top-left UIMenu from the currently available channel labels,
-   hides every matching title and selected underline, and keeps UIKit compact sizing;
- - reduces avoidable heat by caching unchanged UIButton configurations, lowering
-   the system-material probe to 8 Hz, pausing it off-screen, eliminating dormant
-   diagnostic display links, and coalescing repeated right-column refreshes.
+ Focused rollback/fix release:
+ - completely disables the experimental upward-swipe compact path and removes
+   its settings control, preventing any height/offset transform from moving the
+   bottom bar outside the screen;
+ - restores the verified pass-through right action architecture: Douyin's
+   original like/comment/favorite/share controls own every touch, while the
+   46 pt system-glass overlays remain visual only;
+ - keeps the successful 54 pt profile-avatar Liquid Glass backplate;
+ - retains zero custom CALayer perimeter. UIKit's internal optical highlight is
+   left system-owned because removing it requires abandoning native glass;
+ - restores a fully rendered, full-opacity 4 x 4 system material probe and parks
+   it in the physical bottom-left rounded display corner instead of scaling it;
+ - broadens multiline composer background discovery to newer nested hierarchies
+   and reapplies a fixed 22 pt radius from the growing text view's own layout.
 
  Stable behavior retained:
- - real UIKit source-to-menu Liquid Glass morph with 直播/商城/关注/推荐;
- - native customizable bottom bar and system-selected capsule;
- - 46 pt top/right controls, pixel-authored PNG sizing, accent colour, search
-   mutual exclusion, route suppression, authorization and chat refinements;
- - fully rendered 4 x 4 bottom material probe parked under the left platter;
- - iOS 27 force-dark remains opt-in compatible and defaults ON only when no
-   historical preference exists.
+ - native top-left source-to-menu Liquid Glass morph and dynamic channel menu;
+ - hidden top channel labels/selected underline;
+ - native customizable bottom bar, system-selected capsule, custom symbols,
+   accent color, route suppression and iOS 27 force-dark preference behavior.
 */
 
 @interface AWENormalModeTabBar : UIView
@@ -403,11 +396,10 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    id stored = [NSUserDefaults.standardUserDefaults
-        objectForKey:kAWEAlbumMorphCollapseEnabledDefaultsKey];
-    return [stored isKindOfClass:NSNumber.class]
-        ? [(NSNumber *)stored boolValue]
-        : YES;
+    /* 1.0.43d retires the experimental collapse path completely.  Keep the
+       historical preference key only so old installs do not crash while
+       loading settings; no gesture or compact transform is allowed to run. */
+    return NO;
 }
 
 static BOOL AWESecondTabIsShop(void);
@@ -714,7 +706,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.43a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.43d_interaction.log"] copy];
     });
     return path;
 }
@@ -783,7 +775,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.43a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.43d_probe.log"] copy];
     });
     return path;
 }
@@ -1555,6 +1547,8 @@ static BOOL AWEApproximatelyEqual(CGFloat first,
     return fabs(first - second) <= tolerance;
 }
 
+static UIView *AWEFindViewByRuntimeClassName(UIView *root, NSString *className);
+
 static UIView *AWEChatPaintFillView(UIView *container) {
     if (!container) return nil;
 
@@ -1575,37 +1569,101 @@ static UIView *AWEChatPaintFillView(UIView *container) {
     return nil;
 }
 
+static BOOL AWEChatViewHasVisiblePaint(UIView *view) {
+    if (!view || !view.backgroundColor) return NO;
+    UIColor *resolved = view.backgroundColor;
+    if (@available(iOS 13.0, *)) {
+        resolved = [resolved resolvedColorWithTraitCollection:view.traitCollection];
+    }
+    CGFloat alpha = 0.0, white = 0.0;
+    if ([resolved getWhite:&white alpha:&alpha]) return alpha > 0.02;
+    CGFloat red = 0.0, green = 0.0, blue = 0.0;
+    if ([resolved getRed:&red green:&green blue:&blue alpha:&alpha]) {
+        return alpha > 0.02;
+    }
+    return CGColorGetAlpha(resolved.CGColor) > 0.02;
+}
+
 static UIView *AWEChatPaintContainer(UIView *inputRoot) {
     if (!inputRoot) return nil;
 
     CGFloat rootWidth = CGRectGetWidth(inputRoot.bounds);
-    if (rootWidth <= 1.0) return nil;
+    CGFloat rootHeight = CGRectGetHeight(inputRoot.bounds);
+    if (rootWidth <= 1.0 || rootHeight <= 1.0) return nil;
 
-    for (UIView *subview in inputRoot.subviews) {
-        CGRect frame = subview.frame;
-
-        CGFloat height = CGRectGetHeight(frame);
-        BOOL expectedGeometry =
-            AWEApproximatelyEqual(CGRectGetMinX(frame), 8.0, 2.0) &&
-            CGRectGetMinY(frame) >= 7.0 && CGRectGetMinY(frame) <= 13.0 &&
-            AWEApproximatelyEqual(CGRectGetWidth(frame),
-                                  rootWidth - 16.0, 3.0) &&
-            height >= 40.0 && height <= 180.0;
-
-        if (!expectedGeometry) continue;
-
-        /*
-         The visible fill is a plain sibling UIView. IESIMGrowingTextView has
-         the same geometry but is nested inside a separate wrapper and remains
-         transparent, so requiring a same-bounds painted child avoids touching
-         the text/cursor hierarchy.
-        */
-        if (AWEChatPaintFillView(subview)) {
-            return subview;
-        }
+    UIView *growing = AWEFindViewByRuntimeClassName(
+        inputRoot, @"IESIMGrowingTextView");
+    CGRect growingRect = CGRectNull;
+    if (growing) {
+        @try { growingRect = [growing convertRect:growing.bounds toView:inputRoot]; }
+        @catch (__unused NSException *exception) { growingRect = CGRectNull; }
     }
 
-    return nil;
+    NSMutableArray<NSDictionary *> *queue = [NSMutableArray arrayWithObject:
+        @{ @"view": inputRoot, @"depth": @0 }];
+    UIView *best = nil;
+    NSInteger bestScore = NSIntegerMin;
+    NSUInteger visited = 0;
+
+    while (queue.count > 0 && visited < 240) {
+        NSDictionary *entry = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        UIView *candidate = entry[@"view"];
+        NSUInteger depth = [entry[@"depth"] unsignedIntegerValue];
+        visited++;
+
+        if (candidate != inputRoot &&
+            ![candidate isKindOfClass:UILabel.class] &&
+            ![candidate isKindOfClass:UIImageView.class] &&
+            ![candidate isKindOfClass:UITextView.class] &&
+            ![candidate isKindOfClass:UITextField.class] &&
+            ![candidate isKindOfClass:UIControl.class]) {
+            CGRect frame = CGRectNull;
+            @try { frame = [candidate convertRect:candidate.bounds toView:inputRoot]; }
+            @catch (__unused NSException *exception) {}
+            CGFloat width = CGRectGetWidth(frame);
+            CGFloat height = CGRectGetHeight(frame);
+            UIView *fill = AWEChatPaintFillView(candidate);
+            BOOL painted = AWEChatViewHasVisiblePaint(candidate) || fill != nil;
+            BOOL plausibleSize = !CGRectIsNull(frame) && !CGRectIsEmpty(frame) &&
+                width >= MAX(150.0, rootWidth * 0.42) &&
+                width <= rootWidth + 4.0 && height >= 40.0 && height <= 190.0;
+            if (painted && plausibleSize) {
+                NSInteger score = 0;
+                if (fill) score += 180;
+                if (AWEChatViewHasVisiblePaint(candidate)) score += 90;
+                if (candidate.superview == inputRoot) score += 40;
+                NSString *name = NSStringFromClass(candidate.class).lowercaseString;
+                if ([name containsString:@"input"] ||
+                    [name containsString:@"text"] ||
+                    [name containsString:@"container"] ||
+                    [name containsString:@"background"] ||
+                    [name containsString:@"panel"]) score += 45;
+                if (!CGRectIsNull(growingRect)) {
+                    CGRect expanded = CGRectInset(growingRect, -34.0, -12.0);
+                    CGRect intersection = CGRectIntersection(frame, expanded);
+                    if (!CGRectIsNull(intersection) && !CGRectIsEmpty(intersection)) {
+                        CGFloat overlap = CGRectGetWidth(intersection) *
+                                          CGRectGetHeight(intersection);
+                        CGFloat growingArea = MAX(1.0, CGRectGetWidth(growingRect) *
+                                                       CGRectGetHeight(growingRect));
+                        if (overlap / growingArea > 0.55) score += 220;
+                    }
+                    score -= (NSInteger)MIN(100.0,
+                        fabs(CGRectGetMidY(frame) - CGRectGetMidY(growingRect)));
+                }
+                score -= (NSInteger)(depth * 3);
+                if (score > bestScore) { bestScore = score; best = candidate; }
+            }
+        }
+
+        if (depth < 6) {
+            for (UIView *child in candidate.subviews) {
+                [queue addObject:@{ @"view": child, @"depth": @(depth + 1) }];
+            }
+        }
+    }
+    return best;
 }
 
 static UIView *AWEFindLeftComposerAction(UIView *root) {
@@ -1789,6 +1847,9 @@ static BOOL AWEApplyPaintedChatInputPill(UIViewController *controller,
 
     UIView *container = AWEChatPaintContainer(controller.view);
     UIView *fill = AWEChatPaintFillView(container);
+    if (container && !fill && AWEChatViewHasVisiblePaint(container)) {
+        fill = container;
+    }
     if (!container || !fill) {
         if (shouldLog) {
             AWEComposerLog(@"%@ target-missing root=%@",
@@ -1830,6 +1891,33 @@ static BOOL AWEApplyPaintedChatInputPill(UIViewController *controller,
     }
 
     return YES;
+}
+
+static void AWEApplyChatPillNearGrowingTextView(UIView *growing,
+                                                NSString *event) {
+    if (!growing || !AWEChatCapsuleEnabled()) return;
+    UIView *root = growing;
+    for (NSUInteger depth = 0; depth < 6 && root.superview; depth++) {
+        UIView *next = root.superview;
+        root = next;
+        if (CGRectGetWidth(root.bounds) >= CGRectGetWidth(growing.bounds) + 70.0 &&
+            CGRectGetHeight(root.bounds) <= 220.0) {
+            UIView *container = AWEChatPaintContainer(root);
+            if (container) {
+                UIView *fill = AWEChatPaintFillView(container);
+                AWEApplyExactChatCapsuleMask(container, event, NO);
+                if (fill && fill != container) {
+                    [CATransaction begin];
+                    [CATransaction setDisableActions:YES];
+                    fill.layer.cornerRadius = 0.0;
+                    fill.layer.masksToBounds = NO;
+                    fill.clipsToBounds = NO;
+                    [CATransaction commit];
+                }
+                return;
+            }
+        }
+    }
 }
 
 static void AWEApplyChatCornerToView(UIView *view,
@@ -5604,7 +5692,6 @@ typedef NS_ENUM(NSInteger, AWEHomeActionKind) {
     AWEHomeActionKindFavorite,
     AWEHomeActionKindShare
 };
-static NSString *AWEHomeActionKindName(AWEHomeActionKind kind);
 
 @interface AWEHomeActionSlotView : UIView
 @property (nonatomic, weak) UIView *originalView;
@@ -5612,28 +5699,9 @@ static NSString *AWEHomeActionKindName(AWEHomeActionKind kind);
 @property (nonatomic, assign) AWEHomeActionKind actionKind;
 @property (nonatomic, strong) AWEPhotosExactGlassButtonHostView *photosGlassHost;
 @property (nonatomic, strong) UIButton *systemGlassButton;
-- (void)alb_handleActionTap:(UIButton *)sender;
 @end
 
 @implementation AWEHomeActionSlotView
-- (void)alb_handleActionTap:(UIButton *)sender {
-    (void)sender;
-    UIView *target = self.originalView;
-    if (!target) return;
-    BOOL activated = AWETriggerQuickMenuDestinationView(target);
-    AWEInteractionDiagnosticWrite(
-        @"RIGHT_GLASS_TAP kind=%@ result=%d target=%@",
-        AWEHomeActionKindName(self.actionKind), activated,
-        AWEInteractionObjectSummary(target));
-    UIView *stack = self.superview;
-    if (stack) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                     (int64_t)(0.10 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            AWEScheduleHomeActionStackRefresh(stack);
-        });
-    }
-}
 @end
 
 @interface AWEHomeProfileGlassView : UIView
@@ -6252,16 +6320,6 @@ static void AWEBindHomeActionSource(UIView *owner, UIImageView *source) {
     source.layer.opacity = 0.0f;
 }
 
-static NSString *AWEHomeActionKindName(AWEHomeActionKind kind) {
-    switch (kind) {
-        case AWEHomeActionKindLike: return @"LIKE";
-        case AWEHomeActionKindComment: return @"COMMENT";
-        case AWEHomeActionKindFavorite: return @"FAVORITE";
-        case AWEHomeActionKindShare: return @"SHARE";
-        default: return @"UNKNOWN";
-    }
-}
-
 static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
     if (gAWEHomeDiagnosticForegroundMode ==
         AWEHomeDiagnosticForegroundModeForceWhite) {
@@ -6622,16 +6680,13 @@ static AWEHomeActionSlotView *AWEEnsureHomeActionSlot(UIView *stack,
         slot = [[AWEHomeActionSlotView alloc] initWithFrame:CGRectZero];
         slot.accessibilityIdentifier = [NSString stringWithFormat:
             @"AwemeLiquidBar.HomeActionSlot.%ld", (long)kind];
-        slot.userInteractionEnabled = YES;
+        slot.userInteractionEnabled = NO;
         slot.backgroundColor = UIColor.clearColor;
         slot.opaque = NO;
 
         if (@available(iOS 26.0, *)) {
             UIButton *glassButton = [UIButton buttonWithType:UIButtonTypeCustom];
-            glassButton.userInteractionEnabled = YES;
-            [glassButton addTarget:slot
-                            action:@selector(alb_handleActionTap:)
-                  forControlEvents:UIControlEventTouchUpInside];
+            glassButton.userInteractionEnabled = NO;
             glassButton.backgroundColor = UIColor.clearColor;
             glassButton.opaque = NO;
             glassButton.clipsToBounds = NO;
@@ -6683,8 +6738,11 @@ static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
     slot.hidden = NO;
     slot.alpha = 1.0;
     slot.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
-    slot.userInteractionEnabled = YES;
-    slot.systemGlassButton.userInteractionEnabled = YES;
+    /* Keep the verified pass-through interaction path: Douyin's original
+       AWEFeedVideoButton remains the sole touch owner.  The glass is visual
+       only, so like/comment/favorite/share cannot be intercepted or duplicated. */
+    slot.userInteractionEnabled = NO;
+    slot.systemGlassButton.userInteractionEnabled = NO;
     slot.systemGlassButton.frame = slot.bounds;
 
     UIColor *foregroundColor = nil;
@@ -6699,10 +6757,14 @@ static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
         } else if (colorMode != AWEConfiguredIconColorModeAutomatic) {
             /* Fixed/accent/custom always outrank automatic material colour. */
             foregroundColor = AWEApplyConfiguredIconColorMode(symbolKey, nil);
-        } else {
-            /* Automatic stays nil. Clear mode samples the pixels beneath this
-               exact control; adaptive/tinted mode remains system-owned. */
-            foregroundColor = nil;
+        } else if (AWEHomeTransparentGlassEnabled()) {
+            /* The experimental per-button material sampler is intentionally
+               not used for the right action stack.  It could hide the glyph
+               and, more importantly, forced the overlay to own touches.  Use
+               the last stable source-tint fallback while the original Douyin
+               button continues to receive every gesture. */
+            foregroundColor = AWEHomeExplicitForegroundForSource(
+                source, slot, YES);
         }
     }
 
@@ -7272,49 +7334,23 @@ static UIVisualEffectView *AWEEnsureAlbumMorphTintProbe(UIWindow *sourceWindow) 
         gAWEAlbumMorphTintProbeWindow = sourceWindow;
     }
 
-    /*
-     Keep a fully rendered 4 x 4 material internally, but composite it at
-     1/100 scale underneath the real left bottom platter. This preserves the
-     1.0.41a material resolution while making the source-window probe
-     physically sub-pixel and therefore invisible on every route.
-    */
-    CGRect probeFrame = CGRectMake(44.0, CGRectGetHeight(rootView.bounds) - 52.0,
-                                   4.0, 4.0);
-    UITabBar *overlayBar = gAWEAlbumMorphController.tabBar;
-    if (overlayBar.window && !CGRectIsEmpty(overlayBar.bounds)) {
-        @try {
-            CGRect screenFrame = [overlayBar convertRect:overlayBar.bounds toView:nil];
-            CGRect rootFrame = [rootView convertRect:screenFrame fromView:nil];
-            CGFloat coveredX = CGRectGetMinX(rootFrame) +
-                MIN(72.0, MAX(34.0, CGRectGetWidth(rootFrame) * 0.16));
-            probeFrame = CGRectMake(coveredX - 2.0,
-                                    CGRectGetMidY(rootFrame) - 2.0,
-                                    4.0, 4.0);
-        } @catch (__unused NSException *exception) {}
-    }
-
-    CGPoint probeCenter = CGPointMake(CGRectGetMidX(probeFrame),
-                                      CGRectGetMidY(probeFrame));
-    CGRect probeBounds = CGRectMake(0.0, 0.0, 4.0, 4.0);
-    BOOL frameChanged =
-        fabs(gAWEAlbumMorphTintProbe.center.x - probeCenter.x) > 0.25 ||
-        fabs(gAWEAlbumMorphTintProbe.center.y - probeCenter.y) > 0.25 ||
-        fabs(CGRectGetWidth(gAWEAlbumMorphTintProbe.bounds) - 4.0) > 0.25 ||
-        fabs(CGRectGetHeight(gAWEAlbumMorphTintProbe.bounds) - 4.0) > 0.25;
-    if (frameChanged) {
-        gAWEAlbumMorphTintProbe.bounds = probeBounds;
-        gAWEAlbumMorphTintProbe.center = probeCenter;
-    }
+    /* Keep the original fully rendered 4 x 4 probe.  Scaling or reducing its
+       opacity prevents UIGlassEffect from resolving the same material branch
+       as the real bar.  Park it in the physical bottom-left display corner:
+       the screen's rounded mask hides it, while UIKit still renders all four
+       pixels in the source window. */
+    CGFloat rootHeight = CGRectGetHeight(rootView.bounds);
+    CGRect probeFrame = CGRectMake(0.0, MAX(0.0, rootHeight - 4.0), 4.0, 4.0);
+    BOOL frameChanged = !CGRectEqualToRect(gAWEAlbumMorphTintProbe.frame,
+                                            probeFrame);
+    if (frameChanged) gAWEAlbumMorphTintProbe.frame = probeFrame;
+    gAWEAlbumMorphTintProbe.transform = CGAffineTransformIdentity;
     gAWEAlbumMorphTintProbe.layer.cornerRadius = 2.0;
-    gAWEAlbumMorphTintProbe.transform = CGAffineTransformMakeScale(0.01, 0.01);
     gAWEAlbumMorphTintProbe.accessibilityElementsHidden = YES;
-    BOOL barActuallyVisible = gAWEAlbumMorphVisible &&
-        gAWEAlbumMorphOverlayWindow && !gAWEAlbumMorphOverlayWindow.hidden &&
-        overlayBar.window && !overlayBar.hidden;
-    gAWEAlbumMorphTintProbe.hidden = !barActuallyVisible;
-    gAWEAlbumMorphTintProbe.alpha = barActuallyVisible ? 1.0 : 0.0;
-    gAWEAlbumMorphTintProbe.layer.opacity = barActuallyVisible ? 1.0f : 0.0f;
-    if (needsRebuild) [rootView bringSubviewToFront:gAWEAlbumMorphTintProbe];
+    gAWEAlbumMorphTintProbe.hidden = NO;
+    gAWEAlbumMorphTintProbe.alpha = 1.0;
+    gAWEAlbumMorphTintProbe.layer.opacity = 1.0f;
+    [rootView bringSubviewToFront:gAWEAlbumMorphTintProbe];
     if (needsRebuild || frameChanged) {
         [gAWEAlbumMorphTintProbe setNeedsLayout];
         [gAWEAlbumMorphTintProbe layoutIfNeeded];
@@ -10625,7 +10661,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.43a";
+    self.title = @"LiquidBar 设置 · 1.0.43d";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -10777,25 +10813,9 @@ static void AWEClearStoredIconConfigurationForDefinitions(
              forControlEvents:UIControlEventValueChanged];
     self.verticalOffsetSlider = positionSlider;
 
-    UILabel *collapseLabel = [UILabel new];
-    collapseLabel.text = @"上滑收缩底栏（动态高度）";
-    collapseLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
-    UISwitch *collapseSwitch = [UISwitch new];
-    collapseSwitch.on = AWEAlbumMorphCollapseEnabled();
-    collapseSwitch.onTintColor = AWEStoredAccentColor();
-    [collapseSwitch addTarget:self
-                       action:@selector(collapseSwitchChanged:)
-             forControlEvents:UIControlEventValueChanged];
-    self.collapseSwitch = collapseSwitch;
-    UIStackView *collapseRow = [[UIStackView alloc]
-        initWithArrangedSubviews:@[collapseLabel, collapseSwitch]];
-    collapseRow.axis = UILayoutConstraintAxisHorizontal;
-    collapseRow.alignment = UIStackViewAlignmentCenter;
-    collapseRow.distribution = UIStackViewDistributionEqualSpacing;
-
     UIStackView *positionStack =
         [[UIStackView alloc] initWithArrangedSubviews:@[
-            positionTitle, positionValue, positionSlider, collapseRow
+            positionTitle, positionValue, positionSlider
         ]];
     positionStack.translatesAutoresizingMaskIntoConstraints = NO;
     positionStack.axis = UILayoutConstraintAxisVertical;
@@ -11687,7 +11707,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.43a image=%@ ==========" ,
+            @"========== START build=1.0.43d image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -11744,7 +11764,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.43a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.43d diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -11759,7 +11779,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.43a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.43d_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -12470,6 +12490,12 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
     %orig;
 
+    /* Re-resolve the painted sibling from the growing text view itself.  This
+       survives the multiline hierarchy used by newer Douyin builds where the
+       input controller no longer exposes the background as a direct child. */
+    AWEApplyChatPillNearGrowingTextView(composerView,
+                                        @"growingText.layout");
+
     /*
      The probe proved this view is transparent. The visible gray fill is a
      separate sibling container, so do not clip the text/cursor hierarchy.
@@ -12554,6 +12580,11 @@ static BOOL AWEGetDoubleTapLocation(id sender,
                        AWEComposerViewSignature(composerView));
     }
     [composerView setNeedsLayout];
+    __weak UIView *weakComposer = composerView;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        AWEApplyChatPillNearGrowingTextView(weakComposer,
+                                            @"growingText.bounds");
+    });
 }
 
 - (void)setBackgroundColor:(UIColor *)backgroundColor {
@@ -13296,7 +13327,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.43a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.43d os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWETopTelegramSwitcherEnabledDefaultsKey];
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWEHomeForceDarkGlassDefaultsKey];
