@@ -6328,9 +6328,9 @@ static BOOL AWEReadLocalBackdropLuminance(UIButton *button,
         toView:window];
     if (!isfinite(point.x) || !isfinite(point.y)) return NO;
 
-    const size_t width = 3, height = 3;
-    uint8_t pixels[width * height * 4];
-    memset(pixels, 0, sizeof(pixels));
+    enum { sampleWidth = 3, sampleHeight = 3, sampleBytesPerPixel = 4 };
+    const size_t width = sampleWidth, height = sampleHeight;
+    uint8_t pixels[sampleWidth * sampleHeight * sampleBytesPerPixel] = {0};
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef context = CGBitmapContextCreate(
         pixels, width, height, 8, width * 4, colorSpace,

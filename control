@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.43a
+Version: 1.0.43b
 Architecture: iphoneos-arm
 Description: Adds local black-white contrast for clear glass icons, restores interactive right-side glass controls, dynamically mirrors visible top channels into the native menu, hides the selected underline and off-screen probe, adds profile glass, and re-enables height-aware bottom-bar collapse with lower-overhead sampling.
 Maintainer: xyy
