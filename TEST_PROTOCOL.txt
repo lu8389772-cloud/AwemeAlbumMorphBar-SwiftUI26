@@ -1,9 +1,15 @@
-1. Enable pure transparent material and leave each top/right SF Symbol colour on Automatic. Move between clearly bright and dark videos; verify icons change black/white locally without relying on Douyin's original white icons. Then confirm explicit white, black, accent and custom choices override Automatic.
-2. Press and hold the left menu and each right-side action button. Confirm UIKit's native press enlargement / elastic oval deformation remains, with no rigid gray circular outline. Release a normal tap and verify the original Douyin action still fires.
-3. Open the top-left menu with different accounts or channel configurations. Confirm it mirrors the currently visible labels/order, keeps a real local-city label when present, excludes externally hidden channels, and still routes each action.
-4. Select several original top channels through the menu. Confirm all title pixels and the 24 x 9 selected underline stay hidden after selection, rotation and video changes.
-5. Confirm the avatar has a roughly 54 x 54 system Liquid Glass backplate, follows adaptive/clear material settings, and does not block the profile tap.
-6. With bottom-bar collapse enabled, swipe upward anywhere on the home feed and downward to restore. Test after changing the bar's vertical offset/height; compact travel must follow the live height and must not jump to an old coordinate.
-7. Enter chat or another page where the custom bottom bar is absent. Confirm no 4 x 4 probe dot remains. Return home and verify adaptive bottom material resumes.
-8. In chat, type multiple lines. Confirm the input field grows vertically while retaining restrained 22 pt continuous corners rather than becoming a half-height capsule.
-9. Scroll videos for at least five minutes in adaptive mode and then clear mode. Check that no repeated button rebuilding, rapid icon flicker or abnormal heat increase appears. Local contrast may intentionally settle within roughly one second because sampling is rate-limited.
+AwemeLiquidBar 1.0.46a device test
+
+1. Top categories
+- Disable the left-button menu morph: one top glass platter should show up to four category titles.
+- Swipe the group left/right when the account has more than four categories.
+- Enable the left-button menu morph: when the menu has children, the top group must disappear.
+
+2. Bottom-bar transitions
+- Open comments, open an image from comments, return, and close comments.
+- Enter another creator profile and interactively swipe back at 25%, 50%, and 100%.
+- The bar must remain warm, reveal in proportion to return progress, and never flash white or disappear/reappear.
+
+3. Chat composer
+- On a fresh install/update, the experimental composer switches are off.
+- The original Douyin input background, left action, text frame, multiline growth, and shrink behavior must remain untouched.

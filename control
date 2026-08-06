@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.45a
+Version: 1.0.46a
 Architecture: iphoneos-arm
-Description: Uses one native scrollable segmented top glass group, keeps the overlay window resident to suppress transition flashes, restores top/right glass after interactive feed transitions, preserves explicit icon colors, persists a wider absolute bar offset, and applies a live multiline composer pill without clipping controls.
+Description: Adds a Telegram-style four-channel top glass switcher with a single glass platter, ports the verified 1.0.10b resident mask transition architecture to the current bottom bar, keeps the tint resolver warm to prevent white return flashes, and disables the unstable chat composer experiment by default.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

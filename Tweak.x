@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.45a — resident overlay + native segmented top bar + resilient feed recovery
+ AwemeLiquidBar 1.0.46a — Telegram top switcher + resident masked bottom-bar transitions
 
  Focused rollback/fix release:
  - completely disables the experimental upward-swipe compact path and removes
@@ -95,6 +95,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 - (void)setForcedDark:(BOOL)forced;
 - (void)setResolvedInterfaceStyleRaw:(NSInteger)rawValue;
 - (void)setMorphBarVisible:(BOOL)visible animated:(BOOL)animated;
+- (void)setVisibleFraction:(CGFloat)fraction animated:(BOOL)animated;
 - (void)setVerticalOffset:(CGFloat)offset;
 - (void)syncSelectedOriginalIndex:(NSInteger)index;
 - (NSInteger)currentOriginalIndex;
@@ -300,9 +301,9 @@ static NSString * const kAWEAccentHexDefaultsKey = @"AwemeLiquidBarAccentHex";
 static NSString * const kAWEAccentHistoryDefaultsKey =
     @"AwemeLiquidBarAccentHistory";
 static NSString * const kAWEChatCapsuleEnabledDefaultsKey =
-    @"AwemeLiquidBarChatCapsuleEnabled";
+    @"AwemeLiquidBarChatCapsuleEnabled1.0.46";
 static NSString * const kAWEChatSeparateLeftDefaultsKey =
-    @"AwemeLiquidBarChatSeparateLeft";
+    @"AwemeLiquidBarChatSeparateLeft1.0.46";
 static NSString * const kAWELowerHalfDoubleTapCommentDefaultsKey =
     @"AwemeLiquidBarLowerHalfDoubleTapComment";
 static NSString * const kAWEVerticalOffsetDefaultsKey =
@@ -410,7 +411,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    /* 1.0.45a retires the experimental collapse path completely.  Keep the
+    /* 1.0.46a retires the experimental collapse path completely.  Keep the
        historical preference key only so old installs do not crash while
        loading settings; no gesture or compact transform is allowed to run. */
     return NO;
@@ -688,11 +689,14 @@ static BOOL AWEAlbumMorphStyleEnabled(void);
 static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar, BOOL forceVisible);
 static void AWEUninstallAlbumMorphBar(void);
 static void AWEApplyAlbumMorphResolvedAppearance(UIWindow *sourceWindow, NSInteger originalIndex);
+static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction, NSString *reason, BOOL animated);
+static void AWEUpdateAlbumMorphVisibility(UIView *originalBar, NSString *reason);
 static void AWEApplyAlbumMorphOriginalSuppression(UIView *originalBar,
                                                     BOOL suppress);
 static void AWEForceAlbumMorphRouteRecovery(NSString *reason);
 static void AWEAlbumMorphProbeWrite(NSString *format, ...);
 static void AWERestoreAlbumMorphSearchGesture(void);
+static void AWEHideAlbumMorphTintProbe(void);
 
 
 
@@ -721,7 +725,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.45a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.46a_interaction.log"] copy];
     });
     return path;
 }
@@ -790,7 +794,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.45a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.46a_probe.log"] copy];
     });
     return path;
 }
@@ -1361,7 +1365,7 @@ static BOOL AWEChatCapsuleEnabled(void) {
     if (!AWEPluginFeaturesEnabled()) return NO;
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     if (![defaults objectForKey:kAWEChatCapsuleEnabledDefaultsKey]) {
-        return YES;
+        return NO;
     }
     return [defaults boolForKey:kAWEChatCapsuleEnabledDefaultsKey];
 }
@@ -1370,7 +1374,7 @@ static BOOL AWEChatSeparateLeftEnabled(void) {
     if (!AWEPluginFeaturesEnabled()) return NO;
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     if (![defaults objectForKey:kAWEChatSeparateLeftDefaultsKey]) {
-        return YES;
+        return NO;
     }
     return [defaults boolForKey:kAWEChatSeparateLeftDefaultsKey];
 }
@@ -1728,11 +1732,6 @@ static UIView *AWEFindLeftComposerAction(UIView *root) {
 static CGFloat AWEChatCapsuleLeftInset(UIView *backgroundView) {
     if (!backgroundView || !AWEChatSeparateLeftEnabled()) return 0.0;
 
-    /* Newer chat composers already place the painted background to the right
-       of the separate left action. Do not cut a second 36-45 pt hole into a
-       fill whose own frame is already horizontally inset. */
-    if (CGRectGetMinX(backgroundView.frame) >= 24.0) return 0.0;
-
     UIView *root = backgroundView.superview;
     if (!root) return 45.0;
 
@@ -1798,36 +1797,59 @@ static void AWERestoreOriginalChatShape(UIView *view) {
 static void AWEApplyExactChatCapsuleMask(UIView *view,
                                          NSString *event,
                                          BOOL shouldLog) {
-    if (!view) return;
+    if (!view || !AWEChatCapsuleEnabled()) return;
+
     AWEStoreOriginalChatShapeIfNeeded(view);
-    if (!AWEChatCapsuleEnabled()) {
-        AWERestoreOriginalChatShape(view);
-        return;
-    }
+
     CGFloat width = CGRectGetWidth(view.bounds);
     CGFloat height = CGRectGetHeight(view.bounds);
     if (width <= 1.0 || height <= 1.0) return;
 
-    /* Never carve a left-side hole and never mask the interactive composer.
-       The real painted background already owns its current Auto Layout frame;
-       a fixed maximum radius gives a 44 pt single-line capsule and stretches
-       vertically in real time for multiline text. */
+    CGFloat leftInset = AWEChatCapsuleLeftInset(view);
+    CGRect capsuleRect =
+        CGRectMake(leftInset, 0.0, MAX(1.0, width - leftInset), height);
+    /* Keep the single-line 22 pt end radius while the composer grows.
+       Using height/2 on a multi-line field turns the whole tall background
+       into two oversized semicircles instead of vertically stretching it. */
     CGFloat radius = MIN(22.0, height * 0.5);
+
+    CAShapeLayer *mask =
+        objc_getAssociatedObject(view, &kAWEChatCapsuleMaskKey);
+    if (![mask isKindOfClass:[CAShapeLayer class]]) {
+        mask = [CAShapeLayer layer];
+        objc_setAssociatedObject(view,
+                                 &kAWEChatCapsuleMaskKey,
+                                 mask,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+
+    UIBezierPath *path =
+        [UIBezierPath bezierPathWithRoundedRect:capsuleRect
+                                   cornerRadius:radius];
+
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
-    view.layer.mask = nil;
-    view.layer.cornerRadius = radius;
-    view.layer.cornerCurve = kCACornerCurveContinuous;
-    /* cornerRadius rounds the view's own painted background without clipping
-       child controls. This is essential when Douyin puts the left action in
-       the same container on a newer build. */
+
+    mask.frame = view.bounds;
+    mask.path = path.CGPath;
+    view.layer.mask = mask;
+
+    /*
+     Use the geometric path itself for the two half-circles. Do not combine it
+     with continuous-corner rounding, which made the 44 pt bar look swollen.
+    */
+    view.layer.cornerRadius = 0.0;
     view.layer.masksToBounds = NO;
     view.clipsToBounds = NO;
+
     [CATransaction commit];
+
     if (shouldLog) {
-        AWEComposerLog(@"%@ continuousPill radius=%.2f bounds=%@ view={%@}",
-                       event ?: @"chatCapsule", radius,
-                       NSStringFromCGRect(view.bounds),
+        AWEComposerLog(@"%@ exactCapsule inset=%.2f radius=%.2f rect=%@ view={%@}",
+                       event ?: @"chatCapsule",
+                       leftInset,
+                       radius,
+                       NSStringFromCGRect(capsuleRect),
                        AWEComposerViewSignature(view));
     }
 }
@@ -1835,7 +1857,7 @@ static void AWEApplyExactChatCapsuleMask(UIView *view,
 static BOOL AWEApplyPaintedChatInputPill(UIViewController *controller,
                                         NSString *event,
                                         BOOL shouldLog) {
-    if (!controller.view) return NO;
+    if (!controller.view || !AWEChatCapsuleEnabled()) return NO;
 
     UIView *container = AWEChatPaintContainer(controller.view);
     UIView *fill = AWEChatPaintFillView(container);
@@ -1858,19 +1880,22 @@ static BOOL AWEApplyPaintedChatInputPill(UIViewController *controller,
                        AWEComposerViewSignature(fill));
     }
 
-    /* Never mask the interactive composer container itself: on current
-       Douyin builds the left action/search button is a child of that
-       container, so masking the parent makes it disappear while typing.
-       Shape only the painted background layer and let the container grow and
-       shrink normally around it. */
-    if (fill != container) {
-        AWERestoreOriginalChatShape(container);
-        container.layer.masksToBounds = NO;
-        container.clipsToBounds = NO;
-    }
-    AWEApplyExactChatCapsuleMask(fill,
-                                event ?: @"paintedPill.fill",
+    AWEApplyExactChatCapsuleMask(container,
+                                event ?: @"paintedPill",
                                 shouldLog);
+
+    AWEStoreOriginalChatShapeIfNeeded(fill);
+
+    if (AWEChatCapsuleEnabled()) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        fill.layer.cornerRadius = 0.0;
+        fill.layer.masksToBounds = NO;
+        fill.clipsToBounds = NO;
+        [CATransaction commit];
+    } else {
+        AWERestoreOriginalChatShape(fill);
+    }
 
     if (shouldLog) {
         AWEComposerLog(@"%@ after container={%@} fill={%@}",
@@ -1885,12 +1910,6 @@ static BOOL AWEApplyPaintedChatInputPill(UIViewController *controller,
 static void AWEApplyChatPillNearGrowingTextView(UIView *growing,
                                                 NSString *event) {
     if (!growing || !AWEChatCapsuleEnabled()) return;
-    UIView *cachedFill = objc_getAssociatedObject(growing, &kAWEChatResolvedFillKey);
-    if (cachedFill && cachedFill.window == growing.window &&
-        CGRectGetWidth(cachedFill.bounds) > 100.0 &&
-        CGRectGetHeight(cachedFill.bounds) >= 36.0) {
-        AWEApplyExactChatCapsuleMask(cachedFill, event ?: @"growingText.cached", NO);
-    }
     UIView *root = growing;
     for (NSUInteger depth = 0; depth < 6 && root.superview; depth++) {
         UIView *next = root.superview;
@@ -1900,18 +1919,14 @@ static void AWEApplyChatPillNearGrowingTextView(UIView *growing,
             UIView *container = AWEChatPaintContainer(root);
             if (container) {
                 UIView *fill = AWEChatPaintFillView(container);
-                if (!fill && AWEChatViewHasVisiblePaint(container)) fill = container;
-                if (fill) {
-                    if (fill != container) {
-                        AWERestoreOriginalChatShape(container);
-                        container.layer.masksToBounds = NO;
-                        container.clipsToBounds = NO;
-                    }
-                    objc_setAssociatedObject(growing, &kAWEChatResolvedFillKey,
-                                             fill, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                    AWEApplyExactChatCapsuleMask(fill,
-                                                event ?: @"growingText.fill",
-                                                NO);
+                AWEApplyExactChatCapsuleMask(container, event, NO);
+                if (fill && fill != container) {
+                    [CATransaction begin];
+                    [CATransaction setDisableActions:YES];
+                    fill.layer.cornerRadius = 0.0;
+                    fill.layer.masksToBounds = NO;
+                    fill.clipsToBounds = NO;
+                    [CATransaction commit];
                 }
                 return;
             }
@@ -1919,37 +1934,10 @@ static void AWEApplyChatPillNearGrowingTextView(UIView *growing,
     }
 }
 
-static void AWEScheduleChatPillRefreshFromGrowingTextView(UIView *growing,
-                                                           NSString *event) {
-    if (!growing || !AWEPluginFeaturesEnabled()) return;
-    if ([objc_getAssociatedObject(growing, &kAWEComposerRefreshPendingKey)
-            boolValue]) return;
-    objc_setAssociatedObject(growing, &kAWEComposerRefreshPendingKey, @YES,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    __weak UIView *weakGrowing = growing;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIView *strongGrowing = weakGrowing;
-        if (!strongGrowing) return;
-        objc_setAssociatedObject(strongGrowing,
-                                 &kAWEComposerRefreshPendingKey,
-                                 nil,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        AWEApplyChatPillNearGrowingTextView(strongGrowing,
-                                            event ?: @"composer.async");
-        for (NSNumber *delay in @[@0.05, @0.16, @0.34]) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
-                dispatch_get_main_queue(), ^{
-                AWEApplyChatPillNearGrowingTextView(strongGrowing,
-                    event ?: @"composer.trailing");
-            });
-        }
-    });
-}
-
 static void AWEApplyChatCornerToView(UIView *view,
                                      NSString *event,
                                      BOOL shouldLog) {
+    if (!AWEChatCapsuleEnabled()) return;
     AWEApplyExactChatCapsuleMask(view, event, shouldLog);
 }
 
@@ -4290,6 +4278,193 @@ AWECurrentBarTransitionCoordinator(void) {
     return top.transitionCoordinator ?: navigation.transitionCoordinator;
 }
 
+
+static BOOL AWEAlbumMorphSteadyWantsVisible(UIView *originalBar) {
+    if (!originalBar || !originalBar.window || gAWESettingsVisible) return NO;
+    /* Exact 1.0.10b rule: Douyin's hidden flag is the durable route signal.
+       Route registries, alpha and temporary geometry all lag during custom
+       comment/profile returns and must not override the live tab-bar state. */
+    return AWEOriginalBarSteadyWantsVisible(originalBar);
+}
+
+static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
+                                               NSString *reason,
+                                               BOOL animated) {
+    if (!gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
+    fraction = MIN(MAX(fraction, 0.0), 1.0);
+    BOOL changed = fabs(gAWEBarLastVisibleFraction - fraction) > 0.002;
+    gAWEBarLastVisibleFraction = fraction;
+
+    AWEAlbumMorphOverlayWindow *overlay =
+        (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+    overlay.hidden = NO;
+    overlay.alpha = 1.0;
+    gAWEAlbumMorphController.view.hidden = NO;
+    gAWEAlbumMorphController.view.alpha = 1.0;
+    gAWEAlbumMorphController.tabBar.hidden = NO;
+    gAWEAlbumMorphController.tabBar.alpha = 1.0;
+
+    [gAWEAlbumMorphController setVisibleFraction:fraction animated:animated];
+
+    BOOL hitVisible = fraction > 0.001;
+    overlay.contentVisible = hitVisible;
+    if (overlay.searchTouchProxy) {
+        BOOL searchInteractive = fraction >= 0.82;
+        overlay.searchTouchProxy.hidden = !searchInteractive;
+        overlay.searchTouchProxy.userInteractionEnabled = searchInteractive;
+    }
+    gAWEAlbumMorphVisible = hitVisible;
+
+    if (changed) {
+        AWEAlbumMorphProbeWrite(
+            @"VISIBILITY_MASK reason=%@ fraction=%.4f mode=%ld stable=%d animated=%d",
+            reason ?: @"unknown", fraction,
+            (long)gAWEBarTransitionMaskMode,
+            gAWEBarStableVisible, animated);
+    }
+}
+
+static void AWEFinishAlbumMorphTransition(
+    id<UIViewControllerTransitionCoordinatorContext> context,
+    UIView *originalBar,
+    AWEBarTransitionMaskMode mode,
+    BOOL fromVisible,
+    id<UIViewControllerTransitionCoordinator> coordinator) {
+
+    if (gAWEBarVisibilityCoordinator &&
+        gAWEBarVisibilityCoordinator != coordinator) return;
+
+    BOOL targetVisible = fromVisible;
+    if (!context.isCancelled) {
+        if (mode == AWEBarTransitionMaskModeReveal) targetVisible = YES;
+        else if (mode == AWEBarTransitionMaskModeHide) targetVisible = NO;
+        else targetVisible = AWEAlbumMorphSteadyWantsVisible(originalBar);
+    }
+
+    gAWEBarStableStateInitialized = YES;
+    gAWEBarStableVisible = targetVisible;
+    gAWEBarTransitionMaskMode = AWEBarTransitionMaskModeNone;
+    gAWEBarVisibilityCoordinator = nil;
+    AWEApplyAlbumMorphVisibleFraction(
+        targetVisible ? 1.0 : 0.0,
+        context.isCancelled ? @"transition.cancelled" : @"transition.completed",
+        NO);
+    AWEScheduleTransitionRecovery();
+}
+
+static void AWERegisterAlbumMorphCoordinator(
+    UIView *originalBar,
+    id<UIViewControllerTransitionCoordinator> coordinator,
+    AWEBarTransitionMaskMode mode,
+    BOOL fromVisible,
+    BOOL animateTarget) {
+    if (!coordinator || mode == AWEBarTransitionMaskModeNone) return;
+    if (gAWEBarVisibilityCoordinator == coordinator &&
+        gAWEBarTransitionMaskMode == mode) return;
+
+    gAWEBarVisibilityCoordinator = coordinator;
+    gAWEBarTransitionMaskMode = mode;
+    gAWEBarTransitionFromVisible = fromVisible;
+
+    if ([objc_getAssociatedObject((id)coordinator,
+            &kAWEVisibilityCoordinatorRegistrationKey) boolValue]) return;
+    objc_setAssociatedObject((id)coordinator,
+        &kAWEVisibilityCoordinatorRegistrationKey, @YES,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    __weak UIView *weakOriginal = originalBar;
+    __weak id<UIViewControllerTransitionCoordinator> weakCoordinator = coordinator;
+    AWEBarTransitionMaskMode capturedMode = mode;
+    BOOL capturedFromVisible = fromVisible;
+
+    [coordinator animateAlongsideTransition:
+        ^(id<UIViewControllerTransitionCoordinatorContext> context) {
+            (void)context;
+            if (!animateTarget) return;
+            CGFloat target = capturedMode == AWEBarTransitionMaskModeReveal
+                ? 1.0 : 0.0;
+            AWEApplyAlbumMorphVisibleFraction(
+                target, @"coordinator.animation", YES);
+        }
+        completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+            AWEFinishAlbumMorphTransition(
+                context, weakOriginal, capturedMode, capturedFromVisible,
+                weakCoordinator);
+        }];
+}
+
+static void AWEUpdateAlbumMorphVisibility(UIView *originalBar,
+                                           NSString *reason) {
+    if (!originalBar || !gAWEAlbumMorphController ||
+        !gAWEAlbumMorphOverlayWindow) return;
+
+    BOOL targetVisible = AWEAlbumMorphSteadyWantsVisible(originalBar);
+    BOOL fromVisible = gAWEBarStableStateInitialized
+        ? gAWEBarStableVisible
+        : targetVisible;
+    id<UIViewControllerTransitionCoordinator> coordinator =
+        AWECurrentBarTransitionCoordinator();
+
+    if (coordinator && coordinator.isInteractive) {
+        AWEBarTransitionMaskMode mode = AWEBarTransitionMaskModeNone;
+        /* Preserve 1.0.10b's exact direction signal. During an interactive
+           return Douyin flips the original bar hidden flag before alpha/frame
+           settle, which is enough to identify a reveal. */
+        if (!fromVisible && !originalBar.hidden) {
+            mode = AWEBarTransitionMaskModeReveal;
+        } else if (fromVisible &&
+                   (originalBar.hidden || AWECurrentRouteSuppressesBar())) {
+            mode = AWEBarTransitionMaskModeHide;
+        } else if (targetVisible != fromVisible) {
+            mode = targetVisible ? AWEBarTransitionMaskModeReveal
+                                 : AWEBarTransitionMaskModeHide;
+        }
+
+        if (mode != AWEBarTransitionMaskModeNone) {
+            AWERegisterAlbumMorphCoordinator(
+                originalBar, coordinator, mode, fromVisible, NO);
+        }
+
+        if (gAWEBarVisibilityCoordinator == coordinator &&
+            gAWEBarTransitionMaskMode != AWEBarTransitionMaskModeNone) {
+            CGFloat progress = MIN(MAX(coordinator.percentComplete, 0.0), 1.0);
+            CGFloat fraction = gAWEBarTransitionMaskMode ==
+                AWEBarTransitionMaskModeReveal ? progress : 1.0 - progress;
+            AWEApplyAlbumMorphVisibleFraction(
+                fraction, reason ?: @"interactive.tick", NO);
+            return;
+        }
+
+        AWEApplyAlbumMorphVisibleFraction(
+            fromVisible ? 1.0 : 0.0,
+            @"interactive.awaiting-signal", NO);
+        return;
+    }
+
+    if (coordinator && targetVisible != fromVisible) {
+        AWEBarTransitionMaskMode mode = targetVisible
+            ? AWEBarTransitionMaskModeReveal
+            : AWEBarTransitionMaskModeHide;
+        AWEApplyAlbumMorphVisibleFraction(
+            fromVisible ? 1.0 : 0.0, @"coordinator.start", NO);
+        AWERegisterAlbumMorphCoordinator(
+            originalBar, coordinator, mode, fromVisible, YES);
+        return;
+    }
+
+    if (gAWEBarTransitionMaskMode != AWEBarTransitionMaskModeNone &&
+        gAWEBarVisibilityCoordinator && !coordinator) {
+        gAWEBarTransitionMaskMode = AWEBarTransitionMaskModeNone;
+        gAWEBarVisibilityCoordinator = nil;
+    }
+
+    gAWEBarStableStateInitialized = YES;
+    gAWEBarStableVisible = targetVisible;
+    AWEApplyAlbumMorphVisibleFraction(
+        targetVisible ? 1.0 : 0.0,
+        reason ?: @"steady.original-state", NO);
+}
+
 static CAShapeLayer *AWEVisibilityMaskForNativeBar(UITabBar *nativeBar) {
     if (!nativeBar) return nil;
 
@@ -4591,14 +4766,18 @@ static void AWEUpdateNativeBarVisibility(UIView *originalBar,
     (void)displayLink;
 
     UIView *originalBar = (UIView *)gAWELastTabBar;
-    UITabBar *nativeBar = originalBar
-        ? objc_getAssociatedObject(originalBar, &kAWENativeBarKey)
-        : nil;
-
-    if (originalBar && nativeBar) {
-        AWEUpdateNativeBarVisibility(originalBar,
-                                     nativeBar,
-                                     @"display-link");
+    if (originalBar && AWEAlbumMorphStyleEnabled() &&
+        gAWEAlbumMorphController && gAWEAlbumMorphOverlayWindow) {
+        AWEUpdateAlbumMorphVisibility(originalBar, @"display-link");
+    } else {
+        UITabBar *nativeBar = originalBar
+            ? objc_getAssociatedObject(originalBar, &kAWENativeBarKey)
+            : nil;
+        if (originalBar && nativeBar) {
+            AWEUpdateNativeBarVisibility(originalBar,
+                                         nativeBar,
+                                         @"display-link");
+        }
     }
 
     id<UIViewControllerTransitionCoordinator> coordinator =
@@ -5351,12 +5530,22 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
     (void)controller;
-    /* 0.0.20a: the bar is resident at its final frame and mask-controlled. */
+    /*
+     Preserve the verified 1.0.10b invariant for both implementations: the
+     glass object already exists before the return transition starts and only
+     its mask changes.  The coordinator becomes observable after UIKit begins
+     the pop/dismiss, so the display driver performs the progress follow-up.
+    */
     gAWETransitionPrewarmUntil = 0.0;
     gAWEReturnRevealGraceUntil = 0.0;
-    if (gAWELastTabBar) {
-        AWEAttachNativeBarWithForce((UIView *)gAWELastTabBar, NO);
+    if (!gAWELastTabBar) return;
+
+    AWEAttachNativeBarWithForce((UIView *)gAWELastTabBar, NO);
+    if (AWEAlbumMorphStyleEnabled() && gAWEAlbumMorphController) {
+        AWEApplyAlbumMorphVisibleFraction(
+            0.0, @"return.prewarm.resident", NO);
     }
+    AWEStartBarVisibilityDriver();
 }
 
 
@@ -7513,11 +7702,9 @@ static void AWERefreshAlbumMorphTintFromSystemProbe(void) {
     if (!gAWEAlbumMorphVisible || !gAWEAlbumMorphOverlayWindow ||
         !((AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow).contentVisible ||
         !gAWEAlbumMorphController.tabBar.window) {
-        if (gAWEAlbumMorphTintProbe) {
-            gAWEAlbumMorphTintProbe.hidden = YES;
-            gAWEAlbumMorphTintProbe.alpha = 0.0;
-            gAWEAlbumMorphTintProbe.layer.opacity = 0.0f;
-        }
+        /* Keep the 4 x 4 resolver warm in the physical rounded corner.  Only
+           pause sampling; hiding/recreating the effect made the returned bar
+           resolve through a temporary white material branch. */
         displayLink.paused = YES;
         return;
     }
@@ -7561,11 +7748,12 @@ static void AWEStopAlbumMorphTintDisplayLink(void) {
 }
 
 static void AWEHideAlbumMorphTintProbe(void) {
-    if (gAWEAlbumMorphTintProbe) {
-        gAWEAlbumMorphTintProbe.hidden = YES;
-        gAWEAlbumMorphTintProbe.alpha = 0.0;
-        gAWEAlbumMorphTintProbe.layer.opacity = 0.0f;
-    }
+    /* Historical name retained for callers.  The resolver now stays fully
+       rendered in the physical bottom-left rounded corner so the material
+       branch remains warm; only the low-frequency display link is paused. */
+    UIWindow *sourceWindow =
+        gAWEAlbumMorphSuppressedOriginalBar.window ?: AWEActiveMainWindow();
+    if (sourceWindow) AWEEnsureAlbumMorphTintProbe(sourceWindow);
     gAWEAlbumMorphTintDisplayLink.paused = YES;
 }
 
@@ -8566,11 +8754,9 @@ static void AWEApplyAlbumMorphResolvedAppearance(
         AWERestoreAlbumMorphSearchGesture();
         AWEAlbumMorphOverlayWindow *overlay =
             (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
-        overlay.contentVisible = NO;
         overlay.hidden = NO;
-        gAWEAlbumMorphController.tabBar.alpha = 0.0;
-        gAWEAlbumMorphController.tabBar.userInteractionEnabled = NO;
-        gAWEAlbumMorphVisible = NO;
+        overlay.alpha = 1.0;
+        AWEApplyAlbumMorphVisibleFraction(0.0, @"publish.prehide", NO);
         AWEHideAlbumMorphTintProbe();
         AWEAlbumMorphProbeWrite(@"PUBLISH_PREHIDE resident=1");
     }
@@ -8907,8 +9093,9 @@ static BOOL AWEEnsureAlbumMorphOverlayWindow(UIWindow *sourceWindow) {
         overlay.managedTabBar = gAWEAlbumMorphController.tabBar;
         [overlay layoutIfNeeded];
         AWEPrepareAlbumMorphOverlayTransparency();
-        gAWEAlbumMorphController.tabBar.alpha = 0.0;
+        gAWEAlbumMorphController.tabBar.alpha = 1.0;
         gAWEAlbumMorphController.tabBar.userInteractionEnabled = NO;
+        [gAWEAlbumMorphController setVisibleFraction:0.0 animated:NO];
         /* Keep this transparent window resident. Re-hiding/revealing a freshly
            composited UIWindow was the one-frame white flash after comments. */
         overlay.hidden = NO;
@@ -8985,53 +9172,35 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     AWEApplyAlbumMorphResolvedAppearance(sourceWindow, selected);
 
     BOOL settledOriginalVisible =
-        originalBar && AWEAlbumMorphOriginalBarWantsVisible(originalBar);
+        originalBar && AWEAlbumMorphSteadyWantsVisible(originalBar);
     BOOL routeSuppresses = AWECurrentRouteSuppressesBar();
-    /*
-     forceVisible is retained only for call-site compatibility.  It may warm,
-     configure, or realign the already-created overlay, but it must never
-     override the original Douyin bar's live visibility state.
-    */
-    BOOL visible = !routeSuppresses && !gAWESettingsVisible &&
-        settledOriginalVisible;
+    (void)forceVisible;
 
-    /* Route restoration and system-sheet suppression must be immediate. The
-       native setTabBarHidden animation was the second source of the delayed
-       downward settling seen after comment/chat returns. Selection-platter
-       animations remain fully system-owned. */
-    BOOL animate = NO;
-    if (gAWEAlbumMorphVisible != visible || overlay.contentVisible != visible) {
-        UIViewController *top = AWETopViewControllerFrom(sourceWindow.rootViewController);
-        AWEAlbumMorphProbeWrite(
-            @"OVERLAY_VISIBILITY visible=%d requestedForce=%d originalLive=%d route=%d settings=%d top=%@ overlayFrame=%@",
-            visible, forceVisible, settledOriginalVisible, routeSuppresses,
-            gAWESettingsVisible, NSStringFromClass(top.class),
-            NSStringFromCGRect(overlay.frame));
-    }
+    /*
+     Keep the real tab bar and its glass renderer alive permanently.  The
+     visible area is driven exclusively by the 1.0.10b-style mask, including
+     interactive return progress.  Never toggle alpha/hidden here: doing so
+     forces the compositor to recreate the glass surface and causes the white
+     flash/disappear-reappear cycle.
+    */
     AWEPrepareAlbumMorphOverlayTransparency();
     [UIView performWithoutAnimation:^{
         overlay.hidden = NO;
-        overlay.contentVisible = visible;
-        gAWEAlbumMorphController.tabBar.alpha = visible ? 1.0 : 0.0;
-        gAWEAlbumMorphController.tabBar.userInteractionEnabled = visible;
-        if (overlay.searchTouchProxy) {
-            overlay.searchTouchProxy.hidden = !visible;
-            overlay.searchTouchProxy.userInteractionEnabled = visible;
-        }
+        overlay.alpha = 1.0;
+        gAWEAlbumMorphController.view.hidden = NO;
+        gAWEAlbumMorphController.view.alpha = 1.0;
+        gAWEAlbumMorphController.tabBar.hidden = NO;
+        gAWEAlbumMorphController.tabBar.alpha = 1.0;
     }];
-    [gAWEAlbumMorphController setMorphBarVisible:visible animated:animate];
-    gAWEAlbumMorphVisible = visible;
+    AWEUpdateAlbumMorphVisibility(originalBar, @"install.original-state");
 
+    BOOL visible = gAWEBarLastVisibleFraction > 0.001;
+    AWEEnsureAlbumMorphTintProbe(sourceWindow);
     if (visible) {
-        AWEEnsureAlbumMorphTintProbe(sourceWindow);
         AWEStartAlbumMorphTintDisplayLink();
         AWERefreshAlbumMorphTintFromSystemProbe();
-        AWEInstallAlbumMorphCollapseGesture(sourceWindow);
     } else {
-        /* The source-window probe must not remain as a 4 x 4 glass dot on
-           chat/profile/sheet routes where the overlay bar is absent. */
         AWEHideAlbumMorphTintProbe();
-        AWEExpandAlbumMorphBarWithoutAnimation();
     }
 
     AWEInteractionDiagnosticWrite(
@@ -9416,8 +9585,8 @@ static BOOL AWEViewIsInsideActiveSuppressedTopBar(UIView *view) {
                 cursor, &kAWETopLiquidGroupViewKey);
             BOOL menuActive = AWETopMenuMorphEnabled() && slot && !slot.hidden &&
                 slot.hitButton.menu.children.count > 0;
-            BOOL groupActive = AWETopTelegramSwitcherEnabled() && group &&
-                !group.hidden;
+            BOOL groupActive = group && !group.hidden &&
+                group.alpha > 0.01;
             return menuActive || groupActive;
         }
     }
@@ -9437,47 +9606,81 @@ static void AWEForceExactTopIndicatorSuppression(UIView *indicator) {
 }
 
 
-#pragma mark - Native top liquid category group
+#pragma mark - Telegram-style top liquid category group
 
 /*
- A single native UISegmentedControl is hosted on one system-glass platter.
- This deliberately mirrors the architecture used by the SwiftUI segmented
- Picker pattern: the selected capsule belongs to the system control, not to a
- second independently rendered glass button.  The scroll view only provides
- horizontal overflow for accounts with many dynamic categories.
+ One resident system-glass platter, one selected tint pill and at most four
+ title buttons. This follows the proven XHSLiquidBar Telegram switcher pattern
+ instead of embedding UISegmentedControl (whose own background created the
+ two-overlapping-glass result). Accounts with more than four channels shift a
+ one-item window with horizontal swipes; tapping an edge item also advances the
+ window so the next hidden channel becomes available.
 */
+@class AWETopLiquidGroupView;
+static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
+                                    BOOL animated);
+
 @interface AWETopLiquidGroupView : UIView
 @property(nonatomic, strong) UIButton *backgroundGlass;
-@property(nonatomic, strong) UIScrollView *scrollView;
-@property(nonatomic, strong) UISegmentedControl *segmentedControl;
+@property(nonatomic, strong) UIView *selectionGlass;
 @property(nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *definitions;
+@property(nonatomic, strong) NSArray<UIButton *> *buttons;
 @property(nonatomic, assign) NSInteger selectedIndex;
-- (void)alb_segmentChanged:(UISegmentedControl *)sender;
+@property(nonatomic, assign) NSInteger windowStart;
+- (void)alb_categoryTapped:(UIButton *)sender;
+- (void)alb_swipedLeft:(UISwipeGestureRecognizer *)recognizer;
+- (void)alb_swipedRight:(UISwipeGestureRecognizer *)recognizer;
 @end
 
 @implementation AWETopLiquidGroupView
-- (void)alb_segmentChanged:(UISegmentedControl *)sender {
-    NSInteger index = sender.selectedSegmentIndex;
+
+- (NSInteger)alb_visibleCount {
+    return MIN(4, (NSInteger)self.definitions.count);
+}
+
+- (void)alb_categoryTapped:(UIButton *)sender {
+    NSInteger index = sender.tag;
     if (index < 0 || index >= (NSInteger)self.definitions.count) return;
+
     self.selectedIndex = index;
+    NSInteger visibleCount = [self alb_visibleCount];
+    NSInteger maximumStart = MAX(0, (NSInteger)self.definitions.count - visibleCount);
+
+    /* Telegram-like edge hand-off: after choosing an edge channel, reveal one
+       more channel in that direction while retaining the current selection. */
+    if (visibleCount > 1 && index == self.windowStart + visibleCount - 1 &&
+        self.windowStart < maximumStart) {
+        self.windowStart += 1;
+    } else if (index == self.windowStart && self.windowStart > 0) {
+        self.windowStart -= 1;
+    }
+    self.windowStart = MIN(MAX(0, self.windowStart), maximumStart);
+    AWELayoutTopLiquidGroup(self, YES);
+
     NSDictionary *definition = self.definitions[(NSUInteger)index];
     NSString *route = definition[@"route"] ?: definition[@"title"];
     if (route.length) AWEActivateQuickMenuDestination(route);
-    CGRect segmentRect = CGRectZero;
-    @try {
-        CGFloat x = 0.0;
-        for (NSInteger i = 0; i < index; i++) {
-            x += [sender widthForSegmentAtIndex:i];
-        }
-        segmentRect = CGRectMake(x, 0.0,
-            [sender widthForSegmentAtIndex:index], CGRectGetHeight(sender.bounds));
-    } @catch (__unused NSException *exception) {}
-    if (!CGRectIsEmpty(segmentRect)) {
-        [self.scrollView scrollRectToVisible:CGRectInset(segmentRect, -14.0, 0.0)
-                                     animated:YES];
-    }
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
+
+- (void)alb_swipedLeft:(UISwipeGestureRecognizer *)recognizer {
+    (void)recognizer;
+    NSInteger visibleCount = [self alb_visibleCount];
+    NSInteger maximumStart = MAX(0, (NSInteger)self.definitions.count - visibleCount);
+    if (self.windowStart >= maximumStart) return;
+    self.windowStart += 1;
+    AWELayoutTopLiquidGroup(self, YES);
+    [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+}
+
+- (void)alb_swipedRight:(UISwipeGestureRecognizer *)recognizer {
+    (void)recognizer;
+    if (self.windowStart <= 0) return;
+    self.windowStart -= 1;
+    AWELayoutTopLiquidGroup(self, YES);
+    [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+}
+
 @end
 
 static NSInteger AWESelectedTopCategoryIndex(
@@ -9506,6 +9709,18 @@ static NSInteger AWESelectedTopCategoryIndex(
     return best;
 }
 
+static void AWEConfigureTopSelectionPill(UIView *pill) {
+    if (!pill) return;
+    UIColor *accent = AWEStoredAccentColor();
+    pill.backgroundColor = [accent colorWithAlphaComponent:
+        AWEHomeTintedGlassEnabled() ? 0.16 : 0.11];
+    pill.layer.borderWidth = 0.5;
+    pill.layer.borderColor = [accent colorWithAlphaComponent:0.20].CGColor;
+    pill.layer.cornerCurve = kCACornerCurveContinuous;
+    pill.userInteractionEnabled = NO;
+    pill.accessibilityElementsHidden = YES;
+}
+
 static AWETopLiquidGroupView *AWEEnsureTopLiquidGroup(UIView *container) {
     if (!container) return nil;
     AWETopLiquidGroupView *group = objc_getAssociatedObject(
@@ -9517,6 +9732,7 @@ static AWETopLiquidGroupView *AWEEnsureTopLiquidGroup(UIView *container) {
         group.clipsToBounds = NO;
         group.accessibilityIdentifier = @"AwemeLiquidBar.TopLiquidCategoryGroup";
         group.selectedIndex = NSNotFound;
+        group.windowStart = 0;
 
         UIButton *background = [UIButton buttonWithType:UIButtonTypeCustom];
         background.userInteractionEnabled = NO;
@@ -9526,38 +9742,43 @@ static AWETopLiquidGroupView *AWEEnsureTopLiquidGroup(UIView *container) {
         [group addSubview:background];
         group.backgroundGlass = background;
 
-        UIScrollView *scroll = [UIScrollView new];
-        scroll.backgroundColor = UIColor.clearColor;
-        scroll.opaque = NO;
-        scroll.showsHorizontalScrollIndicator = NO;
-        scroll.showsVerticalScrollIndicator = NO;
-        scroll.alwaysBounceHorizontal = NO;
-        scroll.clipsToBounds = YES;
-        scroll.layer.cornerCurve = kCACornerCurveContinuous;
-        [group addSubview:scroll];
-        group.scrollView = scroll;
+        UIView *selection = [UIView new];
+        selection.userInteractionEnabled = NO;
+        selection.backgroundColor = UIColor.clearColor;
+        selection.opaque = NO;
+        selection.clipsToBounds = YES;
+        selection.alpha = 0.0;
+        [group addSubview:selection];
+        group.selectionGlass = selection;
 
-        UISegmentedControl *segmented = [[UISegmentedControl alloc] initWithItems:@[]];
-        segmented.backgroundColor = UIColor.clearColor;
-        segmented.opaque = NO;
-        segmented.apportionsSegmentWidthsByContent = NO;
-        segmented.selectedSegmentIndex = -1;
-        segmented.layer.cornerCurve = kCACornerCurveContinuous;
-        if (@available(iOS 13.0, *)) {
-            segmented.selectedSegmentTintColor = UIColor.tertiarySystemFillColor;
+        NSMutableArray<UIButton *> *buttons = [NSMutableArray arrayWithCapacity:4];
+        for (NSInteger index = 0; index < 4; index++) {
+            UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+            button.backgroundColor = UIColor.clearColor;
+            button.contentHorizontalAlignment =
+                UIControlContentHorizontalAlignmentCenter;
+            button.titleLabel.font = [UIFont systemFontOfSize:14.5
+                                                       weight:UIFontWeightSemibold];
+            button.titleLabel.adjustsFontSizeToFitWidth = YES;
+            button.titleLabel.minimumScaleFactor = 0.72;
+            button.titleLabel.lineBreakMode = NSLineBreakByClipping;
+            button.accessibilityIdentifier = [NSString stringWithFormat:
+                @"AwemeLiquidBar.TopCategory.%ld", (long)index];
+            [button addTarget:group action:@selector(alb_categoryTapped:)
+              forControlEvents:UIControlEventTouchUpInside];
+            [group addSubview:button];
+            [buttons addObject:button];
         }
-        UIImage *empty = [UIImage new];
-        [segmented setBackgroundImage:empty
-                             forState:UIControlStateNormal
-                           barMetrics:UIBarMetricsDefault];
-        [segmented setDividerImage:empty
-              forLeftSegmentState:UIControlStateNormal
-                rightSegmentState:UIControlStateNormal
-                       barMetrics:UIBarMetricsDefault];
-        [segmented addTarget:group action:@selector(alb_segmentChanged:)
-            forControlEvents:UIControlEventValueChanged];
-        [scroll addSubview:segmented];
-        group.segmentedControl = segmented;
+        group.buttons = buttons;
+
+        UISwipeGestureRecognizer *left = [[UISwipeGestureRecognizer alloc]
+            initWithTarget:group action:@selector(alb_swipedLeft:)];
+        left.direction = UISwipeGestureRecognizerDirectionLeft;
+        [group addGestureRecognizer:left];
+        UISwipeGestureRecognizer *right = [[UISwipeGestureRecognizer alloc]
+            initWithTarget:group action:@selector(alb_swipedRight:)];
+        right.direction = UISwipeGestureRecognizerDirectionRight;
+        [group addGestureRecognizer:right];
 
         objc_setAssociatedObject(container, &kAWETopLiquidGroupViewKey,
                                  group, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -9572,25 +9793,116 @@ static AWETopLiquidGroupView *AWEEnsureTopLiquidGroup(UIView *container) {
 static void AWEHideTopLiquidGroup(UIView *container) {
     AWETopLiquidGroupView *group = container ? objc_getAssociatedObject(
         container, &kAWETopLiquidGroupViewKey) : nil;
-    if (group) group.hidden = YES;
+    if (group) {
+        group.hidden = YES;
+        group.userInteractionEnabled = NO;
+    }
+}
+
+static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
+                                    BOOL animated) {
+    if (!group || group.definitions.count < 2 || CGRectIsEmpty(group.bounds)) return;
+    NSInteger total = (NSInteger)group.definitions.count;
+    NSInteger visibleCount = MIN(4, total);
+    NSInteger maximumStart = MAX(0, total - visibleCount);
+    group.windowStart = MIN(MAX(0, group.windowStart), maximumStart);
+
+    if (group.selectedIndex != NSNotFound) {
+        if (group.selectedIndex < group.windowStart) {
+            group.windowStart = group.selectedIndex;
+        } else if (group.selectedIndex >= group.windowStart + visibleCount) {
+            group.windowStart = group.selectedIndex - visibleCount + 1;
+        }
+        group.windowStart = MIN(MAX(0, group.windowStart), maximumStart);
+    }
+
+    CGFloat inset = 4.0;
+    CGRect contentBounds = CGRectInset(group.bounds, inset, inset);
+    CGFloat itemWidth = CGRectGetWidth(contentBounds) / MAX(1, visibleCount);
+    UIColor *accent = AWEStoredAccentColor();
+
+    void (^changes)(void) = ^{
+        group.backgroundGlass.frame = group.bounds;
+        NSInteger visibleSelectionSlot = NSNotFound;
+        for (NSInteger slot = 0; slot < 4; slot++) {
+            UIButton *button = group.buttons[(NSUInteger)slot];
+            if (slot >= visibleCount) {
+                button.hidden = YES;
+                continue;
+            }
+            NSInteger definitionIndex = group.windowStart + slot;
+            NSDictionary *definition = group.definitions[(NSUInteger)definitionIndex];
+            NSString *title = definition[@"title"] ?: @"";
+            button.hidden = NO;
+            button.tag = definitionIndex;
+            button.frame = CGRectMake(
+                CGRectGetMinX(contentBounds) + slot * itemWidth,
+                CGRectGetMinY(contentBounds), itemWidth,
+                CGRectGetHeight(contentBounds));
+            [button setTitle:title forState:UIControlStateNormal];
+            BOOL selected = definitionIndex == group.selectedIndex;
+            [button setTitleColor:selected ? accent : UIColor.secondaryLabelColor
+                         forState:UIControlStateNormal];
+            if (selected) visibleSelectionSlot = slot;
+        }
+
+        if (visibleSelectionSlot != NSNotFound) {
+            CGRect selectedFrame = CGRectMake(
+                CGRectGetMinX(contentBounds) + visibleSelectionSlot * itemWidth,
+                CGRectGetMinY(contentBounds), itemWidth,
+                CGRectGetHeight(contentBounds));
+            group.selectionGlass.frame = CGRectInset(selectedFrame, 1.5, 0.5);
+            group.selectionGlass.layer.cornerRadius =
+                CGRectGetHeight(group.selectionGlass.bounds) * 0.5;
+            group.selectionGlass.alpha = 1.0;
+        } else {
+            group.selectionGlass.alpha = 0.0;
+        }
+    };
+
+    if (animated) {
+        [UIView animateWithDuration:0.32
+                              delay:0.0
+             usingSpringWithDamping:0.88
+              initialSpringVelocity:0.12
+                            options:UIViewAnimationOptionAllowUserInteraction |
+                                    UIViewAnimationOptionBeginFromCurrentState
+                         animations:changes
+                         completion:nil];
+    } else {
+        [UIView performWithoutAnimation:changes];
+    }
+
+    [group bringSubviewToFront:group.selectionGlass];
+    for (UIButton *button in group.buttons) [group bringSubviewToFront:button];
 }
 
 static void AWEUpdateTopLiquidGroup(UIView *container,
                                     BOOL bottomSearchVisible) {
     (void)bottomSearchVisible;
-    if (!container || !AWETopTelegramSwitcherEnabled() ||
-        !AWETopGlassEnabled()) {
+    if (!container || !AWETopGlassEnabled()) {
         AWEHideTopLiquidGroup(container);
         return;
     }
+
     AWEHomeTopSlotView *menuSlot = objc_getAssociatedObject(
         container, &kAWETopMenuSlotKey);
-    if (!menuSlot) {
+    BOOL menuActive = AWETopMenuMorphEnabled() && menuSlot && !menuSlot.hidden &&
+        menuSlot.hitButton.menu && menuSlot.hitButton.showsMenuAsPrimaryAction &&
+        menuSlot.hitButton.menu.children.count > 0;
+    if (menuActive) {
         AWEHideTopLiquidGroup(container);
         return;
     }
-    NSArray<NSDictionary<NSString *, id> *> *definitions =
-        AWEDynamicTopQuickMenuDefinitions(menuSlot);
+
+    NSArray<NSDictionary<NSString *, id> *> *definitions = menuSlot
+        ? AWEDynamicTopQuickMenuDefinitions(menuSlot)
+        : @[
+            @{@"title": @"直播", @"route": @"直播", @"symbol": @"play.rectangle", @"x": @0},
+            @{@"title": @"商城", @"route": @"商城", @"symbol": @"storefront", @"x": @1},
+            @{@"title": @"关注", @"route": @"关注", @"symbol": @"person.2", @"x": @2},
+            @{@"title": @"推荐", @"route": @"推荐", @"symbol": @"sparkles", @"x": @3}
+        ];
     if (definitions.count < 2) {
         AWEHideTopLiquidGroup(container);
         return;
@@ -9601,18 +9913,21 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
     AWEHomeTopSlotView *searchSlot = objc_getAssociatedObject(
         container, &kAWETopSearchSlotKey);
     BOOL topSearchVisible = searchSlot && !searchSlot.hidden;
-    CGFloat height = 46.0;
-    CGFloat left = 82.0;
-    CGFloat right = topSearchVisible ? 82.0 : 14.0;
-    CGFloat width = MAX(110.0, CGRectGetWidth(container.bounds) - left - right);
-    group.frame = CGRectMake(left,
+
+    CGFloat height = 44.0;
+    CGFloat leftBoundary = 82.0;
+    CGFloat rightBoundary = topSearchVisible ? 82.0 : 14.0;
+    CGFloat availableWidth = MAX(120.0,
+        CGRectGetWidth(container.bounds) - leftBoundary - rightBoundary);
+    NSInteger visibleCount = MIN(4, (NSInteger)definitions.count);
+    CGFloat desiredWidth = MIN(availableWidth, MAX(150.0, visibleCount * 68.0));
+    CGFloat centerX = leftBoundary + availableWidth * 0.5;
+    group.frame = CGRectMake(centerX - desiredWidth * 0.5,
                              CGRectGetMidY(container.bounds) - height * 0.5,
-                             width,
+                             desiredWidth,
                              height);
-    group.backgroundGlass.frame = group.bounds;
-    group.scrollView.frame = CGRectInset(group.bounds, 4.0, 4.0);
-    group.scrollView.layer.cornerRadius = CGRectGetHeight(group.scrollView.bounds) * 0.5;
     group.hidden = NO;
+    group.userInteractionEnabled = YES;
     group.alpha = 1.0;
     group.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
 
@@ -9620,70 +9935,12 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
         componentsJoinedByString:@"|"];
     NSString *previous = objc_getAssociatedObject(
         group, &kAWETopTelegramTitlesSignatureKey);
-    UISegmentedControl *segmented = group.segmentedControl;
-    BOOL rebuild = ![previous isEqualToString:signature] ||
-                   segmented.numberOfSegments != definitions.count;
-    if (rebuild) {
-        while (segmented.numberOfSegments > 0) {
-            [segmented removeSegmentAtIndex:0 animated:NO];
-        }
-        group.definitions = definitions;
-        NSMutableArray<NSNumber *> *baseWidths = [NSMutableArray array];
-        CGFloat baseTotal = 0.0;
-        UIFont *font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-        for (NSUInteger index = 0; index < definitions.count; index++) {
-            NSString *title = definitions[index][@"title"] ?: @"";
-            [segmented insertSegmentWithTitle:title atIndex:index animated:NO];
-            CGFloat textWidth = ceil([title sizeWithAttributes:@{
-                NSFontAttributeName: font
-            }].width);
-            CGFloat itemWidth = MAX(58.0, textWidth + 28.0);
-            [baseWidths addObject:@(itemWidth)];
-            baseTotal += itemWidth;
-        }
-        CGFloat viewportWidth = MAX(1.0, CGRectGetWidth(group.scrollView.bounds));
-        CGFloat contentWidth = MAX(baseTotal, viewportWidth);
-        CGFloat extra = definitions.count > 0 && contentWidth > baseTotal
-            ? (contentWidth - baseTotal) / definitions.count : 0.0;
-        for (NSUInteger index = 0; index < baseWidths.count; index++) {
-            [segmented setWidth:baseWidths[index].doubleValue + extra
-              forSegmentAtIndex:index];
-        }
-        segmented.frame = CGRectMake(0.0, 0.0, contentWidth,
-                                     CGRectGetHeight(group.scrollView.bounds));
-        group.scrollView.contentSize = segmented.bounds.size;
+    BOOL changed = ![previous isEqualToString:signature];
+    group.definitions = definitions;
+    if (changed) {
+        group.windowStart = 0;
         objc_setAssociatedObject(group, &kAWETopTelegramTitlesSignatureKey,
                                  signature, OBJC_ASSOCIATION_COPY_NONATOMIC);
-    } else {
-        group.definitions = definitions;
-        CGRect frame = segmented.frame;
-        frame.size.height = CGRectGetHeight(group.scrollView.bounds);
-        segmented.frame = frame;
-        group.scrollView.contentSize = segmented.bounds.size;
-    }
-
-    AWEConfigureAdaptiveSystemGlassPlateButton(
-        group.backgroundGlass, @"top.category.group.background",
-        AWEHomeTintedGlassEnabled());
-
-    NSDictionary *normalAttributes = @{
-        NSFontAttributeName: [UIFont systemFontOfSize:15.0
-                                               weight:UIFontWeightMedium],
-        NSForegroundColorAttributeName: UIColor.secondaryLabelColor
-    };
-    NSDictionary *selectedAttributes = @{
-        NSFontAttributeName: [UIFont systemFontOfSize:15.0
-                                               weight:UIFontWeightSemibold],
-        NSForegroundColorAttributeName: UIColor.labelColor
-    };
-    [segmented setTitleTextAttributes:normalAttributes
-                             forState:UIControlStateNormal];
-    [segmented setTitleTextAttributes:selectedAttributes
-                             forState:UIControlStateSelected];
-    if (@available(iOS 13.0, *)) {
-        segmented.selectedSegmentTintColor = AWEHomeTintedGlassEnabled()
-            ? UIColor.tertiarySystemFillColor
-            : [UIColor colorWithWhite:0.5 alpha:0.22];
     }
 
     NSInteger selected = AWESelectedTopCategoryIndex(container, definitions);
@@ -9692,19 +9949,12 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
         selected = MAX(0, (NSInteger)definitions.count - 1);
     }
     group.selectedIndex = selected;
-    if (segmented.selectedSegmentIndex != selected) {
-        [UIView performWithoutAnimation:^{
-            segmented.selectedSegmentIndex = selected;
-        }];
-    }
-    CGFloat segmentX = 0.0;
-    for (NSInteger index = 0; index < selected; index++) {
-        segmentX += [segmented widthForSegmentAtIndex:index];
-    }
-    CGRect selectedRect = CGRectMake(segmentX, 0.0,
-        [segmented widthForSegmentAtIndex:selected], CGRectGetHeight(segmented.bounds));
-    [group.scrollView scrollRectToVisible:CGRectInset(selectedRect, -14.0, 0.0)
-                                  animated:NO];
+
+    AWEConfigureAdaptiveSystemGlassPlateButton(
+        group.backgroundGlass, @"top.category.group.background",
+        AWEHomeTintedGlassEnabled());
+    AWEConfigureTopSelectionPill(group.selectionGlass);
+    AWELayoutTopLiquidGroup(group, NO);
     [container bringSubviewToFront:group];
 }
 
@@ -9809,7 +10059,10 @@ static void AWERefreshTopActionContainer(UIView *container) {
         menuSlot && !menuSlot.hidden && menuSlot.hitButton.menu &&
         menuSlot.hitButton.showsMenuAsPrimaryAction &&
         menuSlot.hitButton.menu.children.count > 0;
-    BOOL groupOwnsCategorySwitching = AWETopTelegramSwitcherEnabled();
+    AWETopLiquidGroupView *activeGroup = objc_getAssociatedObject(
+        container, &kAWETopLiquidGroupViewKey);
+    BOOL groupOwnsCategorySwitching = activeGroup && !activeGroup.hidden &&
+        activeGroup.alpha > 0.01 && activeGroup.userInteractionEnabled;
     AWEApplyTopCategoryVisualSuppression(
         container, menuOwnsCategorySwitching || groupOwnsCategorySwitching);
     if (menuSlot && !menuSlot.hidden) [container bringSubviewToFront:menuSlot];
@@ -10119,7 +10372,13 @@ static void AWEScheduleTransitionRecovery(void) {
         }
         if (!tabBar) return;
         AWEAttachNativeBarWithForce((UIView *)tabBar, NO);
-        AWEInstallDelegateIfNeeded((UIView *)tabBar);
+        if (AWEAlbumMorphStyleEnabled() && gAWEAlbumMorphController) {
+            AWEUpdateAlbumMorphVisibility((UIView *)tabBar,
+                                          @"next-run-loop.recovery");
+            AWEStartBarVisibilityDriver();
+        } else {
+            AWEInstallDelegateIfNeeded((UIView *)tabBar);
+        }
     });
 }
 
@@ -10131,41 +10390,27 @@ static void AWEForceAlbumMorphRouteRecovery(NSString *reason) {
     AWEAlbumMorphProbeWrite(@"RECOVERY_SCHEDULE generation=%lu reason=%@",
         (unsigned long)generation, reason ?: @"unknown");
 
-    BOOL preDismiss = [reason hasPrefix:@"willDismiss."];
-    NSArray<NSNumber *> *delays = preDismiss
-        ? @[@0.30, @0.56, @0.92]
-        : @[@0.0, @0.10, @0.26, @0.55, @0.90];
-
-    for (NSNumber *delay in delays) {
-        dispatch_after(dispatch_time(
-            DISPATCH_TIME_NOW,
-            (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
-            dispatch_get_main_queue(), ^{
-                if (generation != gAWEAlbumMorphRouteRecoveryGeneration) return;
-                BOOL suppressed = AWECurrentRouteSuppressesBar();
-                AWENormalModeTabBar *tabBar = gAWELastTabBar;
-                if (!tabBar && gAWELastController) {
-                    tabBar = AWEPrepareBarForController(gAWELastController, NO);
-                }
-                BOOL result = NO;
-                if (tabBar) {
-                    result = AWEInstallOrUpdateAlbumMorphBar(
-                        (UIView *)tabBar, NO);
-                }
-                AWEAlbumMorphProbeWrite(
-                    @"RECOVERY_TICK generation=%lu delay=%.2f reason=%@ suppressed=%d tab=%d result=%d overlayVisible=%d",
-                    (unsigned long)generation, delay.doubleValue,
-                    reason ?: @"unknown", suppressed, tabBar != nil, result,
-                    ((AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow).contentVisible);
-                if (result && ((AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow).contentVisible &&
-                    generation == gAWEAlbumMorphRouteRecoveryGeneration) {
-                    /* Cancel the remaining retry batch after the first stable
-                       restoration. Re-running install/alignment five times was
-                       unnecessary and enlarged the post-return settling window. */
-                    gAWEAlbumMorphRouteRecoveryGeneration++;
-                }
-            });
-    }
+    /* One next-run-loop reconciliation only.  Repeated delayed installs were
+       rebuilding/reconfiguring the overlay around the transition boundary and
+       are intentionally removed, matching the stable 1.0.10b architecture. */
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (generation != gAWEAlbumMorphRouteRecoveryGeneration) return;
+        AWENormalModeTabBar *tabBar = gAWELastTabBar;
+        if (!tabBar && gAWELastController) {
+            tabBar = AWEPrepareBarForController(gAWELastController, NO);
+        }
+        BOOL result = NO;
+        if (tabBar) {
+            result = AWEInstallOrUpdateAlbumMorphBar((UIView *)tabBar, NO);
+            AWEUpdateAlbumMorphVisibility((UIView *)tabBar,
+                reason ?: @"route.recovery");
+        }
+        AWEStartBarVisibilityDriver();
+        AWEAlbumMorphProbeWrite(
+            @"RECOVERY_ONCE generation=%lu reason=%@ tab=%d result=%d fraction=%.3f",
+            (unsigned long)generation, reason ?: @"unknown",
+            tabBar != nil, result, gAWEBarLastVisibleFraction);
+    });
 }
 
 #pragma mark - Settings
@@ -11197,7 +11442,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.45a";
+    self.title = @"LiquidBar 设置 · 1.0.46a";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -11461,7 +11706,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     }
 
     UILabel *chatTitle = [UILabel new];
-    chatTitle.text = @"TikTok 化";
+    chatTitle.text = @"聊天输入框（实验）";
     chatTitle.font =
         [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
 
@@ -11671,7 +11916,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     topCategoryGroupRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *topMenuMorphLabel = [UILabel new];
-    topMenuMorphLabel.text = @"左上按钮展开分类菜单";
+    topMenuMorphLabel.text = @"左上按钮展开分类菜单（开启时替代顶部分组）";
     topMenuMorphLabel.font = [UIFont systemFontOfSize:14.0
                                                weight:UIFontWeightMedium];
     UISwitch *topMenuMorphSwitch = [UISwitch new];
@@ -11773,7 +12018,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         albumStyleRow, newBarIconCenterButton,
         hideTitlesRow, forceDarkBottomBarRow,
-        topRow, topCategoryGroupRow, topMenuMorphRow,
+        topRow, topMenuMorphRow,
         adaptiveGlassHint, transparentGlassRow,
         pngRow, pngHint, reloadPNG,
         iconCenterButton, diagnosticRow, diagnosticButtons,
@@ -12232,6 +12477,11 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)topCategoryGroupSwitchChanged:(UISwitch *)sender {
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWETopTelegramSwitcherEnabledDefaultsKey];
+    if (sender.isOn) {
+        [NSUserDefaults.standardUserDefaults setBool:NO
+            forKey:kAWETopMenuMorphEnabledDefaultsKey];
+        self.topMenuMorphSwitch.on = NO;
+    }
     [NSUserDefaults.standardUserDefaults synchronize];
     AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
@@ -12299,7 +12549,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.45a image=%@ ==========" ,
+            @"========== START build=1.0.46a image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -12356,7 +12606,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.45a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.46a diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -12371,7 +12621,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.45a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.46a_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -12799,21 +13049,25 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 - (void)didMoveToWindow {
     %orig;
     AWEForceExactTopIndicatorSuppression((UIView *)self);
+    AWEScheduleTopActionGlass((UIView *)self);
 }
 
 - (void)didMoveToSuperview {
     %orig;
     AWEForceExactTopIndicatorSuppression((UIView *)self);
+    AWEScheduleTopActionGlass((UIView *)self);
 }
 
 - (void)layoutSubviews {
     %orig;
     AWEForceExactTopIndicatorSuppression((UIView *)self);
+    AWEConfigureTopActionGlass((UIView *)self);
 }
 
 - (void)setFrame:(CGRect)frame {
     %orig(frame);
     AWEForceExactTopIndicatorSuppression((UIView *)self);
+    AWEConfigureTopActionGlass((UIView *)self);
 }
 
 %end
@@ -13006,43 +13260,97 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %hook IESIMTextViewInternal
 
 - (void)setFrame:(CGRect)frame {
-    %orig(frame);
-    UIView *cursor = ((UIView *)self).superview;
-    while (cursor && ![NSStringFromClass(cursor.class) isEqualToString:@"IESIMGrowingTextView"]) {
-        cursor = cursor.superview;
+    UIView *internalView = (UIView *)self;
+    BOOL shouldShift =
+        AWEChatCapsuleEnabled() && AWEChatSeparateLeftEnabled();
+
+    NSValue *baseValue =
+        objc_getAssociatedObject(internalView, &kAWEChatTextBaseFrameKey);
+    NSValue *appliedValue =
+        objc_getAssociatedObject(internalView, &kAWEChatTextAppliedFrameKey);
+
+    CGRect baseFrame = frame;
+
+    if (shouldShift) {
+        /*
+         When UIKit/Douyin passes our already-adjusted frame back through the
+         setter, retain the stored original instead of adding another 10 pt.
+         Any genuinely new layout frame becomes the new base.
+        */
+        if (baseValue && appliedValue &&
+            AWEFrameNearEqual(frame, appliedValue.CGRectValue)) {
+            baseFrame = baseValue.CGRectValue;
+        } else {
+            objc_setAssociatedObject(internalView,
+                                     &kAWEChatTextBaseFrameKey,
+                                     [NSValue valueWithCGRect:frame],
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+
+        CGRect adjustedFrame = baseFrame;
+        CGFloat shift = MIN(10.0,
+                            MAX(0.0,
+                                CGRectGetWidth(baseFrame) - 20.0));
+        adjustedFrame.origin.x += shift;
+        adjustedFrame.size.width =
+            MAX(20.0, adjustedFrame.size.width - shift);
+
+        objc_setAssociatedObject(internalView,
+                                 &kAWEChatTextAppliedFrameKey,
+                                 [NSValue valueWithCGRect:adjustedFrame],
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        %orig(adjustedFrame);
+        return;
     }
-    if (cursor) AWEScheduleChatPillRefreshFromGrowingTextView(
-        cursor, @"internalText.frame");
+
+    /*
+     When separation is disabled, restore the pre-adjustment frame if the
+     current incoming value is our last adjusted result.
+    */
+    if (baseValue && appliedValue &&
+        AWEFrameNearEqual(frame, appliedValue.CGRectValue)) {
+        frame = baseValue.CGRectValue;
+    }
+
+    objc_setAssociatedObject(internalView,
+                             &kAWEChatTextAppliedFrameKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    %orig(frame);
 }
 
 - (void)layoutSubviews {
     %orig;
-    UIView *cursor = ((UIView *)self).superview;
-    while (cursor && ![NSStringFromClass(cursor.class) isEqualToString:@"IESIMGrowingTextView"]) {
-        cursor = cursor.superview;
-    }
-    if (cursor) AWEScheduleChatPillRefreshFromGrowingTextView(
-        cursor, @"internalText.layout");
-}
 
-- (void)setText:(NSString *)text {
-    %orig(text);
-    UIView *cursor = ((UIView *)self).superview;
-    while (cursor && ![NSStringFromClass(cursor.class) isEqualToString:@"IESIMGrowingTextView"]) {
-        cursor = cursor.superview;
-    }
-    if (cursor) AWEScheduleChatPillRefreshFromGrowingTextView(
-        cursor, @"internalText.text");
-}
+    UIView *internalView = (UIView *)self;
+    BOOL shouldShift =
+        AWEChatCapsuleEnabled() && AWEChatSeparateLeftEnabled();
 
-- (void)setContentSize:(CGSize)contentSize {
-    %orig(contentSize);
-    UIView *cursor = ((UIView *)self).superview;
-    while (cursor && ![NSStringFromClass(cursor.class) isEqualToString:@"IESIMGrowingTextView"]) {
-        cursor = cursor.superview;
+    NSValue *baseValue =
+        objc_getAssociatedObject(internalView, &kAWEChatTextBaseFrameKey);
+    NSValue *appliedValue =
+        objc_getAssociatedObject(internalView, &kAWEChatTextAppliedFrameKey);
+
+    CGRect current = internalView.frame;
+
+    if (shouldShift) {
+        if (!appliedValue ||
+            !AWEFrameNearEqual(current, appliedValue.CGRectValue)) {
+            /*
+             A late Auto Layout pass has restored x=39/width=251. Re-enter the
+             intercepted setter once; it will store that frame as the new base
+             and publish x+10/width-10 without cumulative drift.
+            */
+            internalView.frame = current;
+        }
+        return;
     }
-    if (cursor) AWEScheduleChatPillRefreshFromGrowingTextView(
-        cursor, @"internalText.contentSize");
+
+    if (baseValue && appliedValue &&
+        AWEFrameNearEqual(current, appliedValue.CGRectValue)) {
+        internalView.frame = baseValue.CGRectValue;
+    }
 }
 
 %end
@@ -13119,8 +13427,6 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     AWELogComposerSnapshot(@"composer.didMoveToWindow",
                            composerView, YES, YES);
     [composerView setNeedsLayout];
-    AWEScheduleChatPillRefreshFromGrowingTextView(
-        composerView, @"growingText.window");
 }
 
 - (void)didMoveToSuperview {
@@ -13129,8 +13435,6 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     UIView *composerView = (UIView *)self;
     AWELogComposerSnapshot(@"composer.didMoveToSuperview",
                            composerView, YES, YES);
-    AWEScheduleChatPillRefreshFromGrowingTextView(
-        composerView, @"growingText.superview");
 }
 
 - (void)setFrame:(CGRect)frame {
@@ -13146,28 +13450,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
                        NSStringFromCGRect(previous),
                        NSStringFromCGRect(frame),
                        AWEComposerViewSignature(composerView));
-        AWEApplyChatPillNearGrowingTextView(composerView,
-                                            @"growingText.frame");
-        AWEScheduleChatPillRefreshFromGrowingTextView(
-            composerView, @"growingText.frame.async");
     }
-}
-
-- (void)setContentSize:(CGSize)contentSize {
-    %orig(contentSize);
-    UIView *composerView = (UIView *)self;
-    AWEApplyChatPillNearGrowingTextView(composerView,
-                                        @"growingText.contentSize");
-    AWEScheduleChatPillRefreshFromGrowingTextView(
-        composerView, @"growingText.contentSize.async");
-}
-
-- (void)setText:(NSString *)text {
-    %orig(text);
-    UIView *composerView = (UIView *)self;
-    [composerView setNeedsLayout];
-    AWEScheduleChatPillRefreshFromGrowingTextView(
-        composerView, @"growingText.text");
 }
 
 - (void)setBounds:(CGRect)bounds {
@@ -13695,26 +13978,9 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     BOOL sensitive = AWEClassNameIsSensitiveDestination(className);
     if (sensitive) {
         AWERegisterSensitiveDestination(controller);
-        if (AWEAlbumMorphStyleEnabled() && gAWEAlbumMorphController) {
-            [gAWEAlbumMorphController setMorphBarVisible:NO animated:NO];
-            AWEAlbumMorphOverlayWindow *overlay =
-                (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
-            overlay.contentVisible = NO;
-            overlay.hidden = NO;
-            gAWEAlbumMorphController.tabBar.alpha = 0.0;
-            gAWEAlbumMorphController.tabBar.userInteractionEnabled = NO;
-            if (overlay.searchTouchProxy) {
-                overlay.searchTouchProxy.hidden = YES;
-                overlay.searchTouchProxy.userInteractionEnabled = NO;
-            }
-            gAWEAlbumMorphVisible = NO;
-            AWEHideAlbumMorphTintProbe();
-            AWEExpandAlbumMorphBarWithoutAnimation();
-            AWEAlbumMorphProbeWrite(
-                @"ROUTE_PRESENT_PREHIDE class=%@", className);
-        }
     }
     %orig(controller, animated, completion);
+    AWEStartBarVisibilityDriver();
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -13794,7 +14060,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     AWEScheduleTransitionRecovery();
     AWEScheduleHomeChromeRecovery(self.view.window ?: AWEActiveMainWindow());
     if (AWEAlbumMorphStyleEnabled() && !AWECurrentRouteSuppressesBar() &&
-        (!gAWEAlbumMorphVisible || !((AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow).contentVisible)) {
+        gAWEBarLastVisibleFraction < 0.999) {
         AWEForceAlbumMorphRouteRecovery(
             [NSString stringWithFormat:@"appear.hidden.%@", className]);
     }
@@ -13943,7 +14209,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.45a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.46a os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

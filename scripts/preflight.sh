@@ -10,41 +10,33 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.45a']
-required_workflow = ['AwemeLiquidBar-1.0.45a-Xcode27-rootless']
+required_control = ['Version: 1.0.46a']
+required_workflow = ['AwemeLiquidBar-1.0.46a-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
     'setResolvedInterfaceStyleRaw',
     'setVerticalOffset(_ offset: CGFloat)',
-    'let designScale: CGFloat = 3.0',
-    'let maximumPixelEdge: CGFloat = 100.0',
+    '@objc(setVisibleFraction:animated:)',
+    'visibilityMaskView',
+    'self.tabBar.mask = self.visibilityMaskView',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.45a',
-    'LiquidBar 设置 · 1.0.45a',
-    'static BOOL AWEAlbumMorphCollapseEnabled(void)',
-    'return NO;',
+    'AwemeLiquidBar 1.0.46a',
+    'LiquidBar 设置 · 1.0.46a',
+    'Telegram-style top liquid category group',
     'AWETopLiquidGroupView',
-    'UISegmentedControl',
-    'contentVisible',
-    'AWEStartHomeChromeRecoverySampler',
-    '顶部分类液态分组（默认）',
-    '左上按钮展开分类菜单',
-    'AWETopMenuMorphEnabled',
-    'AWEUpdateTopLiquidGroup',
-    'AWEScheduleHomeChromeRecovery',
-    '- (void)setCenter:(CGPoint)center',
-    'AWEPrepareAlbumMorphOverlayTransparency',
-    'AWEApplyExactChatCapsuleMask(fill',
-    'continuousPill',
-    'kAWEAdaptiveGlassExplicitForegroundKey',
-    'setContentSize:(CGSize)contentSize',
-    'growingText.contentSize.async',
+    'alb_swipedLeft:',
+    'alb_swipedRight:',
+    'MIN(4, (NSInteger)self.definitions.count)',
+    'AWEConfigureTopSelectionPill',
+    'AWEApplyAlbumMorphVisibleFraction',
+    'AWEUpdateAlbumMorphVisibility',
+    'return.prewarm.resident',
+    'RECOVERY_ONCE',
     'button.menu = menu;',
     'button.showsMenuAsPrimaryAction = YES;',
-    '%hook AWEFeedMultiTabSelectedContainerView',
-    'AWEForceExactTopIndicatorSuppression',
+    'AwemeLiquidBarChatCapsuleEnabled1.0.46',
 ]
 for token in required_control:
     if token not in control: raise SystemExit(f'missing control token: {token}')
@@ -68,9 +60,19 @@ for forbidden in [
     'preferredElementSize = UIMenuElementSizeLarge',
     'collapseLabel',
     '上滑收缩底栏（动态高度）',
+    'NSArray<NSNumber *> *delays = preDismiss',
 ]:
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.45a segmented resident recovery preflight passed')
+# The top category implementation must not create a UISegmentedControl. A
+# UISegmentedControl in the settings UI is allowed.
+top_start = objc.index('#pragma mark - Telegram-style top liquid category group')
+top_end = objc.index('#pragma mark - Top action refresh', top_start)
+if '[[UISegmentedControl alloc]' in objc[top_start:top_end]:
+    raise SystemExit('top group regressed to UISegmentedControl')
+if 'AWEConfigureAdaptiveSystemGlassPlateButton(\n        group.backgroundGlass' not in objc:
+    raise SystemExit('single top glass platter configuration missing')
+
+print('AwemeLiquidBar 1.0.46a Telegram masked-return preflight passed')
 PY2

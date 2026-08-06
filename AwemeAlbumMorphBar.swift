@@ -384,6 +384,8 @@ final class AWEAlbumMorphTabController:
     private var compactMode = false
     private var verticalOffset: CGFloat = 0
     private var fallbackCompactScale: CGFloat = 1
+    private var morphVisibleFraction: CGFloat = 1
+    private let visibilityMaskView = UIView(frame: .zero)
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
 
@@ -407,6 +409,8 @@ final class AWEAlbumMorphTabController:
         tabBar.isOpaque = false
         tabBar.backgroundColor = .clear
         tabBar.clipsToBounds = false
+        visibilityMaskView.backgroundColor = .black
+        visibilityMaskView.isUserInteractionEnabled = false
 
         // Keep every regular item on the same native sizing path. Never scale
         // the whole tab bar or squeeze only the two end items when five page/
@@ -636,6 +640,7 @@ final class AWEAlbumMorphTabController:
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         applyStableVerticalOffset()
+        setVisibleFraction(morphVisibleFraction, animated: false)
         if compactMode {
             compactMode = false
             tabBar.transform = .identity
@@ -693,6 +698,7 @@ final class AWEAlbumMorphTabController:
         }
         verticalOffset = clamped
         applyStableVerticalOffset()
+        setVisibleFraction(morphVisibleFraction, animated: false)
         if compactMode {
             applyFallbackCompactTransform(animated: false)
         }
@@ -782,16 +788,48 @@ final class AWEAlbumMorphTabController:
 
     @objc(setMorphBarVisible:animated:)
     func setMorphBarVisible(_ visible: Bool, animated: Bool) {
-        _ = visible
-        _ = animated
-        // The overlay UIWindow owns visibility. Calling setTabBarHidden here
-        // made UIKit run a second vertical transition underneath the window
-        // hide/show, which produced the reported jump and disconnected motion.
+        // Keep the native Liquid Glass tree alive at all times. Visibility is
+        // represented by a left-to-right mask, matching the proven 1.0.10b
+        // return architecture instead of alpha/hide reconstruction.
         tabBar.isHidden = false
         view.isHidden = false
         view.alpha = 1.0
         applyStableVerticalOffset()
         applyFallbackCompactTransform(animated: false)
+        setVisibleFraction(visible ? 1.0 : 0.0, animated: animated)
+    }
+
+    @objc(setVisibleFraction:animated:)
+    func setVisibleFraction(_ fraction: CGFloat, animated: Bool) {
+        let clamped = min(max(fraction, 0.0), 1.0)
+        morphVisibleFraction = clamped
+
+        tabBar.isHidden = false
+        view.isHidden = false
+        view.alpha = 1.0
+
+        let changes = {
+            if clamped >= 0.999 {
+                self.tabBar.mask = nil
+            } else {
+                self.visibilityMaskView.frame = CGRect(
+                    x: 0,
+                    y: 0,
+                    width: max(0, self.tabBar.bounds.width * clamped),
+                    height: self.tabBar.bounds.height
+                )
+                if self.tabBar.mask !== self.visibilityMaskView {
+                    self.tabBar.mask = self.visibilityMaskView
+                }
+            }
+            self.tabBar.isUserInteractionEnabled = clamped >= 0.82
+        }
+
+        if animated {
+            changes()
+        } else {
+            UIView.performWithoutAnimation(changes)
+        }
     }
 
     @objc(setCompactMode:animated:)
