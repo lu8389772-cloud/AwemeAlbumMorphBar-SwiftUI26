@@ -1,8 +1,10 @@
-AwemeLiquidBar 1.0.46b device test
+AwemeLiquidBar 1.0.46c device test
 
-1. In settings choose top group count 1, 2, 3 and 4; confirm text is readable.
-2. In count=1 mode confirm no selected background pill is shown.
-3. Tap/swipe edge categories; selected pill should travel smoothly without jumping.
-4. Enter messages/chat/comment/profile: the bottom bar must be fully masked.
-5. Interactive-swipe back: the bottom bar should reveal only the returned screen width.
-6. Disable top menu/category glass: right search remains visible unless bottom search is enabled.
+1. Confirm top category text is visible in dark, light and video backgrounds.
+2. Tap each visible category and confirm the feed actually changes.
+3. Swipe left/right on the category group; labels should translate continuously rather than jump.
+4. With 1, 2, 3 and 4 visible items, verify edge hand-off and that one-item mode has no selected pill.
+5. Open a light-mode comment sheet and close it; top/right glass controls should not switch color or flash once.
+6. Repeat image-preview -> comment -> close and half-page feed swipes; top/right controls should remain bound.
+7. Use the feed for several minutes and compare temperature with 1.0.46b; no recovery sampler should run continuously.
+8. Enter messages/chat/comment/profile and interactively return; bottom-bar mask behavior must remain unchanged.
