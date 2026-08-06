@@ -10,11 +10,11 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.41a — system-adaptive native glass controls
+ AwemeLiquidBar 1.0.41b — system-adaptive native glass controls
 
- 1.0.41a experiment:
+ 1.0.41b experiment:
  - preserves the verified four-item native UIMenu source-to-menu morph from
-   1.0.40b on the home top-left button;
+   1.0.41b on the home top-left button;
  - replaces the explicit SwiftUI glassEffect surfaces used by top/search/right
    controls with real 46 pt UIButtonConfiguration glass controls;
  - transparent mode uses clearGlassButtonConfiguration and tint mode uses
@@ -186,7 +186,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 @end
 
 /*
- 1.0.40b: these helpers are used by the bottom-search configuration saver
+ 1.0.41b: these helpers are used by the bottom-search configuration saver
  before the main forward-declaration block later in the file. Keep their
  static prototypes here so Clang never creates implicit int declarations.
 */
@@ -749,7 +749,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.40b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.41b_interaction.log"] copy];
     });
     return path;
 }
@@ -798,7 +798,7 @@ static void AWEInteractionDiagnosticWrite(NSString *format, ...) {
     });
 }
 
-#pragma mark - 1.0.40b bounded route / scroll probe
+#pragma mark - 1.0.41b bounded route / scroll probe
 
 static dispatch_queue_t AWEAlbumMorphProbeQueue(void) {
     static dispatch_queue_t queue;
@@ -818,7 +818,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.40b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.41b_probe.log"] copy];
     });
     return path;
 }
@@ -6268,13 +6268,16 @@ static void AWERegisterAdaptiveGlassButton(UIButton *button) {
 
 static void AWEApplyResolvedGlassStyleToAdaptiveButton(UIButton *button) {
     if (!button) return;
-    UIUserInterfaceStyle style = gAWEAlbumMorphLastAppliedStyle;
-    if (style != UIUserInterfaceStyleLight &&
-        style != UIUserInterfaceStyleDark) {
-        style = UIUserInterfaceStyleUnspecified;
-    }
-    if (button.overrideUserInterfaceStyle != style) {
-        button.overrideUserInterfaceStyle = style;
+
+    /*
+     1.0.41b: never mirror the bottom bar's resolved light/dark branch onto
+     independent top/right controls.  A real system glass button already owns
+     a local backdrop sample at its own screen position.  Keeping the trait
+     unspecified allows each button to react to the video directly beneath it
+     while still honoring the user's Clear/Tinted system glass preference.
+    */
+    if (button.overrideUserInterfaceStyle != UIUserInterfaceStyleUnspecified) {
+        button.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
     }
     [button setNeedsUpdateConfiguration];
     [button setNeedsLayout];
@@ -6324,8 +6327,8 @@ static void AWEConfigureAdaptiveSystemGlassIconButton(
     configuration.baseBackgroundColor = nil;
 
     /* Original-colour PNGs ignore this because they use AlwaysOriginal. SF
-       Symbols use semantic label colour inside the same light/dark style that
-       the bottom system bar resolved through its probe. */
+       Symbols use semantic label colour while the native glass surface resolves
+       contrast from this button's own local backdrop. */
     if (!preserveOriginalImage) {
         configuration.baseForegroundColor = foregroundColor ?: UIColor.labelColor;
         if (@available(iOS 13.0, *)) {
@@ -6851,26 +6854,38 @@ static UIVisualEffectView *AWEEnsureAlbumMorphTintProbe(UIWindow *sourceWindow) 
     }
 
     UIView *referenceBar = gAWEAlbumMorphSuppressedOriginalBar;
+    /*
+     The old 4 x 4 visible probe sat at the geometric center of the suppressed
+     native bar.  With only two regular tabs that point lands in the open gap
+     between the left platter and the independent search capsule, producing the
+     small Liquid Glass dot shown by the user.  Keep the probe renderable, but
+     reduce it to one point and park it under the covered left platter instead
+     of in the exposed center gap.
+    */
     CGRect probeFrame = CGRectMake(
-        CGRectGetMidX(rootView.bounds) - 2.0,
+        CGRectGetWidth(rootView.bounds) * 0.24,
         CGRectGetHeight(rootView.bounds) - 38.0,
-        4.0, 4.0);
+        1.0, 1.0);
     if (referenceBar && referenceBar.window == sourceWindow) {
         @try {
             CGRect barFrame = [referenceBar convertRect:referenceBar.bounds
                                                   toView:rootView];
             if (!CGRectIsEmpty(barFrame)) {
+                CGFloat coveredX = CGRectGetMinX(barFrame) +
+                    MAX(24.0, CGRectGetWidth(barFrame) * 0.24);
                 probeFrame = CGRectMake(
-                    CGRectGetMidX(barFrame) - 2.0,
-                    CGRectGetMidY(barFrame) - 2.0,
-                    4.0, 4.0);
+                    coveredX,
+                    CGRectGetMidY(barFrame),
+                    1.0, 1.0);
             }
         } @catch (__unused NSException *exception) {}
     }
 
     gAWEAlbumMorphTintProbe.frame = probeFrame;
+    gAWEAlbumMorphTintProbe.layer.cornerRadius = 0.5;
     gAWEAlbumMorphTintProbe.hidden = NO;
-    gAWEAlbumMorphTintProbe.alpha = 1.0;
+    gAWEAlbumMorphTintProbe.alpha = 0.02;
+    gAWEAlbumMorphTintProbe.layer.opacity = 0.02f;
     [rootView bringSubviewToFront:gAWEAlbumMorphTintProbe];
     [gAWEAlbumMorphTintProbe setNeedsLayout];
     [gAWEAlbumMorphTintProbe layoutIfNeeded];
@@ -8165,7 +8180,7 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     return YES;
 }
 
-/* Native minimization is intentionally disabled in 1.0.41a. The overlay
+/* Native minimization is intentionally disabled in 1.0.41b. The overlay
    controller remains isolated from all Douyin UIScrollView instances. */
 
 static AWEHomeTopSlotView *AWEEnsureTopSlot(UIView *container,
@@ -9610,7 +9625,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.40b";
+    self.title = @"LiquidBar 设置 · 1.0.41b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -10633,7 +10648,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.40b image=%@ ==========" ,
+            @"========== START build=1.0.41b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -10690,7 +10705,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.40b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.41b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -10705,7 +10720,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.40b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.41b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -12197,7 +12212,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.40b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.41b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWETopTelegramSwitcherEnabledDefaultsKey];
         [NSUserDefaults.standardUserDefaults removeObjectForKey:kAWEHomeForceDarkGlassDefaultsKey];

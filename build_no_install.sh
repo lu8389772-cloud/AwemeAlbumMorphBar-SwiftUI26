@@ -2,13 +2,13 @@
 set -e
 
 EXPECTED_PACKAGE='com.xyy.awemeliquidbar'
-EXPECTED_VERSION='1.0.40b'
+EXPECTED_VERSION='1.0.41b'
 
 rm -rf .theos packages
 grep -q "^Package: ${EXPECTED_PACKAGE}$" control
 grep -q "^Version: ${EXPECTED_VERSION}$" control
-grep -q 'LiquidBar 设置 · 1.0.40b' Tweak.x
-grep -q 'AwemeLiquidBar_1.0.40b_interaction.log' Tweak.x
+grep -q 'LiquidBar 设置 · 1.0.41b' Tweak.x
+grep -q 'AwemeLiquidBar_1.0.41b_interaction.log' Tweak.x
 grep -q 'AWEAlbumMorphTabController' AwemeAlbumMorphBar.swift
 grep -q 'tabBarMinimizeBehavior = .never' AwemeAlbumMorphBar.swift
 grep -q '.glassEffect(.clear.interactive(), in: Capsule())' AwemeAlbumMorphBar.swift
@@ -44,7 +44,7 @@ ACTUAL_VERSION="$(dpkg-deb -f "$DEB" Version)"
 [ "$ACTUAL_PACKAGE" = "$EXPECTED_PACKAGE" ]
 [ "$ACTUAL_VERSION" = "$EXPECTED_VERSION" ]
 
-echo 'AwemeLiquidBar 1.0.40b BUILD COMPLETE'
+echo 'AwemeLiquidBar 1.0.41b BUILD COMPLETE'
 echo "Package: $ACTUAL_PACKAGE"
 echo "Version: $ACTUAL_VERSION"
 echo "DEB: $DEB"

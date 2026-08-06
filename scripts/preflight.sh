@@ -10,7 +10,7 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 
 for token in [
-    'Version: 1.0.41a',
+    'Version: 1.0.41b',
 ]:
     if token not in control:
         raise SystemExit(f'missing control token: {token}')
@@ -27,8 +27,8 @@ for token in [
         raise SystemExit(f'missing Swift stable token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.41a',
-    'Native minimization is intentionally disabled in 1.0.41a',
+    'AwemeLiquidBar 1.0.41b',
+    'Native minimization is intentionally disabled in 1.0.41b',
     'AWEApplyAlbumMorphResolvedAppearance',
     'gAWEAlbumMorphLastAppliedStyle',
     'AWERefreshRegisteredAdaptiveGlassButtons',
@@ -39,7 +39,7 @@ for token in [
     'configuration.baseBackgroundColor = nil;',
     'configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;',
     'configuration.contentInsets = NSDirectionalEdgeInsetsZero;',
-    'button.overrideUserInterfaceStyle = style;',
+    'button.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;',
     'slot.systemGlassButton',
     'const CGFloat diameter = 46.0;',
     'PNG is a separate original-colour path.',
@@ -54,6 +54,8 @@ for token in [
     '@{@"title": @"关注", @"symbol": @"person.2"}',
     '@{@"title": @"推荐", @"symbol": @"sparkles"}',
     '@"顶部与右侧按钮色调模式（系统自适应）"',
+    'gAWEAlbumMorphTintProbe.alpha = 0.02;',
+    'covered left platter',
 ]:
     if token not in objc:
         raise SystemExit(f'missing Objective-C token: {token}')
@@ -74,5 +76,5 @@ for forbidden in [
     if forbidden in objc:
         raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.41a system-adaptive glass preflight passed')
+print('AwemeLiquidBar 1.0.41b local-backdrop glass preflight passed')
 PY
