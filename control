@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.40b
+Version: 1.0.41a
 Architecture: iphoneos-arm
-Description: Native iOS 26 four-item Liquid Glass source-to-menu test for the Douyin home top-left button, with Live, Shop, Following and Recommended actions.
+Description: System-adaptive iOS 26 Liquid Glass controls for Douyin top and right buttons, preserving the four-item native menu morph and matching the bottom bar's resolved system appearance.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

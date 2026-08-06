@@ -1,6 +1,7 @@
-1. Open Douyin Home.
-2. Tap the top-left Liquid Glass button once.
-3. Confirm the source button expands continuously into a native four-row menu.
-4. Confirm the rows are: 直播、商城、关注、推荐.
-5. Tap each row and observe whether Douyin switches to the matching visible channel.
-6. Reopen the menu several times and verify there is no blank menu, loading row, delayed rebound or sidebar opening.
+1. Open Douyin Home and confirm the bottom bar is visible.
+2. In plugin settings, test transparent mode first.
+3. Compare the top-left, top-search and right-side button material with the bottom bar while switching between bright and dark videos.
+4. Change the system Liquid Glass appearance/contrast setting, return to Douyin, and confirm the custom buttons update with the native bottom bar.
+5. Enable tint mode and repeat the comparison. The tint should remain soft with no custom colour fill.
+6. Tap the top-left button and confirm the successful native morph still opens 直播、商城、关注、推荐.
+7. Confirm custom PNG dimensions and selected like/favorite colours remain unchanged.

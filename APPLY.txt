@@ -1,1 +1,1 @@
-This archive is a complete Theos project, not a patch. Put the zip in /var/mobile/, then replace the contents of the existing Git repository project directory with this complete project before git add/commit/push.
+This is a complete 1.0.41a project. Replace the current repository project contents with this project, then commit and push. Do not apply it as a patch on top of 1.0.40b.

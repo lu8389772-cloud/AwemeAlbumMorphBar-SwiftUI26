@@ -10,26 +10,24 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.40b — native four-item top-left Liquid Glass menu
+ AwemeLiquidBar 1.0.41a — system-adaptive native glass controls
 
- 1.0.40b experiment:
- - turns the replacement top-left glass control itself into the UIKit menu source;
- - embeds the existing 46 pt SwiftUI Liquid Glass body inside the real UIButton,
-   so UIKit snapshots the visible glass rather than a transparent hit proxy;
- - assigns a native UIMenu containing four synchronous UIAction children and
-   enables showsMenuAsPrimaryAction, entering the same system-owned source-to-menu
-   morph path used by the latest WCGlass home-plus implementation;
- - presents four full-width rows — 直播、商城、关注、推荐 — and attempts to
-   activate the matching visible Douyin top channel after selection;
- - right-side actions, top Search, bottom bar, authorization and all 1.0.39
-   appearance behavior remain unchanged.
+ 1.0.41a experiment:
+ - preserves the verified four-item native UIMenu source-to-menu morph from
+   1.0.40b on the home top-left button;
+ - replaces the explicit SwiftUI glassEffect surfaces used by top/search/right
+   controls with real 46 pt UIButtonConfiguration glass controls;
+ - transparent mode uses clearGlassButtonConfiguration and tint mode uses
+   glassButtonConfiguration, with no custom background tint or opacity;
+ - mirrors the exact light/dark style resolved for the native bottom UITabBar
+   while leaving UIKit free to honor system Clear/Tinted, contrast and
+   transparency preferences;
+ - makes the menu source UIButton itself own both the glass material and UIMenu,
+   improving press feedback and preserving the successful morph animation.
 
  Release delta from 1.0.37:
- - replaces the padded GlassButtonStyle shell (private 56 x 46 interaction view)
-   with an explicit 46 x 46 SwiftUI glass body for all top/right controls;
- - uses Capsule rather than Circle, so the square body is a circle at rest and
-   can become a native pill/oval when its frame is stretched;
- - keeps Clear Glass as default and the optional regular/tinted material switch;
+ - keeps all top/right system glass buttons at an explicit 46 x 46 frame;
+ - keeps Clear Glass as default and the optional restrained system tint mode;
  - interprets imported PNG files by source pixels as @3x artwork: 30 px renders
    near 10 pt, 100 px near 33.3 pt, and only edges over 100 px are reduced;
  - preserves icon colour modes, original-colour PNGs, search mutual exclusion,
@@ -400,6 +398,8 @@ static CADisplayLink *gAWEAlbumMorphTintDisplayLink = nil;
 static id gAWEAlbumMorphTintDisplayLinkTarget = nil;
 static __weak UIWindow *gAWEAlbumMorphTintProbeWindow = nil;
 static UIUserInterfaceStyle gAWEAlbumMorphLastMirroredStyle = UIUserInterfaceStyleUnspecified;
+static UIUserInterfaceStyle gAWEAlbumMorphLastAppliedStyle = UIUserInterfaceStyleUnspecified;
+static NSHashTable<UIButton *> *gAWEAdaptiveGlassButtons = nil;
 static id gAWEAlbumMorphCoordinator = nil;
 static BOOL gAWEAlbumMorphVisible = NO;
 static __weak UIView *gAWEAlbumMorphSuppressedOriginalBar = nil;
@@ -5616,10 +5616,9 @@ static void AWEInstallDelegateIfNeeded(UIView *tabBar) {
  - The original AWEFeedVideoButton remains in place and receives the real tap;
    all added views have userInteractionEnabled = NO.
  - Douyin's solid PNG is hidden only while the matching slot is bound.
- - Every visible control is hosted by the exact SwiftUI glass button used by
-   the final Photos imitation app: Button + Image + .buttonStyle(.glass).
- - No external-button UIButtonConfiguration, UIGlassEffect, manual Clear/Tinted
-   switching, white border, background fill, or refraction override remains.
+ - Each replacement is a real non-prominent UIKit glass UIButton constrained to
+   46 x 46 pt. Clear and regular modes use Apple's native configurations only.
+ - No custom material tint, backdrop opacity, border or blur stack is added.
  - Like/favorite selected states keep their configured foreground symbols.
 
  Top menu/search:
@@ -5642,6 +5641,7 @@ typedef NS_ENUM(NSInteger, AWEHomeActionKind) {
 @property (nonatomic, weak) UIImageView *sourceImageView;
 @property (nonatomic, assign) AWEHomeActionKind actionKind;
 @property (nonatomic, strong) AWEPhotosExactGlassButtonHostView *photosGlassHost;
+@property (nonatomic, strong) UIButton *systemGlassButton;
 @end
 
 @implementation AWEHomeActionSlotView
@@ -5658,6 +5658,7 @@ static UIView *AWEFindTopOwnerCandidate(UIView *root, BOOL search);
 @interface AWEHomeTopSlotView : UIView
 @property (nonatomic, assign) AWEHomeTopActionKind topKind;
 @property (nonatomic, strong) AWEPhotosExactGlassButtonHostView *photosGlassHost;
+@property (nonatomic, strong) UIButton *systemGlassButton;
 @property (nonatomic, weak) UIImageView *sourceImageView;
 @property (nonatomic, weak) UIView *ownerView;
 @property (nonatomic, strong) UIButton *hitButton;
@@ -6244,6 +6245,111 @@ static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
     return automaticColor;
 }
 
+/*
+ Custom top/right controls must stay on the same system-owned material path as
+ the native UITabBar.  Direct SwiftUI glassEffect(.clear/.regular) pins a
+ concrete material variant and can miss the user's system Clear/Tinted glass
+ preference.  A real UIButtonConfiguration glass style lets UIKit rebuild the
+ material when system glass appearance, contrast, transparency or traits
+ change.  No custom background tint or opacity is added, keeping both modes
+ restrained.
+*/
+static NSHashTable<UIButton *> *AWEAdaptiveGlassButtonRegistry(void) {
+    if (!gAWEAdaptiveGlassButtons) {
+        gAWEAdaptiveGlassButtons = [NSHashTable weakObjectsHashTable];
+    }
+    return gAWEAdaptiveGlassButtons;
+}
+
+static void AWERegisterAdaptiveGlassButton(UIButton *button) {
+    if (!button) return;
+    [AWEAdaptiveGlassButtonRegistry() addObject:button];
+}
+
+static void AWEApplyResolvedGlassStyleToAdaptiveButton(UIButton *button) {
+    if (!button) return;
+    UIUserInterfaceStyle style = gAWEAlbumMorphLastAppliedStyle;
+    if (style != UIUserInterfaceStyleLight &&
+        style != UIUserInterfaceStyleDark) {
+        style = UIUserInterfaceStyleUnspecified;
+    }
+    if (button.overrideUserInterfaceStyle != style) {
+        button.overrideUserInterfaceStyle = style;
+    }
+    [button setNeedsUpdateConfiguration];
+    [button setNeedsLayout];
+}
+
+static void AWERefreshRegisteredAdaptiveGlassButtons(void) {
+    for (UIButton *button in AWEAdaptiveGlassButtonRegistry().allObjects) {
+        AWEApplyResolvedGlassStyleToAdaptiveButton(button);
+    }
+}
+
+static UIButtonConfiguration *AWECreateAdaptiveGlassIconConfiguration(
+    BOOL tintedGlass) {
+    Class configurationClass = NSClassFromString(@"UIButtonConfiguration");
+    SEL selector = NSSelectorFromString(tintedGlass
+        ? @"glassButtonConfiguration"
+        : @"clearGlassButtonConfiguration");
+    if (configurationClass &&
+        [configurationClass respondsToSelector:selector]) {
+        return ((id (*)(id, SEL))objc_msgSend)(configurationClass, selector);
+    }
+
+    /* Runtime fallback only. iOS 26 receives the native glass configuration. */
+    UIButtonConfiguration *fallback = tintedGlass
+        ? [UIButtonConfiguration tintedButtonConfiguration]
+        : [UIButtonConfiguration plainButtonConfiguration];
+    return fallback;
+}
+
+static void AWEConfigureAdaptiveSystemGlassIconButton(
+    UIButton *button,
+    UIImage *image,
+    CGFloat pointSize,
+    UIColor *foregroundColor,
+    BOOL preserveOriginalImage,
+    BOOL tintedGlass) {
+    if (!button || !image) return;
+
+    UIButtonConfiguration *configuration =
+        AWECreateAdaptiveGlassIconConfiguration(tintedGlass);
+    configuration.title = nil;
+    configuration.subtitle = nil;
+    configuration.image = image;
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    configuration.contentInsets = NSDirectionalEdgeInsetsZero;
+    configuration.imagePadding = 0.0;
+    configuration.baseBackgroundColor = nil;
+
+    /* Original-colour PNGs ignore this because they use AlwaysOriginal. SF
+       Symbols use semantic label colour inside the same light/dark style that
+       the bottom system bar resolved through its probe. */
+    if (!preserveOriginalImage) {
+        configuration.baseForegroundColor = foregroundColor ?: UIColor.labelColor;
+        if (@available(iOS 13.0, *)) {
+            configuration.preferredSymbolConfigurationForImage =
+                [UIImageSymbolConfiguration
+                    configurationWithPointSize:pointSize
+                                         weight:UIImageSymbolWeightMedium
+                                          scale:UIImageSymbolScaleMedium];
+        }
+    } else {
+        configuration.baseForegroundColor = nil;
+    }
+
+    button.configuration = configuration;
+    button.backgroundColor = UIColor.clearColor;
+    button.opaque = NO;
+    button.clipsToBounds = NO;
+    button.imageView.contentMode = UIViewContentModeCenter;
+    button.adjustsImageWhenHighlighted = NO;
+    button.adjustsImageWhenDisabled = NO;
+    AWERegisterAdaptiveGlassButton(button);
+    AWEApplyResolvedGlassStyleToAdaptiveButton(button);
+}
+
 static NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *
 AWEHomeActionSlotsForStack(UIView *stack) {
     NSMutableDictionary *slots = objc_getAssociatedObject(stack,
@@ -6271,14 +6377,13 @@ static AWEHomeActionSlotView *AWEEnsureHomeActionSlot(UIView *stack,
         slot.opaque = NO;
 
         if (@available(iOS 26.0, *)) {
-            AWEPhotosExactGlassButtonHostView *host =
-                [[AWEPhotosExactGlassButtonHostView alloc] initWithFrame:CGRectZero];
-            host.userInteractionEnabled = NO;
-            host.backgroundColor = UIColor.clearColor;
-            host.opaque = NO;
-            host.clipsToBounds = NO;
-            [slot addSubview:host];
-            slot.photosGlassHost = host;
+            UIButton *glassButton = [UIButton buttonWithType:UIButtonTypeCustom];
+            glassButton.userInteractionEnabled = NO;
+            glassButton.backgroundColor = UIColor.clearColor;
+            glassButton.opaque = NO;
+            glassButton.clipsToBounds = NO;
+            [slot addSubview:glassButton];
+            slot.systemGlassButton = glassButton;
         }
         slot.actionKind = kind;
 
@@ -6325,6 +6430,7 @@ static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
     slot.hidden = NO;
     slot.alpha = 1.0;
     slot.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+    slot.systemGlassButton.frame = slot.bounds;
 
     UIColor *foregroundColor = nil;
     if (!originalPNG) {
@@ -6341,14 +6447,15 @@ static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
     }
 
     if (@available(iOS 26.0, *)) {
-        slot.photosGlassHost.hidden = NO;
-        slot.photosGlassHost.frame = slot.bounds;
-        [slot.photosGlassHost updateWithImage:symbol
-                                    pointSize:symbolSize
-                                  controlSize:diameter
-                              foregroundColor:foregroundColor
-                       preserveOriginalImage:originalPNG
-                                  tintedGlass:AWEHomeTintedGlassEnabled()];
+        slot.photosGlassHost.hidden = YES;
+        slot.systemGlassButton.hidden = NO;
+        AWEConfigureAdaptiveSystemGlassIconButton(
+            slot.systemGlassButton,
+            symbol,
+            symbolSize,
+            foregroundColor,
+            originalPNG,
+            AWEHomeTintedGlassEnabled());
     } else {
         slot.hidden = YES;
     }
@@ -6365,6 +6472,7 @@ static void AWEHideAndReleaseHomeActionSlot(AWEHomeActionSlotView *slot) {
     }
     slot.originalView = nil;
     slot.sourceImageView = nil;
+    slot.systemGlassButton.hidden = YES;
     slot.hidden = YES;
 }
 
@@ -6849,6 +6957,8 @@ static void AWEStopAlbumMorphTintDisplayLink(void) {
     gAWEAlbumMorphTintProbe = nil;
     gAWEAlbumMorphTintProbeWindow = nil;
     gAWEAlbumMorphLastMirroredStyle = UIUserInterfaceStyleUnspecified;
+    gAWEAlbumMorphLastAppliedStyle = UIUserInterfaceStyleUnspecified;
+    AWERefreshRegisteredAdaptiveGlassButtons();
 }
 
 static BOOL AWEForwardTopActionOwner(UIView *owner,
@@ -7227,9 +7337,9 @@ static void AWEInstallTopMenuMorph(AWEHomeTopSlotView *slot) {
                                  @YES,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         AWEInteractionDiagnosticWrite(
-            @"TOP_MENU_NATIVE installed button=%@ glassHost=%@ children=%lu",
+            @"TOP_MENU_NATIVE installed button=%@ systemGlass=%@ children=%lu",
             AWEInteractionObjectSummary(button),
-            AWEInteractionObjectSummary(slot.photosGlassHost),
+            AWEInteractionObjectSummary(slot.systemGlassButton),
             (unsigned long)menu.children.count);
     }
 }
@@ -7577,12 +7687,17 @@ static void AWEApplyAlbumMorphResolvedAppearance(
         style = UIUserInterfaceStyleLight;
     }
 
+    BOOL customButtonsChanged = gAWEAlbumMorphLastAppliedStyle != style;
+    gAWEAlbumMorphLastAppliedStyle = style;
     BOOL changed =
         gAWEAlbumMorphOverlayWindow.overrideUserInterfaceStyle != style ||
         gAWEAlbumMorphController.overrideUserInterfaceStyle != style ||
         gAWEAlbumMorphController.view.overrideUserInterfaceStyle != style ||
         gAWEAlbumMorphController.tabBar.overrideUserInterfaceStyle != style;
-    if (!changed) return;
+    if (!changed) {
+        if (customButtonsChanged) AWERefreshRegisteredAdaptiveGlassButtons();
+        return;
+    }
 
     [UIView performWithoutAnimation:^{
         if (gAWEAlbumMorphOverlayWindow) {
@@ -7593,6 +7708,7 @@ static void AWEApplyAlbumMorphResolvedAppearance(
         gAWEAlbumMorphController.view.overrideUserInterfaceStyle = style;
         gAWEAlbumMorphController.tabBar.overrideUserInterfaceStyle = style;
     }];
+    AWERefreshRegisteredAdaptiveGlassButtons();
 
     BOOL forcedDark = AWEIsIOS27OrLater() && AWEHomeForceDarkGlassEnabled();
     AWEInteractionDiagnosticWrite(
@@ -8049,7 +8165,7 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     return YES;
 }
 
-/* Native minimization is intentionally disabled in 1.0.40b. The overlay
+/* Native minimization is intentionally disabled in 1.0.41a. The overlay
    controller remains isolated from all Douyin UIScrollView instances. */
 
 static AWEHomeTopSlotView *AWEEnsureTopSlot(UIView *container,
@@ -8070,14 +8186,13 @@ static AWEHomeTopSlotView *AWEEnsureTopSlot(UIView *container,
             : @"AwemeLiquidBar.HomeTopSlot.Menu";
 
         if (@available(iOS 26.0, *)) {
-            AWEPhotosExactGlassButtonHostView *host =
-                [[AWEPhotosExactGlassButtonHostView alloc] initWithFrame:CGRectZero];
-            host.userInteractionEnabled = NO;
-            host.backgroundColor = UIColor.clearColor;
-            host.opaque = NO;
-            host.clipsToBounds = NO;
-            [slot addSubview:host];
-            slot.photosGlassHost = host;
+            UIButton *glassButton = [UIButton buttonWithType:UIButtonTypeCustom];
+            glassButton.userInteractionEnabled = NO;
+            glassButton.backgroundColor = UIColor.clearColor;
+            glassButton.opaque = NO;
+            glassButton.clipsToBounds = NO;
+            [slot addSubview:glassButton];
+            slot.systemGlassButton = glassButton;
         }
 
         UIButton *hit = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -8160,22 +8275,13 @@ static void AWEConfigureTopSlot(UIView *container,
     slot.alpha = 1.0;
     slot.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
     slot.hitButton.frame = slot.bounds;
+    slot.systemGlassButton.frame = slot.bounds;
 
-    /* UIKit's menu transition snapshots the UIButton itself. The old layout
-       kept the glass host as a sibling underneath a transparent hit button,
-       which would give the menu animator an empty source preview. Embed the
-       visible glass inside the menu button only for the left-side morph. */
-    if (kind == AWEHomeTopActionKindMenu) {
-        if (slot.photosGlassHost &&
-            slot.photosGlassHost.superview != slot.hitButton) {
-            [slot.photosGlassHost removeFromSuperview];
-            [slot.hitButton insertSubview:slot.photosGlassHost atIndex:0];
-        }
-    } else if (slot.photosGlassHost &&
-               slot.photosGlassHost.superview != slot) {
-        [slot.photosGlassHost removeFromSuperview];
-        [slot insertSubview:slot.photosGlassHost atIndex:0];
-    }
+    /* The menu source is now itself a native system-glass UIButton. This keeps
+       the source snapshot, press response and source-to-menu morph on one
+       UIKit-owned control instead of snapshotting a transparent proxy around
+       a separate SwiftUI effect. Search remains a visual-only native button so
+       the real Douyin recognizer underneath still receives the touch. */
 
     NSArray<NSString *> *fallbackNames = kind == AWEHomeTopActionKindSearch
         ? @[@"lasso.badge.sparkles", @"magnifyingglass"]
@@ -8195,14 +8301,18 @@ static void AWEConfigureTopSlot(UIView *container,
     }
 
     if (@available(iOS 26.0, *)) {
-        slot.photosGlassHost.hidden = NO;
-        slot.photosGlassHost.frame = slot.photosGlassHost.superview.bounds;
-        [slot.photosGlassHost updateWithImage:image
-                                    pointSize:iconPointSize
-                                  controlSize:diameter
-                              foregroundColor:foregroundColor
-                       preserveOriginalImage:originalPNG
-                                  tintedGlass:AWEHomeTintedGlassEnabled()];
+        slot.photosGlassHost.hidden = YES;
+        UIButton *materialButton = directSearchPassthrough
+            ? slot.systemGlassButton
+            : slot.hitButton;
+        AWEConfigureAdaptiveSystemGlassIconButton(
+            materialButton,
+            image,
+            iconPointSize,
+            foregroundColor,
+            originalPNG,
+            AWEHomeTintedGlassEnabled());
+        slot.systemGlassButton.hidden = !directSearchPassthrough;
     } else {
         slot.hidden = YES;
     }
@@ -8246,6 +8356,7 @@ static void AWEHideTopSlot(UIView *container, AWEHomeTopActionKind kind) {
     slot.userInteractionEnabled = NO;
     slot.hitButton.userInteractionEnabled = NO;
     slot.hitButton.hidden = YES;
+    slot.systemGlassButton.hidden = YES;
     slot.hidden = YES;
 }
 
@@ -9955,7 +10066,7 @@ static NSArray<NSString *> *AWEIconSectionTitles(void) {
     topRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *tintedGlassLabel = [UILabel new];
-    tintedGlassLabel.text = @"顶部与右侧按钮色调模式";
+    tintedGlassLabel.text = @"顶部与右侧按钮色调模式（系统自适应）";
     tintedGlassLabel.font =
         [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
     UISwitch *tintedGlassSwitch = [UISwitch new];

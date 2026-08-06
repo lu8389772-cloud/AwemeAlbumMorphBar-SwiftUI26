@@ -1,5 +1,14 @@
-# AwemeLiquidBar 1.0.40b
+# AwemeLiquidBar 1.0.41a
 
-Based on 1.0.39. The home top-left 46 pt SwiftUI Liquid Glass button is the real UIKit menu source. A synchronous native `UIMenu` contains four `UIAction` rows: 直播、商城、关注、推荐. No empty deferred element is used.
+Based on the verified 1.0.40b four-item menu build. The top-left menu animation and its four rows remain unchanged: 直播、商城、关注、推荐.
 
-The menu uses `showsMenuAsPrimaryAction` and large menu elements. Selecting a row performs a bounded search for the matching visible Douyin top-channel control and triggers its existing control/gesture/accessibility path.
+Top-left, top-search and right-side replacement controls now use real system `UIButtonConfiguration` Liquid Glass surfaces instead of explicit SwiftUI `glassEffect(.clear/.regular)` surfaces.
+
+- Transparent mode: `clearGlassButtonConfiguration`
+- Tint mode: `glassButtonConfiguration`
+- No custom glass tint, background fill or manual opacity
+- Fixed 46 × 46 pt control frame
+- Mirrors the light/dark style resolved for the native bottom `UITabBar`
+- Keeps original-colour PNG sizing and existing icon colour modes
+
+This is intended to let UIKit honor the same system glass appearance, contrast and transparency behavior as the native bottom bar while keeping both variants restrained.
