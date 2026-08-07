@@ -10,8 +10,8 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.47d']
-required_workflow = ['AwemeLiquidBar-1.0.47d-Xcode27-rootless']
+required_control = ['Version: 1.0.48a']
+required_workflow = ['AwemeLiquidBar-1.0.48a-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
@@ -22,8 +22,8 @@ required_swift = [
     'self.view.mask = self.visibilityMaskView',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.47d',
-    'LiquidBar 设置 · 1.0.47d',
+    'AwemeLiquidBar 1.0.48a',
+    'LiquidBar 设置 · 1.0.48a',
     'Telegram-style top liquid category group',
     'AWETopLiquidGroupView',
     'alb_swipedLeft:',
@@ -75,5 +75,5 @@ if '[[UISegmentedControl alloc]' in objc[top_start:top_end]:
 if 'AWEConfigureAdaptiveSystemGlassPlateButton(\n        group.backgroundGlass' not in objc:
     raise SystemExit('single top glass platter configuration missing')
 
-print('AwemeLiquidBar 1.0.47d configurable Telegram switcher and controller-mask preflight passed')
+print('AwemeLiquidBar 1.0.48a configurable Telegram switcher and controller-mask preflight passed')
 PY2

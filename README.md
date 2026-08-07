@@ -1,14 +1,17 @@
-# AwemeLiquidBar 1.0.47d
+# AwemeLiquidBar 1.0.48a
 
-- Native indicator-driven top selection pill: follows Douyin paging continuously instead of starting a spring after page selection.
-- Single lightweight window-shift animation for hidden categories; removes the two-phase fade/translate rebuild.
-- Removes the continuous recovery CADisplayLink and cuts delayed rescans to three bounded passes.
-- Freezes top/right button material while the home feed is covered, preventing route-transition recolour flashes.
-- Explicit white/black/accent/custom icon colours are re-applied to UIButtonConfiguration after every material update.
-- Search remains independent of the top-category/menu switch.
+Stability-restore release based on 1.0.47d (26-account encrypted authorization retained).
 
+## Restored regressions
+- Publish/creation route: restores hard suspension of the independent AlbumMorph overlay window while the publish flow is presented, preventing the overlay from trapping dismissal/touches.
+- Share/forward/system sheets: hard-suspends the overlay for share, forward, transpond, send-panel, activity and document routes so lower controls are never covered by LiquidBar.
+- Imported PNG sizing: restores the established @3x pixel contract (30 px → 10 pt, 100 px → 33.33 pt) with a 100 px longest-edge cap before images enter UIButtonConfiguration.
+- Commerce/group-buy isolation: presented commerce controllers matching group-buy/POI/e-commerce/product/order/cart/purchase routes suppress the plugin bar; diagnostic mode records presented controller classes to investigate device-only commerce bugs.
 
-## 1.0.47d
-- 顶部分组标题固定白色。
-- 选中胶囊跟随同步降为短时 30 Hz，并增加亚像素去重，降低发热。
-- 授权摘要表扩展为 26 项，并增加第二级摘要标签预筛选。
+## Performance
+- Development probe file I/O is now disabled unless Interaction Diagnostics is explicitly enabled. This removes continuous probe-log file churn during normal use.
+
+## Retained
+- 26-item encrypted authorization table; no plaintext account identifiers.
+- Current Telegram-style top switcher, cached Liquid Glass buttons, avatar glass, adaptive material behavior and iOS 27 force-dark preference.
+- Experimental bottom-bar collapse remains disabled.

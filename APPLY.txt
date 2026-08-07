@@ -1,2 +1,2 @@
-This is the complete AwemeLiquidBar 1.0.47d project.
-Place the ZIP in /var/mobile, replace the repository contents while preserving .git, then commit and push. Do not apply another patch after copying the complete project.
+This is the complete AwemeLiquidBar 1.0.48a project.
+Use the complete project archive; it already contains the 1.0.47d encrypted 26-account authorization table plus the stability-restoration changes.

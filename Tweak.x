@@ -10,28 +10,21 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.47d — Telegram top switcher + resident masked bottom-bar transitions
+ AwemeLiquidBar 1.0.48a — stability restore for publish/share/PNG/commerce overlays
 
- Focused rollback/fix release:
- - completely disables the experimental upward-swipe compact path and removes
-   its settings control, preventing any height/offset transform from moving the
-   bottom bar outside the screen;
- - restores the verified pass-through right action architecture: Douyin's
-   original like/comment/favorite/share controls own every touch, while the
-   46 pt system-glass overlays remain visual only;
- - keeps the successful 54 pt profile-avatar Liquid Glass backplate;
- - retains zero custom CALayer perimeter. UIKit's internal optical highlight is
-   left system-owned because removing it requires abandoning native glass;
- - restores a fully rendered, full-opacity 4 x 4 system material probe and parks
-   it in the physical bottom-left rounded display corner instead of scaling it;
- - broadens multiline composer background discovery to newer nested hierarchies
-   and reapplies a fixed 22 pt radius from the growing text view's own layout.
+ Regression restore release:
+ - restores the proven hard-suspend path for publish and share/forward sheets so
+   the independent AlbumMorph UIWindow cannot intercept dismissal or lower-page
+   controls while those destinations are presented;
+ - restores imported PNG pixel semantics at @3x (with the established 100 px
+   longest-edge cap) before images enter UIKit UIButtonConfiguration;
+ - keeps transient commerce/group-buy sheets outside plugin bottom-bar ownership
+   and records their controller classes only when diagnostics are enabled;
+ - preserves the current top switcher, cached glass buttons, avatar glass,
+   authorization table and low-frequency adaptive-material behavior.
 
- Stable behavior retained:
- - native top-left source-to-menu Liquid Glass morph and dynamic channel menu;
- - hidden top channel labels/selected underline;
- - native customizable bottom bar, system-selected capsule, custom symbols,
-   accent color, route suppression and iOS 27 force-dark preference behavior.
+ The goal of this release is to restore previously proven route isolation without
+ rolling back the newer Liquid Glass interaction and caching work.
 */
 
 @interface AWENormalModeTabBar : UIView
@@ -419,7 +412,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    /* 1.0.47d retires the experimental collapse path completely.  Keep the
+    /* 1.0.48a retires the experimental collapse path completely.  Keep the
        historical preference key only so old installs do not crash while
        loading settings; no gesture or compact transform is allowed to run. */
     return NO;
@@ -733,7 +726,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.47d_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.48a_interaction.log"] copy];
     });
     return path;
 }
@@ -802,7 +795,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.47d_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.48a_probe.log"] copy];
     });
     return path;
 }
@@ -815,7 +808,10 @@ static void AWEAlbumMorphProbeClear(void) {
 }
 
 static void AWEAlbumMorphProbeWrite(NSString *format, ...) {
-    if (format.length == 0) return;
+    /* Probe I/O is diagnostic-only. Earlier development builds wrote this log
+       continuously even when the user had diagnostics disabled, which adds
+       unnecessary file churn during feed/page transitions. */
+    if (!AWEInteractionDiagnosticsEnabled() || format.length == 0) return;
     va_list args;
     va_start(args, format);
     NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
@@ -2882,6 +2878,49 @@ static void AWEInvalidateHomeCustomPNGCache(void) {
     [AWEHomeCustomPNGCache() removeAllObjects];
 }
 
+static UIImage *AWENormalizeImportedPNGForDisplay(UIImage *image) {
+    if (!image) return nil;
+    CGImageRef cgImage = image.CGImage;
+    if (!cgImage) return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+
+    const CGFloat designScale = 3.0;
+    const CGFloat maximumPixelEdge = 100.0;
+    CGFloat pixelWidth = (CGFloat)CGImageGetWidth(cgImage);
+    CGFloat pixelHeight = (CGFloat)CGImageGetHeight(cgImage);
+    if (pixelWidth <= 0.0 || pixelHeight <= 0.0) {
+        return [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+
+    CGFloat longestEdge = MAX(pixelWidth, pixelHeight);
+    CGFloat resizeScale = longestEdge > maximumPixelEdge
+        ? maximumPixelEdge / longestEdge
+        : 1.0;
+    UIImage *pixelImage = image;
+    if (resizeScale < 0.999) {
+        CGSize targetPixels = CGSizeMake(
+            MAX(1.0, round(pixelWidth * resizeScale)),
+            MAX(1.0, round(pixelHeight * resizeScale)));
+        UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+        format.scale = 1.0;
+        format.opaque = NO;
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc]
+            initWithSize:targetPixels format:format];
+        pixelImage = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+            (void)context;
+            [image drawInRect:(CGRect){CGPointZero, targetPixels}];
+        }];
+    }
+
+    CGImageRef normalizedCG = pixelImage.CGImage;
+    if (!normalizedCG) {
+        return [pixelImage imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+    UIImage *normalized = [UIImage imageWithCGImage:normalizedCG
+                                               scale:designScale
+                                         orientation:UIImageOrientationUp];
+    return [normalized imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+}
+
 static UIImage *AWEHomeCustomPNGForKey(NSString *key) {
     if (!AWEHomeCustomPNGModeEnabled()) return nil;
     NSString *directory = AWEHomeCustomIconsDirectory();
@@ -2910,7 +2949,10 @@ static UIImage *AWEHomeCustomPNGForKey(NSString *key) {
                 UIImage *prepared = [image imageByPreparingForDisplay];
                 if (prepared) image = prepared;
             }
-            image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+            /* UIKit UIButtonConfiguration interprets UIImage.size in points.
+               Force imported artwork back to the established @3x contract so
+               30 px -> 10 pt and 100 px -> 33.33 pt, matching 1.0.39. */
+            image = AWENormalizeImportedPNGForDisplay(image);
             NSUInteger width = (NSUInteger)MAX(1.0, image.size.width * image.scale);
             NSUInteger height = (NSUInteger)MAX(1.0, image.size.height * image.scale);
             [AWEHomeCustomPNGCache() setObject:image forKey:path cost:width * height * 4];
@@ -3846,6 +3888,89 @@ static BOOL AWEControllerTreeContainsUserDetailRoute(UIViewController *controlle
     return NO;
 }
 
+static BOOL AWEClassNameLooksLikeTransientCommerceDestination(NSString *className) {
+    if (className.length == 0) return NO;
+    NSString *lower = className.lowercaseString;
+    BOOL controllerLike =
+        [lower containsString:@"controller"] ||
+        [lower containsString:@"container"] ||
+        [lower containsString:@"panel"] ||
+        [lower containsString:@"sheet"];
+    if (!controllerLike) return NO;
+
+    /* Presented life-service/group-buy/product sheets are not home-feed chrome.
+       Keep this matcher controller-scoped so normal feed-side commerce views do
+       not suppress LiquidBar merely because their view names contain EC/Lynx. */
+    return [lower containsString:@"groupbuy"] ||
+           [lower containsString:@"group_buy"] ||
+           [lower containsString:@"poi"] ||
+           [lower containsString:@"ecommerce"] ||
+           [lower containsString:@"ecom"] ||
+           [lower containsString:@"commerce"] ||
+           [lower containsString:@"life"] ||
+           [lower containsString:@"goods"] ||
+           [lower containsString:@"product"] ||
+           [lower containsString:@"trade"] ||
+           [lower containsString:@"order"] ||
+           [lower containsString:@"shoppingcart"] ||
+           [lower containsString:@"shopcart"] ||
+           [lower containsString:@"cartpanel"] ||
+           [lower containsString:@"buypanel"] ||
+           [lower containsString:@"purchase"];
+}
+
+static BOOL AWEClassNameRequiresHardOverlaySuppression(NSString *className) {
+    if (className.length == 0) return NO;
+    NSString *lower = className.lowercaseString;
+    BOOL controllerLike =
+        [lower containsString:@"controller"] ||
+        [lower containsString:@"container"] ||
+        [lower containsString:@"panel"] ||
+        [lower containsString:@"sheet"];
+
+    BOOL forwardOrShare = controllerLike &&
+        ([lower containsString:@"share"] ||
+         [lower containsString:@"forward"] ||
+         [lower containsString:@"transpond"] ||
+         [lower containsString:@"sendpanel"]);
+    BOOL systemSheet =
+        [lower containsString:@"activityviewcontroller"] ||
+        [lower containsString:@"activitycontentviewcontroller"] ||
+        [lower containsString:@"activitygroupviewcontroller"] ||
+        [lower containsString:@"documentpicker"] ||
+        [lower containsString:@"documentbrowser"] ||
+        [lower containsString:@"fileprovider"] ||
+        [lower containsString:@"quicklook"] ||
+        [lower containsString:@"qlpreview"];
+    BOOL publish = controllerLike &&
+        ([lower containsString:@"publish"] ||
+         [lower containsString:@"record"] ||
+         [lower containsString:@"shoot"] ||
+         [lower containsString:@"camera"] ||
+         [lower containsString:@"creation"] ||
+         [lower containsString:@"composer"] ||
+         [lower containsString:@"postedit"] ||
+         [lower containsString:@"videoedit"]);
+    return forwardOrShare || systemSheet || publish ||
+           AWEClassNameLooksLikeTransientCommerceDestination(className);
+}
+
+static void AWEHardSuspendAlbumMorphOverlay(NSString *reason) {
+    AWEAlbumMorphOverlayWindow *overlay =
+        (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+    if (!overlay) return;
+    overlay.contentVisible = NO;
+    if (overlay.searchTouchProxy) {
+        overlay.searchTouchProxy.hidden = YES;
+        overlay.searchTouchProxy.userInteractionEnabled = NO;
+    }
+    overlay.hidden = YES;
+    overlay.alpha = 1.0;
+    gAWEAlbumMorphVisible = NO;
+    AWEHideAlbumMorphTintProbe();
+    AWEAlbumMorphProbeWrite(@"HARD_OVERLAY_SUSPEND reason=%@", reason ?: @"unknown");
+}
+
 static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
     if (className.length == 0) return NO;
 
@@ -3906,9 +4031,12 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
          [lower containsString:@"postedit"] ||
          [lower containsString:@"videoedit"]);
 
+    BOOL transientCommerceDestination =
+        AWEClassNameLooksLikeTransientCommerceDestination(className);
+
     return directConversation || commentDestination || forwardDestination ||
            systemActivityDestination || systemDocumentDestination ||
-           publishDestination;
+           publishDestination || transientCommerceDestination;
 }
 
 static void AWERegisterSensitiveDestination(UIViewController *controller) {
@@ -4335,6 +4463,10 @@ static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
                                                BOOL animated) {
     if (!gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
     fraction = MIN(MAX(fraction, 0.0), 1.0);
+    /* No recovery caller may resurrect the bottom overlay on top of a modal
+       share/publish/commerce route.  This guards against late coordinator and
+       lifecycle callbacks that arrive after route registration. */
+    if (fraction > 0.0 && AWECurrentRouteSuppressesBar()) fraction = 0.0;
     BOOL changed = fabs(gAWEBarLastVisibleFraction - fraction) > 0.002;
     gAWEBarLastVisibleFraction = fraction;
 
@@ -8920,13 +9052,12 @@ static void AWEApplyAlbumMorphResolvedAppearance(
         gAWEAlbumMorphPublishSourceController =
             AWETopViewControllerFrom(sourceWindow.rootViewController);
         AWERestoreAlbumMorphSearchGesture();
-        AWEAlbumMorphOverlayWindow *overlay =
-            (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
-        overlay.hidden = NO;
-        overlay.alpha = 1.0;
-        AWEApplyAlbumMorphVisibleFraction(0.0, @"publish.prehide", NO);
-        AWEHideAlbumMorphTintProbe();
-        AWEAlbumMorphProbeWrite(@"PUBLISH_PREHIDE resident=1");
+        /* Restore the proven pre-1.0.46 publish isolation.  The overlay stays
+           allocated/warm, but the UIWindow itself is hidden so it cannot own
+           any hit-testing or transition snapshot while Douyin's creation flow
+           is being presented/dismissed. */
+        AWEHardSuspendAlbumMorphOverlay(@"publish.prehide");
+        AWEAlbumMorphProbeWrite(@"PUBLISH_PREHIDE hard=1");
     }
 
     BOOL forwarded = AWEForwardToOriginalButton((UIView *)originalBar, index);
@@ -10677,7 +10808,7 @@ static void AWERefreshHomeChromeImmediately(UIWindow *window) {
 @end
 
 static void AWEStartHomeChromeRecoverySampler(void) {
-    /* 1.0.47d: no continuous CADisplayLink. Lifecycle hooks and three bounded
+    /* 1.0.48a: no continuous CADisplayLink. Lifecycle hooks and three bounded
        reconciliation passes are sufficient and avoid the major heat source. */
 }
 
@@ -11888,7 +12019,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.47d";
+    self.title = @"LiquidBar 设置 · 1.0.48a";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -13027,7 +13158,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.47d image=%@ ==========" ,
+            @"========== START build=1.0.48a image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13084,7 +13215,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.47d diagnostic export\n"
+                @"AwemeLiquidBar 1.0.48a diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13099,7 +13230,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.47d_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.48a_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14447,8 +14578,18 @@ static BOOL AWEGetDoubleTapLocation(id sender,
                     completion:(void (^)(void))completion {
     NSString *className = NSStringFromClass(controller.class);
     BOOL sensitive = AWEClassNameIsSensitiveDestination(className);
+    BOOL hardSuspend = AWEClassNameRequiresHardOverlaySuppression(className);
+    AWEInteractionDiagnosticWrite(
+        @"VC_PRESENT class=%@ sensitive=%d hard=%d style=%ld",
+        className, sensitive, hardSuspend,
+        (long)controller.modalPresentationStyle);
     if (sensitive) {
         AWERegisterSensitiveDestination(controller);
+    }
+    if (hardSuspend) {
+        AWEHardSuspendAlbumMorphOverlay(
+            [NSString stringWithFormat:@"present.%@", className]);
+        AWEInteractionDiagnosticWrite(@"HARD_ROUTE_PRESENT class=%@", className);
     }
     %orig(controller, animated, completion);
     AWEStartBarVisibilityDriver();
@@ -14466,7 +14607,16 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
     if (sensitive) {
         AWERegisterSensitiveDestination(self);
-        if (gAWELastTabBar) {
+        BOOL transientCommerce =
+            AWEClassNameLooksLikeTransientCommerceDestination(className);
+        BOOL hardRoute = AWEClassNameRequiresHardOverlaySuppression(className);
+        /* Share/forward/publish routes are hard-suspended whether presented or
+           pushed. Commerce matching is intentionally restricted to presented
+           sheets so the main Shop tab can still own the normal bottom bar. */
+        if (hardRoute && (!transientCommerce || self.presentingViewController)) {
+            AWEHardSuspendAlbumMorphOverlay(
+                [NSString stringWithFormat:@"willAppear.%@", className]);
+        } else if (gAWELastTabBar) {
             AWEAttachNativeBarWithForce((UIView *)gAWELastTabBar, NO);
         }
     }
@@ -14680,7 +14830,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.47d os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.48a os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

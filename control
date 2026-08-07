@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.47d
+Version: 1.0.48a
 Architecture: iphoneos-arm
-Description: Adds a configurable one-to-four-item Telegram-style top switcher with readable adaptive titles and a smooth selected pill, keeps search independent from the top-menu toggle, and applies the resident return mask to the complete floating-bar controller so hidden and interactive-return states expose the correct width without glass rebuilding.
+Description: Restores publish/share route isolation and @3x custom PNG sizing, adds defensive commerce-sheet suppression and diagnostic-only probe logging, while retaining the current Liquid Glass top switcher, cached controls and encrypted 26-account authorization.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks
