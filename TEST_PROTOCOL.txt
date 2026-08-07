@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.46c device test
+AwemeLiquidBar 1.0.47a device test
 
 1. Confirm top category text is visible in dark, light and video backgrounds.
 2. Tap each visible category and confirm the feed actually changes.

@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.46c
+Version: 1.0.47a
 Architecture: iphoneos-arm
 Description: Adds a configurable one-to-four-item Telegram-style top switcher with readable adaptive titles and a smooth selected pill, keeps search independent from the top-menu toggle, and applies the resident return mask to the complete floating-bar controller so hidden and interactive-return states expose the correct width without glass rebuilding.
 Maintainer: xyy
