@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.48a — stability restore for publish/share/PNG/commerce overlays
+ AwemeLiquidBar 1.0.48b — complete top-left hide switch + encrypted auth28
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -187,6 +187,7 @@ static char kAWETopSourceSlotKey;
 static char kAWETopOwnerLayerOpacityKey;
 static char kAWETopOwnerInteractionKey;
 static char kAWETopOwnerSlotKey;
+static char kAWETopMenuForcedHiddenKey;
 static char kAWETabBarSymbolSignatureKey;
 static char kAWEIconPresetNameKey;
 static char kAWETopTelegramHostKey;
@@ -314,6 +315,8 @@ static NSString * const kAWEHomeCustomPNGModeDefaultsKey =
     @"AwemeLiquidBarHomeCustomPNGMode";
 static NSString * const kAWETopGlassEnabledDefaultsKey =
     @"AwemeLiquidBarTopGlassEnabled";
+static NSString * const kAWEHideTopLeftButtonDefaultsKey =
+    @"AwemeLiquidBarHideTopLeftButtonV1";
 static NSString * const kAWEHomeTransparentGlassDefaultsKey =
     @"AwemeLiquidBarHomeTransparentGlassV1";
 static NSString * const kAWETopTelegramSwitcherEnabledDefaultsKey =
@@ -726,7 +729,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.48a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.48b_interaction.log"] copy];
     });
     return path;
 }
@@ -795,7 +798,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.48a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.48b_probe.log"] copy];
     });
     return path;
 }
@@ -1023,7 +1026,7 @@ typedef struct {
     uint8_t value[32];
 } AWEAuthorizationDigestPair;
 
-static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[26] = {
+static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[28] = {
     { { 0x59, 0x82, 0x56, 0x11, 0xCC, 0x1E, 0x58, 0xA8, 0xEF, 0xB6, 0x24, 0x7E, 0x97, 0xB8, 0x64, 0x73, 0xCE, 0x8F, 0x7D, 0x23, 0x21, 0xF4, 0xC3, 0xC9, 0x75, 0xD5, 0xCA, 0xF8, 0xE3, 0x16, 0xB1, 0x32 }, { 0x9F, 0x0C, 0xED, 0xA5, 0xCB, 0x5B, 0x84, 0x63, 0xD4, 0x38, 0xC3, 0x54, 0x7D, 0x04, 0x85, 0xBD, 0x81, 0x67, 0xEC, 0xF0, 0x4D, 0xE2, 0x02, 0x72, 0xDC, 0x96, 0xFF, 0xE4, 0x3D, 0x52, 0x81, 0xB2 } },
     { { 0x3F, 0x40, 0x8A, 0x7D, 0x84, 0xB4, 0xFA, 0x3E, 0x5E, 0x8B, 0x01, 0xB5, 0x24, 0xF8, 0xBD, 0xDD, 0x2A, 0xB5, 0xA0, 0xEB, 0xC5, 0xAA, 0x72, 0xCC, 0x16, 0x88, 0x8F, 0xC9, 0x67, 0xCB, 0xCC, 0x73 }, { 0xDE, 0x19, 0x74, 0x29, 0x81, 0xA3, 0x4B, 0xB7, 0x6A, 0xD2, 0x31, 0xA1, 0x70, 0xF0, 0x66, 0xA7, 0xA4, 0xFD, 0x73, 0x60, 0x1A, 0x65, 0xD2, 0x57, 0xCD, 0x90, 0x06, 0x85, 0xD9, 0xCA, 0xDD, 0x34 } },
     { { 0x91, 0xDF, 0x80, 0xC6, 0x2F, 0x47, 0x04, 0xEE, 0x32, 0x74, 0xC6, 0x3B, 0x38, 0xF5, 0x47, 0xF2, 0x01, 0x89, 0xE2, 0x8C, 0x36, 0xC3, 0xE2, 0xE8, 0xA4, 0x62, 0xA2, 0x8E, 0xDC, 0x76, 0xE7, 0xC0 }, { 0x58, 0xFD, 0x08, 0x53, 0xC3, 0x95, 0x41, 0x39, 0x18, 0xBA, 0x8D, 0x20, 0xD0, 0x9D, 0x7B, 0xBD, 0x0A, 0xFF, 0x31, 0xF9, 0x8B, 0xBE, 0x4E, 0xFD, 0xFA, 0x2C, 0x84, 0x7F, 0x07, 0x15, 0x5C, 0x4A } },
@@ -1050,6 +1053,9 @@ static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[26] = {
     { { 0x4B, 0xE8, 0xCB, 0xC5, 0x90, 0x87, 0xFB, 0xBA, 0xA5, 0x66, 0xFF, 0x3E, 0x09, 0x6F, 0xA8, 0x57, 0x8D, 0xBB, 0x1A, 0x1C, 0x32, 0x91, 0x46, 0x4C, 0x0A, 0x8F, 0xF2, 0xB1, 0x9A, 0x22, 0x1F, 0x82 }, { 0xB6, 0x73, 0x3B, 0xE9, 0x03, 0x4D, 0x50, 0x0E, 0xF4, 0x64, 0x15, 0x4D, 0x35, 0x01, 0xC8, 0x9F, 0x95, 0x3F, 0x66, 0x2B, 0xE0, 0x5B, 0x65, 0x51, 0x2A, 0x4C, 0x2A, 0x28, 0x52, 0xBF, 0xBE, 0x86 } },
     { { 0x58, 0xA4, 0xE6, 0x5B, 0xFC, 0xD9, 0xAC, 0x0B, 0xBC, 0x47, 0x52, 0x36, 0xD0, 0x6A, 0x81, 0x66, 0x6A, 0x56, 0x55, 0xA1, 0x6C, 0xFD, 0x37, 0xB2, 0xD3, 0x95, 0xE7, 0xB0, 0xE8, 0xE8, 0xA7, 0x52 }, { 0x6D, 0x67, 0x4F, 0x6E, 0x32, 0xA9, 0x8B, 0xAE, 0x6D, 0x31, 0xD9, 0xE9, 0x93, 0x11, 0xDC, 0x6D, 0xCA, 0x48, 0x64, 0xB4, 0xD0, 0xD3, 0xD4, 0x1E, 0x25, 0x3C, 0xE6, 0x01, 0x91, 0xDE, 0xB6, 0xA8 } },
     { { 0x07, 0x62, 0x9A, 0xCA, 0xD0, 0x9C, 0x9D, 0x8E, 0xCB, 0xB4, 0x12, 0x9E, 0xF4, 0x27, 0x26, 0x73, 0x2A, 0x1D, 0xA1, 0x47, 0xBB, 0x01, 0x6F, 0x53, 0x7A, 0x42, 0x55, 0x49, 0x36, 0x47, 0x7E, 0x17 }, { 0x9E, 0x54, 0xCC, 0xDE, 0x32, 0x9B, 0xF5, 0x47, 0xBF, 0xFD, 0xB2, 0x93, 0x05, 0xA2, 0xBD, 0xF4, 0x47, 0x72, 0xD3, 0x4A, 0x9E, 0xFD, 0x22, 0x7F, 0x10, 0x88, 0x0D, 0x83, 0x07, 0x34, 0x0B, 0x0F } },
+    { { 0xE9, 0x64, 0x37, 0x23, 0x78, 0x31, 0xEA, 0x77, 0x80, 0x5E, 0x43, 0x1B, 0xC4, 0x54, 0xEC, 0x9A, 0xA2, 0x07, 0x04, 0xFE, 0xC0, 0xD8, 0xB8, 0x69, 0x56, 0x49, 0x12, 0x13, 0xC4, 0x24, 0xFA, 0xEB }, { 0x99, 0x2C, 0xD6, 0x20, 0xF3, 0xDD, 0x0A, 0x42, 0x95, 0x2C, 0xFA, 0x66, 0x8B, 0xA4, 0x94, 0xD4, 0x22, 0xD6, 0xE4, 0x31, 0x79, 0x7D, 0xC9, 0x73, 0x18, 0xB6, 0x0A, 0xB2, 0x97, 0xCC, 0x8E, 0x10 } },
+    { { 0x4D, 0xD0, 0x84, 0x0C, 0x7D, 0xB5, 0x27, 0xBD, 0x70, 0x1E, 0xCF, 0x08, 0xC3, 0x23, 0xEB, 0x69, 0xA6, 0xDB, 0xA2, 0xD3, 0x2C, 0x7B, 0x35, 0xF6, 0x5F, 0x33, 0x88, 0x12, 0x3F, 0xDB, 0xD4, 0xA7 }, { 0x3A, 0xCD, 0x79, 0xA9, 0x16, 0x9D, 0xF9, 0x9F, 0xF0, 0xEC, 0xE0, 0x68, 0xDD, 0x06, 0x63, 0xA7, 0xA5, 0x8A, 0x1B, 0xD4, 0x1D, 0x8C, 0xD0, 0xFE, 0x01, 0x32, 0xAD, 0x3C, 0x12, 0x08, 0xAA, 0x86 } },
+
 };
 
 
@@ -1068,7 +1074,7 @@ static uint32_t AWEAuthorizationDigestTag(const uint8_t *bytes) {
 }
 
 static const uint32_t kAWEAuthorizationDigestTags[AWE_AUTHORIZATION_DIGEST_COUNT] = {
-    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u
+    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u
 };
 
 static BOOL AWEConstantTimeEqual(const uint8_t *left, const uint8_t *right, size_t length) {
@@ -2768,6 +2774,11 @@ static BOOL AWETopGlassEnabled(void) {
     id value = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWETopGlassEnabledDefaultsKey];
     return value ? [value boolValue] : YES;
+}
+
+static BOOL AWEHideTopLeftButtonEnabled(void) {
+    return [NSUserDefaults.standardUserDefaults
+        boolForKey:kAWEHideTopLeftButtonDefaultsKey];
 }
 
 static BOOL AWEHomeTransparentGlassEnabled(void) {
@@ -10576,6 +10587,51 @@ static void AWEHideTopSlot(UIView *container, AWEHomeTopActionKind kind) {
     slot.hidden = YES;
 }
 
+static void AWEForceHideTopLeftControl(UIView *container,
+                                       UIView *owner,
+                                       UIImageView *source) {
+    if (!container) return;
+    AWEHomeTopSlotView *slot = AWEEnsureTopSlot(
+        container, AWEHomeTopActionKindMenu);
+    if (!slot) return;
+
+    if (owner) {
+        AWEHideTopSourceImage(slot, source ?: AWEBestTopIconImageView(owner));
+        AWEHideTopOwnerVisual(slot, owner, container);
+        if (!objc_getAssociatedObject(owner, &kAWETopOwnerInteractionKey)) {
+            objc_setAssociatedObject(owner, &kAWETopOwnerInteractionKey,
+                                     @(owner.userInteractionEnabled),
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        owner.userInteractionEnabled = NO;
+        owner.layer.opacity = 0.0f;
+    } else if (slot.ownerView) {
+        slot.ownerView.layer.opacity = 0.0f;
+        slot.ownerView.userInteractionEnabled = NO;
+    }
+
+    AWEClearTopMenuMorph(slot);
+    slot.userInteractionEnabled = NO;
+    slot.hitButton.userInteractionEnabled = NO;
+    slot.hitButton.hidden = YES;
+    slot.systemGlassButton.hidden = YES;
+    slot.photosGlassHost.hidden = YES;
+    slot.hidden = YES;
+    objc_setAssociatedObject(slot, &kAWETopMenuForcedHiddenKey,
+                             @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void AWERestoreTopLeftControlAfterForcedHide(UIView *container) {
+    AWEHomeTopSlotView *slot = container
+        ? objc_getAssociatedObject(container, &kAWETopMenuSlotKey) : nil;
+    if (!slot || ![objc_getAssociatedObject(
+            slot, &kAWETopMenuForcedHiddenKey) boolValue]) return;
+    AWERestoreTopSourceImage(slot);
+    AWERestoreTopOwnerVisual(slot);
+    objc_setAssociatedObject(slot, &kAWETopMenuForcedHiddenKey,
+                             nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static void AWERefreshTopActionContainer(UIView *container) {
     if (!AWEPluginFeaturesEnabled() || gAWESettingsVisible) return;
     if (!container || !container.window ||
@@ -10614,15 +10670,20 @@ static void AWERefreshTopActionContainer(UIView *container) {
     UIImageView *leftSource = AWEBestTopIconImageView(leftOwner);
     UIImageView *searchSource = AWEBestTopIconImageView(searchOwner);
 
-    if (!AWETopGlassEnabled()) {
-        AWEHideTopSlot(container, AWEHomeTopActionKindMenu);
-    } else if (leftOwner) {
-        AWEConfigureTopSlot(container, AWEHomeTopActionKindMenu,
-                            leftOwner, leftSource);
-    } else if (existingMenuSlot && existingMenuSlot.ownerView.window) {
-        existingMenuSlot.hidden = NO;
+    if (AWEHideTopLeftButtonEnabled()) {
+        AWEForceHideTopLeftControl(container, leftOwner, leftSource);
     } else {
-        AWEHideTopSlot(container, AWEHomeTopActionKindMenu);
+        AWERestoreTopLeftControlAfterForcedHide(container);
+        if (!AWETopGlassEnabled()) {
+            AWEHideTopSlot(container, AWEHomeTopActionKindMenu);
+        } else if (leftOwner) {
+            AWEConfigureTopSlot(container, AWEHomeTopActionKindMenu,
+                                leftOwner, leftSource);
+        } else if (existingMenuSlot && existingMenuSlot.ownerView.window) {
+            existingMenuSlot.hidden = NO;
+        } else {
+            AWEHideTopSlot(container, AWEHomeTopActionKindMenu);
+        }
     }
 
     if (bottomSearchVisible) {
@@ -11994,6 +12055,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 @property (nonatomic, retain) UISwitch *wanToWSwitch;
 @property (nonatomic, retain) UISwitch *customPNGModeSwitch;
 @property (nonatomic, retain) UISwitch *topGlassSwitch;
+@property (nonatomic, retain) UISwitch *hideTopLeftButtonSwitch;
 @property (nonatomic, retain) UISwitch *topCategoryGroupSwitch;
 @property (nonatomic, retain) UISegmentedControl *topCategoryVisibleCountControl;
 @property (nonatomic, retain) UISwitch *topMenuMorphSwitch;
@@ -12019,7 +12081,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.48a";
+    self.title = @"LiquidBar 设置 · 1.0.48b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -12474,6 +12536,24 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     topRow.alignment = UIStackViewAlignmentCenter;
     topRow.distribution = UIStackViewDistributionEqualSpacing;
 
+    UILabel *hideTopLeftButtonLabel = [UILabel new];
+    hideTopLeftButtonLabel.text = @"完全隐藏左上角按钮";
+    hideTopLeftButtonLabel.font =
+        [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
+    UISwitch *hideTopLeftButtonSwitch = [UISwitch new];
+    hideTopLeftButtonSwitch.on = AWEHideTopLeftButtonEnabled();
+    hideTopLeftButtonSwitch.onTintColor = AWEStoredAccentColor();
+    [hideTopLeftButtonSwitch addTarget:self
+        action:@selector(hideTopLeftButtonSwitchChanged:)
+        forControlEvents:UIControlEventValueChanged];
+    self.hideTopLeftButtonSwitch = hideTopLeftButtonSwitch;
+    UIStackView *hideTopLeftButtonRow = [[UIStackView alloc]
+        initWithArrangedSubviews:@[hideTopLeftButtonLabel,
+                                  hideTopLeftButtonSwitch]];
+    hideTopLeftButtonRow.axis = UILayoutConstraintAxisHorizontal;
+    hideTopLeftButtonRow.alignment = UIStackViewAlignmentCenter;
+    hideTopLeftButtonRow.distribution = UIStackViewDistributionEqualSpacing;
+
     UILabel *topCategoryGroupLabel = [UILabel new];
     topCategoryGroupLabel.text = @"顶部分类液态分组（默认）";
     topCategoryGroupLabel.font = [UIFont systemFontOfSize:14.0
@@ -12617,7 +12697,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         albumStyleRow, newBarIconCenterButton,
         hideTitlesRow, forceDarkBottomBarRow,
-        topRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
+        topRow, hideTopLeftButtonRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
         adaptiveGlassHint, transparentGlassRow,
         pngRow, pngHint, reloadPNG,
         iconCenterButton, diagnosticRow, diagnosticButtons,
@@ -13074,6 +13154,14 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
 }
 
+- (void)hideTopLeftButtonSwitchChanged:(UISwitch *)sender {
+    [NSUserDefaults.standardUserDefaults setBool:sender.isOn
+        forKey:kAWEHideTopLeftButtonDefaultsKey];
+    [NSUserDefaults.standardUserDefaults synchronize];
+    AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
+    [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+}
+
 - (void)topCategoryGroupSwitchChanged:(UISwitch *)sender {
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWETopTelegramSwitcherEnabledDefaultsKey];
@@ -13158,7 +13246,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.48a image=%@ ==========" ,
+            @"========== START build=1.0.48b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13215,7 +13303,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.48a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.48b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13230,7 +13318,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.48a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.48b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14830,7 +14918,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.48a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.48b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

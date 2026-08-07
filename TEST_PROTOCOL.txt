@@ -1,23 +1,5 @@
-AwemeLiquidBar 1.0.48a device test
-
-1. Publish regression
-- Tap the center publish button.
-- Enter the publish/creation flow, then close/cancel it normally.
-- Expected: page closes normally; no frozen overlay and no forced app restart.
-
-2. PNG @3x regression
-- Enable custom PNG mode.
-- Test 30x30, 60x60, 100x100 and >100px artwork.
-- Expected: 30px=10pt, 60px=20pt, 100px=33.33pt; >100px is proportionally capped to a 100px longest edge before /3 rendering.
-
-3. Share/forward regression
-- Open Douyin share/forward/send-to panels from a video.
-- Expected: LiquidBar does not cover lower panel buttons and does not intercept taps.
-
-4. Group-buy / local-commerce report
-- Reproduce the reported shopping-cart/group-buy flow if available.
-- Expected: plugin bottom overlay is absent on matched presented commerce sheets.
-- If the native panel still disappears after a slight swipe, enable Interaction Diagnostics, reproduce once, export the diagnostic log, and compare the VC_PRESENT class lines. This distinguishes a Douyin-native gesture issue from plugin route interference.
-
-5. Regression sanity
-- Home top switcher/menu, top-left/search/right glass, avatar glass, bottom bar and authorization should remain unchanged from 1.0.47d.
+AwemeLiquidBar 1.0.48b device test
+1. Toggle 完全隐藏左上角按钮 ON: left entrance must disappear completely; top search remains.
+2. Toggle it OFF: normal left Liquid Glass/menu behavior returns with interaction restored.
+3. Recheck publish close, forward/share bottom controls, PNG @3x sizing, commerce/group-buy overlays.
+4. Authorization table contains 28 encrypted entries.

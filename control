@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.48a
+Version: 1.0.48b
 Architecture: iphoneos-arm
-Description: Restores publish/share route isolation and @3x custom PNG sizing, adds defensive commerce-sheet suppression and diagnostic-only probe logging, while retaining the current Liquid Glass top switcher, cached controls and encrypted 26-account authorization.
+Description: Adds an independent complete-hide switch for the top-left entrance and extends encrypted authorization to 28 accounts, while retaining the 1.0.48a publish/share/PNG/commerce stability fixes and cached Liquid Glass controls.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks
