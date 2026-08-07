@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.49a — bottom interaction diagnostics + new-bar title/icon fixes + auth28
+ AwemeLiquidBar 1.0.49b — bottom interaction diagnostics + new-bar title/icon fixes + auth28
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -737,7 +737,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.49b_interaction.log"] copy];
     });
     return path;
 }
@@ -806,7 +806,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.49b_probe.log"] copy];
     });
     return path;
 }
@@ -12135,7 +12135,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.49a";
+    self.title = @"LiquidBar 设置 · 1.0.49b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -13300,7 +13300,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.49a image=%@ ==========" ,
+            @"========== START build=1.0.49b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13367,7 +13367,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.49a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.49b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13382,7 +13382,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.49a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.49b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14982,7 +14982,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

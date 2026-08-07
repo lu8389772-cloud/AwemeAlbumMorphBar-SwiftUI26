@@ -552,8 +552,8 @@ final class AWEAlbumMorphTabController:
 
     private func applyExplicitSelectionImages(selectedIdentifier: String?) {
         for tab in tabs {
-            guard let identifier = tab.identifier,
-                  let images = explicitImagesByIdentifier[identifier] else {
+            let identifier = tab.identifier
+            guard let images = explicitImagesByIdentifier[identifier] else {
                 continue
             }
             let selected = identifier == selectedIdentifier

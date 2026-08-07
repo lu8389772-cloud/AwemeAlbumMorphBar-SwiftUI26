@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.49a
+Version: 1.0.49b
 Architecture: iphoneos-arm
 Description: Adds an independent complete-hide switch for the top-left entrance and extends encrypted authorization to 28 accounts, while retaining the 1.0.48a publish/share/PNG/commerce stability fixes and cached Liquid Glass controls.
 Maintainer: xyy
