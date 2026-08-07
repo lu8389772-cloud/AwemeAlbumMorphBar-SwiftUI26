@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.48b — complete top-left hide switch + encrypted auth28
+ AwemeLiquidBar 1.0.49a — bottom interaction diagnostics + new-bar title/icon fixes + auth28
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -414,6 +414,12 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
         boolForKey:kAWEHideBottomTitlesDefaultsKey];
 }
 
+/* Swift native-tab bridge. Keep the exported ABI integer-based so the
+   Objective-C++/Swift boundary does not depend on Bool ABI details. */
+int32_t AWEAlbumMorphHideTitlesEnabled(void) {
+    return AWEHideBottomTitlesEnabled() ? 1 : 0;
+}
+
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
     /* 1.0.48a retires the experimental collapse path completely.  Keep the
        historical preference key only so old installs do not crash while
@@ -706,6 +712,8 @@ static void AWEHideAlbumMorphTintProbe(void);
 
 #pragma mark - Low-frequency interaction diagnostics
 
+static CFTimeInterval gAWELastBottomHitDiagnosticTime = 0.0;
+
 static BOOL AWEInteractionDiagnosticsEnabled(void) {
     return [NSUserDefaults.standardUserDefaults
         boolForKey:kAWEInteractionDiagnosticEnabledDefaultsKey];
@@ -729,7 +737,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.48b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.49a_interaction.log"] copy];
     });
     return path;
 }
@@ -798,7 +806,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.48b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.49a_probe.log"] copy];
     });
     return path;
 }
@@ -9052,7 +9060,31 @@ static void AWEApplyAlbumMorphResolvedAppearance(
 
 - (void)albumMorphDidRequestOriginalIndex:(NSInteger)index {
     AWENormalModeTabBar *originalBar = gAWELastTabBar;
-    if (!originalBar) return;
+    if (!originalBar && gAWELastController) {
+        /* Fresh installs can materialize the transplanted native bar before
+           the weak original-bar cache has been populated. Re-acquire the
+           source bar from the controller instead of silently dropping taps. */
+        originalBar = AWEPrepareBarForController(gAWELastController, NO);
+        if (originalBar) gAWELastTabBar = originalBar;
+    }
+
+    AWEAlbumMorphOverlayWindow *overlay =
+        (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+    AWEInteractionDiagnosticWrite(
+        @"ALBUM_MORPH_TAP_BEGIN index=%ld original=%@ controller=%@ native=%@ overlay=%@ content=%d",
+        (long)index,
+        AWEInteractionObjectSummary(originalBar),
+        AWEInteractionObjectSummary(gAWELastController),
+        AWEInteractionObjectSummary(gAWEAlbumMorphController ? gAWEAlbumMorphController.tabBar : nil),
+        AWEInteractionObjectSummary(overlay),
+        overlay ? overlay.contentVisible : 0);
+
+    if (!originalBar) {
+        AWEInteractionDiagnosticWrite(
+            @"ALBUM_MORPH_TAP_END index=%ld result=NO reason=no-original-bar",
+            (long)index);
+        return;
+    }
 
     UIWindow *sourceWindow = originalBar.window ?: AWEActiveMainWindow();
     AWEApplyAlbumMorphResolvedAppearance(sourceWindow, index);
@@ -9081,8 +9113,10 @@ static void AWEApplyAlbumMorphResolvedAppearance(
     }
 
     AWEInteractionDiagnosticWrite(
-        @"ALBUM_MORPH_FORWARD index=%ld result=%d",
-        (long)index, forwarded);
+        @"ALBUM_MORPH_FORWARD index=%ld result=%d original=%@ controller=%@",
+        (long)index, forwarded,
+        AWEInteractionObjectSummary(originalBar),
+        AWEInteractionObjectSummary(gAWELastController));
 
     if (index == 2 && !forwarded) {
         gAWEAlbumMorphPublishLaunchSuppressionUntil = 0.0;
@@ -9140,8 +9174,15 @@ static void AWEApplyAlbumMorphResolvedAppearance(
         searchProxy.userInteractionEnabled && searchProxy.alpha > 0.01) {
         CGPoint pointInProxy = [self convertPoint:point toView:searchProxy];
         if ([searchProxy pointInside:pointInProxy withEvent:event]) {
-            return [searchProxy hitTest:pointInProxy withEvent:event]
+            UIView *searchHit = [searchProxy hitTest:pointInProxy withEvent:event]
                 ?: searchProxy;
+            if (AWEInteractionDiagnosticsEnabled() && event.type == UIEventTypeTouches) {
+                AWEInteractionDiagnosticWrite(
+                    @"ALBUM_HIT_SEARCH point=(%.1f,%.1f) proxy=%@ hit=%@",
+                    point.x, point.y, AWEInteractionObjectSummary(searchProxy),
+                    AWEInteractionObjectSummary(searchHit));
+            }
+            return searchHit;
         }
     }
 
@@ -9152,7 +9193,20 @@ static void AWEApplyAlbumMorphResolvedAppearance(
     if (![tabBar pointInside:pointInBar withEvent:event]) return nil;
 
     UIView *hit = [tabBar hitTest:pointInBar withEvent:event];
-    return hit ?: tabBar;
+    UIView *resolved = hit ?: tabBar;
+    if (AWEInteractionDiagnosticsEnabled() && event.type == UIEventTypeTouches) {
+        CFTimeInterval now = CACurrentMediaTime();
+        if (now - gAWELastBottomHitDiagnosticTime >= 0.10) {
+            gAWELastBottomHitDiagnosticTime = now;
+            AWEInteractionDiagnosticWrite(
+                @"ALBUM_HIT_TAB point=(%.1f,%.1f) barPoint=(%.1f,%.1f) content=%d barHidden=%d barAlpha=%.3f barUI=%d selected=%ld hit=%@",
+                point.x, point.y, pointInBar.x, pointInBar.y, self.contentVisible,
+                tabBar.hidden, tabBar.alpha, tabBar.userInteractionEnabled,
+                (long)gAWEAlbumMorphController.selectedIndex,
+                AWEInteractionObjectSummary(resolved));
+        }
+    }
+    return resolved;
 }
 
 @end
@@ -12081,7 +12135,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.48b";
+    self.title = @"LiquidBar 设置 · 1.0.49a";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -12678,7 +12732,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     diagnosticRow.alignment = UIStackViewAlignmentCenter;
     diagnosticRow.distribution = UIStackViewDistributionEqualSpacing;
 
-    UIButton *snapshotButton = AWECreateGlassTextButton(@"写入当前交互状态", UIColor.systemGrayColor, NO);
+    UIButton *snapshotButton = AWECreateGlassTextButton(@"写入当前交互/底栏状态", UIColor.systemGrayColor, NO);
     [snapshotButton addTarget:self action:@selector(writeInteractionSnapshot:)
              forControlEvents:UIControlEventTouchUpInside];
     UIButton *clearLogButton = AWECreateGlassTextButton(@"清空全部日志", UIColor.systemGrayColor, NO);
@@ -13246,7 +13300,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.48b image=%@ ==========" ,
+            @"========== START build=1.0.49a image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13260,8 +13314,11 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         window, @"AWEFeedTopBarContainer", 0);
     UIView *menu = top ? AWEFindTopOwnerCandidate(top, NO) : nil;
     UIView *search = top ? AWEFindTopOwnerCandidate(top, YES) : nil;
+    AWEAlbumMorphOverlayWindow *albumOverlay =
+        (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+    UITabBar *albumBar = gAWEAlbumMorphController ? gAWEAlbumMorphController.tabBar : nil;
     AWEInteractionDiagnosticWrite(
-        @"SNAPSHOT controller=%@ tab=%@ native=%@ buttons=%lu top=%@ menu=%@ search=%@",
+        @"SNAPSHOT controller=%@ tab=%@ native=%@ buttons=%lu top=%@ menu=%@ search=%@ albumController=%@ albumBar=%@ albumItems=%lu albumSelected=%ld albumUI=%d overlay=%@ overlayContent=%d",
         AWEInteractionObjectSummary(gAWELastController),
         AWEInteractionObjectSummary(gAWELastTabBar),
         AWEInteractionObjectSummary(gAWELastTabBar ?
@@ -13269,7 +13326,14 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         (unsigned long)buttons.count,
         AWEInteractionObjectSummary(top),
         AWEInteractionObjectSummary(menu),
-        AWEInteractionObjectSummary(search));
+        AWEInteractionObjectSummary(search),
+        AWEInteractionObjectSummary(gAWEAlbumMorphController),
+        AWEInteractionObjectSummary(albumBar),
+        (unsigned long)albumBar.items.count,
+        (long)gAWEAlbumMorphController.selectedIndex,
+        albumBar.userInteractionEnabled,
+        AWEInteractionObjectSummary(albumOverlay),
+        albumOverlay ? albumOverlay.contentVisible : 0);
     [[[UIImpactFeedbackGenerator alloc]
         initWithStyle:UIImpactFeedbackStyleLight] impactOccurred];
 }
@@ -13303,7 +13367,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.48b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.49a diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13318,7 +13382,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.48b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.49a_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14918,7 +14982,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.48b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49a os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

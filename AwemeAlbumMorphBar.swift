@@ -210,6 +210,13 @@ private func albumMorphProbe(_ message: String) {
     message.withCString { AWEAlbumMorphProbeLog($0) }
 }
 
+@_silgen_name("AWEAlbumMorphHideTitlesEnabled")
+private func AWEAlbumMorphHideTitlesEnabled() -> Int32
+
+private var albumMorphHideTitles: Bool {
+    AWEAlbumMorphHideTitlesEnabled() != 0
+}
+
 @_silgen_name("AWEAlbumMorphCreateConfiguredImage")
 private func AWEAlbumMorphCreateConfiguredImage(
     _ key: UnsafePointer<CChar>,
@@ -375,6 +382,7 @@ final class AWEAlbumMorphTabController:
     private var proxies: [AWEAlbumMorphProxyController] = []
     private var suppressCallbacks = false
     private var secondTitle = "朋友"
+    private var explicitImagesByIdentifier: [String: (normal: UIImage?, selected: UIImage?)] = [:]
     private var secondNormalSymbol = "hands.and.sparkles"
     private var secondSelectedSymbol = "hands.and.sparkles.fill"
     private var secondImageRole = "friends"
@@ -454,8 +462,9 @@ final class AWEAlbumMorphTabController:
             fallback: selectedFallback,
             pointSize: 22.0
         )
+        explicitImagesByIdentifier[identifier] = (normalImage, selectedImage)
         let tab = UITab(
-            title: title,
+            title: albumMorphHideTitles ? "" : title,
             image: normalImage,
             identifier: identifier
         ) { [weak self] _ in
@@ -541,6 +550,21 @@ final class AWEAlbumMorphTabController:
         }
     }
 
+    private func applyExplicitSelectionImages(selectedIdentifier: String?) {
+        for tab in tabs {
+            guard let identifier = tab.identifier,
+                  let images = explicitImagesByIdentifier[identifier] else {
+                continue
+            }
+            let selected = identifier == selectedIdentifier
+            tab.image = selected ? (images.selected ?? images.normal) : images.normal
+            if #available(iOS 26.1, *) {
+                tab.selectedImage = images.selected ?? images.normal
+            }
+        }
+        tabBar.setNeedsLayout()
+    }
+
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
@@ -568,6 +592,7 @@ final class AWEAlbumMorphTabController:
 
     private func rebuildTabs(preservingOriginalIndex originalIndex: Int) {
         proxies.removeAll()
+        explicitImagesByIdentifier.removeAll(keepingCapacity: true)
 
         let rebuilt = visibleItemIdentifiers.compactMap(tabForItemKey)
         guard !rebuilt.isEmpty else { return }
@@ -582,6 +607,7 @@ final class AWEAlbumMorphTabController:
         UIView.performWithoutAnimation {
             tabs = rebuilt
             selectedTab = preferred
+            applyExplicitSelectionImages(selectedIdentifier: preferred?.identifier)
             tabBar.itemPositioning = .fill
             tabBar.itemWidth = 0
             tabBar.itemSpacing = 0
@@ -884,6 +910,7 @@ final class AWEAlbumMorphTabController:
             guard self.selectedTab !== target else { return }
             self.suppressCallbacks = true
             self.selectedTab = target
+            self.applyExplicitSelectionImages(selectedIdentifier: target.identifier)
             self.suppressCallbacks = false
         }
 
@@ -931,6 +958,7 @@ final class AWEAlbumMorphTabController:
         guard selectedTab !== target else { return }
         suppressCallbacks = true
         selectedTab = target
+        applyExplicitSelectionImages(selectedIdentifier: target.identifier)
         suppressCallbacks = false
     }
 
@@ -967,6 +995,7 @@ final class AWEAlbumMorphTabController:
         }
 
         cachedOriginalIndex = originalIndex
+        applyExplicitSelectionImages(selectedIdentifier: selectedTab.identifier)
         albumMorphProbe(
             "TAB_SELECT originalIndex=\(originalIndex) previous=\(previousTab?.identifier ?? "nil")"
         )
