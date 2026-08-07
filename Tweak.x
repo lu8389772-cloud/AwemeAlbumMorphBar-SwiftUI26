@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.47b — Telegram top switcher + resident masked bottom-bar transitions
+ AwemeLiquidBar 1.0.47c — Telegram top switcher + resident masked bottom-bar transitions
 
  Focused rollback/fix release:
  - completely disables the experimental upward-swipe compact path and removes
@@ -419,7 +419,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    /* 1.0.47b retires the experimental collapse path completely.  Keep the
+    /* 1.0.47c retires the experimental collapse path completely.  Keep the
        historical preference key only so old installs do not crash while
        loading settings; no gesture or compact transform is allowed to run. */
     return NO;
@@ -733,7 +733,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.47b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.47c_interaction.log"] copy];
     });
     return path;
 }
@@ -802,7 +802,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.47b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.47c_probe.log"] copy];
     });
     return path;
 }
@@ -1027,7 +1027,7 @@ typedef struct {
     uint8_t value[32];
 } AWEAuthorizationDigestPair;
 
-static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[21] = {
+static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[23] = {
     { { 0x59, 0x82, 0x56, 0x11, 0xCC, 0x1E, 0x58, 0xA8, 0xEF, 0xB6, 0x24, 0x7E, 0x97, 0xB8, 0x64, 0x73, 0xCE, 0x8F, 0x7D, 0x23, 0x21, 0xF4, 0xC3, 0xC9, 0x75, 0xD5, 0xCA, 0xF8, 0xE3, 0x16, 0xB1, 0x32 }, { 0x9F, 0x0C, 0xED, 0xA5, 0xCB, 0x5B, 0x84, 0x63, 0xD4, 0x38, 0xC3, 0x54, 0x7D, 0x04, 0x85, 0xBD, 0x81, 0x67, 0xEC, 0xF0, 0x4D, 0xE2, 0x02, 0x72, 0xDC, 0x96, 0xFF, 0xE4, 0x3D, 0x52, 0x81, 0xB2 } },
     { { 0x3F, 0x40, 0x8A, 0x7D, 0x84, 0xB4, 0xFA, 0x3E, 0x5E, 0x8B, 0x01, 0xB5, 0x24, 0xF8, 0xBD, 0xDD, 0x2A, 0xB5, 0xA0, 0xEB, 0xC5, 0xAA, 0x72, 0xCC, 0x16, 0x88, 0x8F, 0xC9, 0x67, 0xCB, 0xCC, 0x73 }, { 0xDE, 0x19, 0x74, 0x29, 0x81, 0xA3, 0x4B, 0xB7, 0x6A, 0xD2, 0x31, 0xA1, 0x70, 0xF0, 0x66, 0xA7, 0xA4, 0xFD, 0x73, 0x60, 0x1A, 0x65, 0xD2, 0x57, 0xCD, 0x90, 0x06, 0x85, 0xD9, 0xCA, 0xDD, 0x34 } },
     { { 0x91, 0xDF, 0x80, 0xC6, 0x2F, 0x47, 0x04, 0xEE, 0x32, 0x74, 0xC6, 0x3B, 0x38, 0xF5, 0x47, 0xF2, 0x01, 0x89, 0xE2, 0x8C, 0x36, 0xC3, 0xE2, 0xE8, 0xA4, 0x62, 0xA2, 0x8E, 0xDC, 0x76, 0xE7, 0xC0 }, { 0x58, 0xFD, 0x08, 0x53, 0xC3, 0x95, 0x41, 0x39, 0x18, 0xBA, 0x8D, 0x20, 0xD0, 0x9D, 0x7B, 0xBD, 0x0A, 0xFF, 0x31, 0xF9, 0x8B, 0xBE, 0x4E, 0xFD, 0xFA, 0x2C, 0x84, 0x7F, 0x07, 0x15, 0x5C, 0x4A } },
@@ -1049,6 +1049,27 @@ static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[21] = {
     { { 0x50, 0x84, 0x34, 0x3A, 0xC2, 0x16, 0xE2, 0xF3, 0xAC, 0xA3, 0x72, 0x54, 0x1F, 0xDC, 0x43, 0x4E, 0xEE, 0xEF, 0x51, 0x47, 0x8E, 0x1A, 0x0E, 0x04, 0x27, 0x56, 0xB5, 0x4D, 0xC9, 0x12, 0xCD, 0x67 }, { 0x7D, 0x33, 0xDB, 0xF4, 0x61, 0x4C, 0x1E, 0x6C, 0xFF, 0x1D, 0xD4, 0xFF, 0xAD, 0x72, 0xA4, 0x76, 0xCF, 0x9D, 0xE2, 0xE5, 0xC8, 0x42, 0x77, 0x60, 0xD7, 0xE6, 0x28, 0x0E, 0xC5, 0xAD, 0xC1, 0x46 } },
     { { 0x9A, 0x72, 0x0B, 0xD0, 0x8F, 0x81, 0x9D, 0x49, 0x58, 0xC8, 0xFF, 0xD9, 0x57, 0x59, 0x6E, 0x69, 0xE8, 0x53, 0x53, 0xB6, 0xE7, 0x33, 0x92, 0x95, 0x2A, 0x12, 0x26, 0x56, 0xE8, 0xCC, 0xDF, 0xEC }, { 0x7D, 0x96, 0xA5, 0x37, 0x91, 0x85, 0xF9, 0x8B, 0xD4, 0x3E, 0x00, 0xC1, 0xD0, 0x60, 0x4A, 0x00, 0x67, 0xF6, 0x0C, 0x22, 0xBD, 0xB2, 0x47, 0x20, 0x8A, 0xD6, 0x72, 0xFC, 0x5F, 0x7B, 0xE3, 0x79 } },
     { { 0x6D, 0x54, 0x34, 0xD3, 0x42, 0x11, 0xAD, 0x5D, 0xCE, 0x98, 0x00, 0x4A, 0xC7, 0x55, 0x7E, 0x9F, 0x9D, 0xD9, 0xCD, 0x23, 0x87, 0xB9, 0xE7, 0xB3, 0xD8, 0x2C, 0x98, 0xEF, 0x65, 0x07, 0xF6, 0xB8 }, { 0xB5, 0x9B, 0xE7, 0xC9, 0x07, 0x49, 0xF8, 0x2B, 0xFC, 0x8F, 0x0F, 0xD8, 0x4C, 0x31, 0xD0, 0x53, 0xBE, 0xC4, 0x4B, 0x00, 0x2D, 0x69, 0x3B, 0xC5, 0x8B, 0x86, 0xDE, 0x1F, 0xAB, 0x06, 0x44, 0x71 } },
+    { { 0x51, 0xDE, 0x0F, 0x73, 0x21, 0xA2, 0xF9, 0xB3, 0xB3, 0xC3, 0xD6, 0xC1, 0x25, 0x55, 0x65, 0xCE, 0x2A, 0x52, 0x04, 0x03, 0x22, 0x22, 0x1D, 0x9D, 0x9D, 0xCC, 0xEF, 0x4B, 0x11, 0xDE, 0x94, 0x38 }, { 0xF4, 0x41, 0x50, 0x82, 0x05, 0xCE, 0xB9, 0x86, 0xBA, 0x95, 0xDB, 0x9F, 0x8B, 0x34, 0xF9, 0x15, 0x56, 0xDE, 0xA2, 0x1A, 0x4A, 0x32, 0xA3, 0x23, 0x88, 0x2C, 0x63, 0xD2, 0x4C, 0xB1, 0xEE, 0x5E } },
+    { { 0xFB, 0xBD, 0x7B, 0xE8, 0x0A, 0x68, 0xE9, 0xCF, 0x67, 0x87, 0x3D, 0xAD, 0xCD, 0x2F, 0x17, 0x4D, 0xCB, 0x7F, 0xB7, 0x60, 0x65, 0xC6, 0xBF, 0x34, 0xE1, 0x0B, 0x10, 0x34, 0x7F, 0x24, 0x13, 0x72 }, { 0xA4, 0xE7, 0x1F, 0x54, 0x44, 0xFD, 0xEB, 0x6B, 0x0B, 0xBF, 0x04, 0x3D, 0xD7, 0x65, 0x10, 0x0A, 0x25, 0xCB, 0x1E, 0x24, 0x8D, 0xE5, 0xE3, 0x5A, 0xB3, 0xA8, 0x4D, 0x4B, 0xD3, 0x1F, 0x37, 0x66 } },
+};
+
+
+#define AWE_AUTHORIZATION_DIGEST_COUNT \
+    (sizeof(kAWEAuthorizationDigests) / sizeof(kAWEAuthorizationDigests[0]))
+
+static uint32_t AWEAuthorizationDigestTag(const uint8_t *bytes) {
+    if (!bytes) return 0;
+    uint32_t tag = 0xA73C5D91u;
+    for (NSUInteger index = 0; index < 32; index++) {
+        tag ^= ((uint32_t)bytes[index] + 0x9Du + (uint32_t)index * 17u);
+        tag = (tag << 7) | (tag >> 25);
+        tag *= 0x45D9F3Bu;
+    }
+    return tag ^ 0xC17A4E6Du;
+}
+
+static const uint32_t kAWEAuthorizationDigestTags[AWE_AUTHORIZATION_DIGEST_COUNT] = {
+    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u
 };
 
 static BOOL AWEConstantTimeEqual(const uint8_t *left, const uint8_t *right, size_t length) {
@@ -1089,8 +1110,10 @@ static NSData *AWEAuthorizationDigestForIdentifier(NSString *identifier) {
 static BOOL AWEAuthorizationDigestAllowed(NSData *digest) {
     if (digest.length != 32) return NO;
     const uint8_t *candidate = digest.bytes;
+    const uint32_t candidateTag = AWEAuthorizationDigestTag(candidate);
     uint8_t expected[32];
-    for (NSUInteger entry = 0; entry < 21; entry++) {
+    for (NSUInteger entry = 0; entry < AWE_AUTHORIZATION_DIGEST_COUNT; entry++) {
+        if ((candidateTag ^ kAWEAuthorizationDigestTags[entry]) != 0) continue;
         for (NSUInteger index = 0; index < 32; index++) {
             expected[index] = kAWEAuthorizationDigests[entry].mask[index] ^
                               kAWEAuthorizationDigests[entry].value[index];
@@ -9790,6 +9813,7 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
 @property(nonatomic, weak) UIView *nativeIndicator;
 @property(nonatomic, strong) CADisplayLink *indicatorDisplayLink;
 @property(nonatomic, assign) CFTimeInterval indicatorDisplayLinkDeadline;
+@property(nonatomic, assign) CGRect lastSelectionPresentationFrame;
 - (NSInteger)alb_visibleCount;
 - (void)alb_categoryTapped:(UIButton *)sender;
 - (void)alb_swipedLeft:(UISwipeGestureRecognizer *)recognizer;
@@ -9900,6 +9924,7 @@ static void AWEAnimateTopLiquidWindowShift(AWETopLiquidGroupView *group,
         [displayLink invalidate];
         self.indicatorDisplayLink = nil;
         self.nativeIndicator = nil;
+        self.lastSelectionPresentationFrame = CGRectZero;
         return;
     }
     AWESyncTopSelectionPillToNativeIndicator(indicator);
@@ -9952,6 +9977,11 @@ static void AWESyncTopSelectionPillToNativeIndicator(UIView *indicator) {
     CGFloat slot = ((CGFloat)(left - group.windowStart)) + progress * ((CGFloat)(right - left));
     slot = MIN((CGFloat)visibleCount - 1.0, MAX(0.0, slot));
     CGRect target = CGRectInset(CGRectMake(CGRectGetMinX(cb) + slot * iw, CGRectGetMinY(cb), iw, CGRectGetHeight(cb)), 1.5, 0.5);
+    CGRect previous = group.lastSelectionPresentationFrame;
+    if (!CGRectIsEmpty(previous) &&
+        fabs(CGRectGetMinX(previous) - CGRectGetMinX(target)) < 0.18 &&
+        fabs(CGRectGetWidth(previous) - CGRectGetWidth(target)) < 0.18) return;
+    group.lastSelectionPresentationFrame = target;
     [group.selectionGlass.layer removeAllAnimations];
     [UIView performWithoutAnimation:^{
         group.selectionGlass.frame = target;
@@ -9964,14 +9994,14 @@ static void AWETrackTopSelectionPresentationIfNeeded(UIView *indicator) {
     AWETopLiquidGroupView *group = AWEFindTopLiquidGroupFromView(indicator);
     if (!group || group.hidden || indicator.layer.animationKeys.count == 0) return;
     group.nativeIndicator = indicator;
-    group.indicatorDisplayLinkDeadline = CACurrentMediaTime() + 0.50;
+    group.indicatorDisplayLinkDeadline = CACurrentMediaTime() + 0.34;
     if (group.indicatorDisplayLink) return;
     CADisplayLink *link = [CADisplayLink displayLinkWithTarget:group
         selector:@selector(alb_indicatorTick:)];
     if (@available(iOS 15.0, *)) {
-        link.preferredFrameRateRange = CAFrameRateRangeMake(30.0, 60.0, 60.0);
+        link.preferredFrameRateRange = CAFrameRateRangeMake(20.0, 30.0, 30.0);
     } else {
-        link.preferredFramesPerSecond = 60;
+        link.preferredFramesPerSecond = 30;
     }
     [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
     group.indicatorDisplayLink = link;
@@ -10139,10 +10169,9 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
         style != UIUserInterfaceStyleDark) {
         style = UIUserInterfaceStyleDark;
     }
-    UIColor *labelColor = AWELabelColorResolvedForStyle(style);
-    UIColor *normalColor = [labelColor colorWithAlphaComponent:0.84];
-    UIColor *selectedColor = labelColor;
-    UIColor *accent = AWEStoredAccentColor();
+    (void)style;
+    UIColor *normalColor = [UIColor.whiteColor colorWithAlphaComponent:0.86];
+    UIColor *selectedColor = UIColor.whiteColor;
 
     CGRect oldSelectionFrame = group.selectionGlass.frame;
     BOOL hadVisibleSelection = group.selectionGlass.alpha > 0.01;
@@ -10178,9 +10207,11 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
             BOOL selected = definitionIndex == group.selectedIndex;
             UIColor *titleColor = selected ? selectedColor : normalColor;
             if (visibleCount == 1 && selected) {
-                titleColor = accent;
+                titleColor = UIColor.whiteColor;
             }
             [button setTitleColor:titleColor forState:UIControlStateNormal];
+            [button setTitleColor:titleColor forState:UIControlStateHighlighted];
+            [button setTitleColor:titleColor forState:UIControlStateSelected];
             button.tintColor = titleColor;
             button.titleLabel.hidden = NO;
             button.titleLabel.alpha = 1.0;
@@ -10643,7 +10674,7 @@ static void AWERefreshHomeChromeImmediately(UIWindow *window) {
 @end
 
 static void AWEStartHomeChromeRecoverySampler(void) {
-    /* 1.0.47b: no continuous CADisplayLink. Lifecycle hooks and three bounded
+    /* 1.0.47c: no continuous CADisplayLink. Lifecycle hooks and three bounded
        reconciliation passes are sufficient and avoid the major heat source. */
 }
 
@@ -11854,7 +11885,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.47b";
+    self.title = @"LiquidBar 设置 · 1.0.47c";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -12993,7 +13024,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.47b image=%@ ==========" ,
+            @"========== START build=1.0.47c image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13050,7 +13081,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.47b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.47c diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13065,7 +13096,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.47b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.47c_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14646,7 +14677,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.47b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.47c os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
