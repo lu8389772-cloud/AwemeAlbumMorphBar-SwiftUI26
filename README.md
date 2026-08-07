@@ -1,4 +1,4 @@
-# AwemeLiquidBar 1.0.47a
+# AwemeLiquidBar 1.0.47b
 
 - Native indicator-driven top selection pill: follows Douyin paging continuously instead of starting a spring after page selection.
 - Single lightweight window-shift animation for hidden categories; removes the two-phase fade/translate rebuild.

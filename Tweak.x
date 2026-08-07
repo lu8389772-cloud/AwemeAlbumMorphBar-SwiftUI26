@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.47a — Telegram top switcher + resident masked bottom-bar transitions
+ AwemeLiquidBar 1.0.47b — Telegram top switcher + resident masked bottom-bar transitions
 
  Focused rollback/fix release:
  - completely disables the experimental upward-swipe compact path and removes
@@ -172,6 +172,9 @@ static char kAWEAdaptiveGlassAutomaticContrastKey;
 static char kAWEAdaptiveGlassForegroundLightKey;
 static char kAWEAdaptiveGlassLastSampleTimeKey;
 static char kAWEAdaptiveGlassExplicitForegroundKey;
+static char kAWEAdaptiveGlassBaseImageKey;
+static char kAWEAdaptiveGlassUpdateHandlerInstalledKey;
+static char kAWEAdaptiveGlassAppliedForegroundSignatureKey;
 static char kAWEHomeGlassTintViewKey;
 static char kAWETopActionRetryGenerationKey;
 static char kAWETopMenuMorphInstalledKey;
@@ -361,6 +364,8 @@ static __weak UIWindow *gAWEAlbumMorphTintProbeWindow = nil;
 static UIUserInterfaceStyle gAWEAlbumMorphLastMirroredStyle = UIUserInterfaceStyleUnspecified;
 static UIUserInterfaceStyle gAWEAlbumMorphLastAppliedStyle = UIUserInterfaceStyleUnspecified;
 static UIUserInterfaceStyle gAWEHomeChromeLastStableStyle = UIUserInterfaceStyleUnspecified;
+static UIUserInterfaceStyle gAWEHomeChromePendingStyle = UIUserInterfaceStyleUnspecified;
+static NSUInteger gAWEHomeChromeStyleGeneration = 0;
 static NSHashTable<UIButton *> *gAWEAdaptiveGlassButtons = nil;
 static NSUInteger gAWEAdaptiveContrastRoundRobinIndex = 0;
 static NSUInteger gAWEConfiguredIconGeneration = 1;
@@ -414,7 +419,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    /* 1.0.47a retires the experimental collapse path completely.  Keep the
+    /* 1.0.47b retires the experimental collapse path completely.  Keep the
        historical preference key only so old installs do not crash while
        loading settings; no gesture or compact transform is allowed to run. */
     return NO;
@@ -728,7 +733,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.47a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.47b_interaction.log"] copy];
     });
     return path;
 }
@@ -797,7 +802,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.47a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.47b_probe.log"] copy];
     });
     return path;
 }
@@ -6723,6 +6728,66 @@ static void AWERefreshOneAdaptiveButtonContrast(void) {
     }
 }
 
+static BOOL AWEAdaptiveForegroundMatches(UIColor *left, UIColor *right) {
+    if (left == right) return YES;
+    if (!left || !right) return NO;
+    NSString *leftHex = AWEHexStringFromColor(left);
+    NSString *rightHex = AWEHexStringFromColor(right);
+    return leftHex.length && [leftHex isEqualToString:rightHex];
+}
+
+static void AWEEnforceExplicitForeground(UIButton *button, BOOL force) {
+    if (!button) return;
+    UIColor *explicitForeground = objc_getAssociatedObject(
+        button, &kAWEAdaptiveGlassExplicitForegroundKey);
+    if (!explicitForeground) return;
+
+    NSString *signature = AWEHexStringFromColor(explicitForeground)
+        ?: explicitForeground.description;
+    NSString *previous = objc_getAssociatedObject(
+        button, &kAWEAdaptiveGlassAppliedForegroundSignatureKey);
+    UIButtonConfiguration *configuration = [button.configuration copy];
+    UIImage *baseImage = objc_getAssociatedObject(
+        button, &kAWEAdaptiveGlassBaseImageKey);
+    BOOL needsConfiguration = force || ![previous isEqualToString:signature] ||
+        !AWEAdaptiveForegroundMatches(configuration.baseForegroundColor,
+                                      explicitForeground);
+    if (configuration && needsConfiguration) {
+        if (baseImage) {
+            configuration.image = [baseImage imageWithTintColor:explicitForeground
+                renderingMode:UIImageRenderingModeAlwaysOriginal];
+        } else if (configuration.image) {
+            configuration.image = [configuration.image imageWithTintColor:explicitForeground
+                renderingMode:UIImageRenderingModeAlwaysOriginal];
+        }
+        configuration.baseForegroundColor = explicitForeground;
+        button.configuration = configuration;
+        objc_setAssociatedObject(button,
+            &kAWEAdaptiveGlassAppliedForegroundSignatureKey,
+            signature, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    }
+    button.tintAdjustmentMode = UIViewTintAdjustmentModeNormal;
+    button.tintColor = explicitForeground;
+    button.imageView.tintColor = explicitForeground;
+    button.imageView.hidden = NO;
+    button.imageView.alpha = 1.0;
+}
+
+static void AWEInstallAdaptiveForegroundUpdateHandler(UIButton *button) {
+    if (!button || [objc_getAssociatedObject(
+            button, &kAWEAdaptiveGlassUpdateHandlerInstalledKey) boolValue]) {
+        return;
+    }
+    __weak UIButton *weakButton = button;
+    button.configurationUpdateHandler = ^(UIButton *updatedButton) {
+        UIButton *liveButton = weakButton ?: updatedButton;
+        AWEEnforceExplicitForeground(liveButton, NO);
+    };
+    objc_setAssociatedObject(button,
+        &kAWEAdaptiveGlassUpdateHandlerInstalledKey,
+        @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static void AWEApplyResolvedGlassStyleToAdaptiveButton(UIButton *button) {
     if (!button) return;
     if (button.window && !AWEHomeViewEffectivelyVisible(button)) return;
@@ -6750,12 +6815,8 @@ static void AWEApplyResolvedGlassStyleToAdaptiveButton(UIButton *button) {
     }
     AWEApplySoftClearEdgeToButton(button);
     if (explicitForeground) {
-        UIButtonConfiguration *cfg = [button.configuration copy];
-        if (cfg) { cfg.baseForegroundColor = explicitForeground; button.configuration = cfg; }
-        button.tintColor = explicitForeground;
-        button.imageView.tintColor = explicitForeground;
-        button.imageView.hidden = NO;
-        button.imageView.alpha = 1.0;
+        AWEInstallAdaptiveForegroundUpdateHandler(button);
+        AWEEnforceExplicitForeground(button, changed);
     }
 }
 
@@ -6820,6 +6881,9 @@ static void AWEConfigureAdaptiveSystemGlassIconButton(
                              @(automaticContrast), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(button, &kAWEAdaptiveGlassExplicitForegroundKey,
                              foregroundColor, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(button, &kAWEAdaptiveGlassBaseImageKey,
+                             image, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (foregroundColor) AWEInstallAdaptiveForegroundUpdateHandler(button);
     if (!automaticContrast) {
         objc_setAssociatedObject(button, &kAWEAdaptiveGlassForegroundLightKey,
                                  nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -6860,6 +6924,10 @@ static void AWEConfigureAdaptiveSystemGlassIconButton(
                Automatic is driven by the button's own sampled backdrop rather
                than Douyin's permanently-white source artwork. */
             configuration.baseForegroundColor = resolvedForeground;
+            if (foregroundColor) {
+                configuration.image = [image imageWithTintColor:foregroundColor
+                    renderingMode:UIImageRenderingModeAlwaysOriginal];
+            }
             if (@available(iOS 13.0, *)) {
                 configuration.preferredSymbolConfigurationForImage =
                     [UIImageSymbolConfiguration
@@ -6893,17 +6961,9 @@ static void AWEConfigureAdaptiveSystemGlassIconButton(
     AWERegisterAdaptiveGlassButton(button);
     AWEApplyResolvedGlassStyleToAdaptiveButton(button);
     if (!preserveOriginalImage && foregroundColor) {
-        UIButtonConfiguration *configuration = [button.configuration copy];
-        configuration.baseForegroundColor = foregroundColor;
-        if (configuration.image) {
-            configuration.image = [configuration.image imageWithRenderingMode:
-                UIImageRenderingModeAlwaysTemplate];
-        }
-        button.configuration = configuration;
-        button.tintColor = foregroundColor;
-        button.imageView.tintColor = foregroundColor;
-        button.imageView.hidden = NO;
-        button.imageView.alpha = 1.0;
+        AWEInstallAdaptiveForegroundUpdateHandler(button);
+        AWEEnforceExplicitForeground(button, needsConfiguration);
+        if (needsConfiguration) [button setNeedsUpdateConfiguration];
     }
     if (automaticContrast) {
         NSNumber *storedLight = objc_getAssociatedObject(
@@ -7320,6 +7380,30 @@ static void AWERefreshHomeActionStack(UIView *stack) {
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
+static void AWELayoutBoundHomeActionSlots(UIView *stack) {
+    if (!stack || !stack.window) return;
+    NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
+        objc_getAssociatedObject(stack, &kAWEHomeActionStackSlotsKey);
+    if (![slots isKindOfClass:NSMutableDictionary.class]) return;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (AWEHomeActionSlotView *slot in slots.allValues) {
+        UIImageView *source = slot.sourceImageView;
+        UIView *owner = slot.originalView;
+        if (!source || !owner || !source.image ||
+            !AWEViewIsDescendantOfView(owner, stack)) continue;
+        CGPoint center = [source convertPoint:
+            CGPointMake(CGRectGetMidX(source.bounds), CGRectGetMidY(source.bounds))
+            toView:stack];
+        if (!isfinite(center.x) || !isfinite(center.y)) continue;
+        slot.bounds = CGRectMake(0.0, 0.0, 46.0, 46.0);
+        slot.center = CGPointMake(center.x, center.y - 4.0);
+        slot.systemGlassButton.frame = slot.bounds;
+        slot.hidden = NO;
+    }
+    [CATransaction commit];
+}
+
 static void AWEScheduleHomeActionStackRefresh(UIView *stack) {
     if (!AWEPluginFeaturesEnabled() || !stack) return;
     if ([objc_getAssociatedObject(
@@ -7333,7 +7417,7 @@ static void AWEScheduleHomeActionStackRefresh(UIView *stack) {
             integerValue] + 1;
     objc_setAssociatedObject(stack, &kAWEHomeActionStackRetryGenerationKey,
                              @(generation), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    NSArray<NSNumber *> *delays = @[@0.0, @0.12, @0.42, @0.96];
+    NSArray<NSNumber *> *delays = @[@0.0, @0.18, @0.55];
     __weak UIView *weakStack = stack;
     for (NSUInteger index = 0; index < delays.count; index++) {
         NSNumber *delay = delays[index];
@@ -8714,6 +8798,39 @@ static UIUserInterfaceStyle AWEAlbumMorphResolvedInterfaceStyle(
         sourceWindow ?: AWEActiveMainWindow());
 }
 
+static void AWEScheduleStableHomeChromeStyle(
+    UIUserInterfaceStyle style) {
+    if (style != UIUserInterfaceStyleLight &&
+        style != UIUserInterfaceStyleDark) return;
+    if (gAWEHomeChromeLastStableStyle == UIUserInterfaceStyleUnspecified) {
+        gAWEHomeChromeLastStableStyle = style;
+        gAWEHomeChromePendingStyle = UIUserInterfaceStyleUnspecified;
+        AWERefreshRegisteredAdaptiveGlassButtons();
+        return;
+    }
+    if (gAWEHomeChromeLastStableStyle == style) {
+        gAWEHomeChromePendingStyle = UIUserInterfaceStyleUnspecified;
+        gAWEHomeChromeStyleGeneration++;
+        return;
+    }
+    gAWEHomeChromePendingStyle = style;
+    NSUInteger generation = ++gAWEHomeChromeStyleGeneration;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                 (int64_t)(0.18 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (generation != gAWEHomeChromeStyleGeneration ||
+            gAWEHomeChromePendingStyle != style ||
+            !AWEOriginalBarSteadyWantsVisible((UIView *)gAWELastTabBar)) {
+            return;
+        }
+        gAWEHomeChromePendingStyle = UIUserInterfaceStyleUnspecified;
+        if (gAWEHomeChromeLastStableStyle != style) {
+            gAWEHomeChromeLastStableStyle = style;
+            AWERefreshRegisteredAdaptiveGlassButtons();
+        }
+    });
+}
+
 static void AWEApplyAlbumMorphResolvedAppearance(
     UIWindow *sourceWindow,
     NSInteger originalIndex) {
@@ -8731,21 +8848,14 @@ static void AWEApplyAlbumMorphResolvedAppearance(
     }
 
     BOOL homeChromeActive = AWEOriginalBarSteadyWantsVisible((UIView *)gAWELastTabBar);
-    BOOL customButtonsChanged = NO;
-    if (homeChromeActive) {
-        customButtonsChanged = gAWEHomeChromeLastStableStyle != style;
-        gAWEHomeChromeLastStableStyle = style;
-    }
+    if (homeChromeActive) AWEScheduleStableHomeChromeStyle(style);
     gAWEAlbumMorphLastAppliedStyle = style;
     BOOL changed =
         gAWEAlbumMorphOverlayWindow.overrideUserInterfaceStyle != style ||
         gAWEAlbumMorphController.overrideUserInterfaceStyle != style ||
         gAWEAlbumMorphController.view.overrideUserInterfaceStyle != style ||
         gAWEAlbumMorphController.tabBar.overrideUserInterfaceStyle != style;
-    if (!changed) {
-        if (customButtonsChanged) AWERefreshRegisteredAdaptiveGlassButtons();
-        return;
-    }
+    if (!changed) return;
 
     [UIView performWithoutAnimation:^{
         if (gAWEAlbumMorphOverlayWindow) {
@@ -8756,8 +8866,6 @@ static void AWEApplyAlbumMorphResolvedAppearance(
         gAWEAlbumMorphController.view.overrideUserInterfaceStyle = style;
         gAWEAlbumMorphController.tabBar.overrideUserInterfaceStyle = style;
     }];
-    if (customButtonsChanged) AWERefreshRegisteredAdaptiveGlassButtons();
-
     BOOL forcedDark = AWEIsIOS27OrLater() && AWEHomeForceDarkGlassEnabled();
     AWEInteractionDiagnosticWrite(
         @"ALBUM_MORPH_APPEARANCE index=%ld mode=%@ style=%@",
@@ -9679,11 +9787,17 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
 @property(nonatomic, assign) NSInteger windowStart;
 @property(nonatomic, assign) CFTimeInterval selectionAnimationDeadline;
 @property(nonatomic, assign) BOOL windowAnimationInFlight;
+@property(nonatomic, weak) UIView *nativeIndicator;
+@property(nonatomic, strong) CADisplayLink *indicatorDisplayLink;
+@property(nonatomic, assign) CFTimeInterval indicatorDisplayLinkDeadline;
 - (NSInteger)alb_visibleCount;
 - (void)alb_categoryTapped:(UIButton *)sender;
 - (void)alb_swipedLeft:(UISwipeGestureRecognizer *)recognizer;
 - (void)alb_swipedRight:(UISwipeGestureRecognizer *)recognizer;
+- (void)alb_indicatorTick:(CADisplayLink *)displayLink;
 @end
+
+static void AWESyncTopSelectionPillToNativeIndicator(UIView *indicator);
 
 static BOOL AWEActivateTopLiquidDefinition(NSDictionary<NSString *, id> *definition) {
     if (![definition isKindOfClass:NSDictionary.class]) return NO;
@@ -9779,6 +9893,22 @@ static void AWEAnimateTopLiquidWindowShift(AWETopLiquidGroupView *group,
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
 
+- (void)alb_indicatorTick:(CADisplayLink *)displayLink {
+    UIView *indicator = self.nativeIndicator;
+    if (!indicator || !indicator.window || self.hidden ||
+        CACurrentMediaTime() > self.indicatorDisplayLinkDeadline) {
+        [displayLink invalidate];
+        self.indicatorDisplayLink = nil;
+        self.nativeIndicator = nil;
+        return;
+    }
+    AWESyncTopSelectionPillToNativeIndicator(indicator);
+    if (indicator.layer.animationKeys.count == 0 &&
+        CACurrentMediaTime() + 0.05 < self.indicatorDisplayLinkDeadline) {
+        self.indicatorDisplayLinkDeadline = CACurrentMediaTime() + 0.05;
+    }
+}
+
 @end
 
 static AWETopLiquidGroupView *AWEFindTopLiquidGroupFromView(UIView *view) {
@@ -9797,7 +9927,14 @@ static void AWESyncTopSelectionPillToNativeIndicator(UIView *indicator) {
     if (visibleCount < 2) return;
     UIView *container = group.superview;
     if (!container) return;
-    CGRect indicatorFrame = [indicator convertRect:indicator.bounds toView:container];
+    CGRect indicatorFrame = CGRectZero;
+    CALayer *presentation = indicator.layer.presentationLayer;
+    if (presentation && indicator.superview) {
+        indicatorFrame = [indicator.superview convertRect:presentation.frame
+                                                   toView:container];
+    } else {
+        indicatorFrame = [indicator convertRect:indicator.bounds toView:container];
+    }
     CGFloat x = CGRectGetMidX(indicatorFrame);
     NSInteger left = NSNotFound, right = NSNotFound;
     CGFloat leftX = -CGFLOAT_MAX, rightX = CGFLOAT_MAX;
@@ -9821,6 +9958,23 @@ static void AWESyncTopSelectionPillToNativeIndicator(UIView *indicator) {
         group.selectionGlass.layer.cornerRadius = CGRectGetHeight(target) * 0.5;
         group.selectionGlass.alpha = 1.0;
     }];
+}
+
+static void AWETrackTopSelectionPresentationIfNeeded(UIView *indicator) {
+    AWETopLiquidGroupView *group = AWEFindTopLiquidGroupFromView(indicator);
+    if (!group || group.hidden || indicator.layer.animationKeys.count == 0) return;
+    group.nativeIndicator = indicator;
+    group.indicatorDisplayLinkDeadline = CACurrentMediaTime() + 0.50;
+    if (group.indicatorDisplayLink) return;
+    CADisplayLink *link = [CADisplayLink displayLinkWithTarget:group
+        selector:@selector(alb_indicatorTick:)];
+    if (@available(iOS 15.0, *)) {
+        link.preferredFrameRateRange = CAFrameRateRangeMake(30.0, 60.0, 60.0);
+    } else {
+        link.preferredFramesPerSecond = 60;
+    }
+    [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    group.indicatorDisplayLink = link;
 }
 
 static NSInteger AWESelectedTopCategoryIndex(
@@ -10076,6 +10230,56 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
     for (UIButton *button in group.buttons) [group bringSubviewToFront:button];
 }
 
+static void AWELayoutExistingTopChrome(UIView *container) {
+    if (!container || CGRectIsEmpty(container.bounds)) return;
+    AWEHomeTopSlotView *menuSlot = objc_getAssociatedObject(
+        container, &kAWETopMenuSlotKey);
+    AWEHomeTopSlotView *searchSlot = objc_getAssociatedObject(
+        container, &kAWETopSearchSlotKey);
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (menuSlot && !menuSlot.hidden) {
+        menuSlot.bounds = CGRectMake(0.0, 0.0, 46.0, 46.0);
+        menuSlot.center = CGPointMake(44.0, CGRectGetMidY(container.bounds));
+        menuSlot.hitButton.frame = menuSlot.bounds;
+        menuSlot.systemGlassButton.frame = menuSlot.bounds;
+    }
+    if (searchSlot && !searchSlot.hidden) {
+        searchSlot.bounds = CGRectMake(0.0, 0.0, 46.0, 46.0);
+        searchSlot.center = CGPointMake(CGRectGetWidth(container.bounds) - 44.0,
+                                        CGRectGetMidY(container.bounds));
+        searchSlot.hitButton.frame = searchSlot.bounds;
+        searchSlot.systemGlassButton.frame = searchSlot.bounds;
+    }
+    AWETopLiquidGroupView *group = objc_getAssociatedObject(
+        container, &kAWETopLiquidGroupViewKey);
+    if (group && !group.hidden && group.definitions.count > 0) {
+        NSInteger visibleCount = MIN([group alb_visibleCount],
+                                     (NSInteger)group.definitions.count);
+        BOOL topSearchVisible = searchSlot && !searchSlot.hidden;
+        CGFloat height = 44.0;
+        CGFloat leftBoundary = 82.0;
+        CGFloat rightBoundary = topSearchVisible ? 82.0 : 14.0;
+        CGFloat availableWidth = MAX(120.0,
+            CGRectGetWidth(container.bounds) - leftBoundary - rightBoundary);
+        CGFloat perItemWidth = visibleCount == 1 ? 96.0 : 74.0;
+        CGFloat desiredWidth = MIN(availableWidth,
+            MAX(visibleCount == 1 ? 92.0 : 148.0,
+                visibleCount * perItemWidth));
+        CGFloat centerX = leftBoundary + availableWidth * 0.5;
+        group.frame = CGRectMake(centerX - desiredWidth * 0.5,
+                                 CGRectGetMidY(container.bounds) - height * 0.5,
+                                 desiredWidth, height);
+        group.layer.cornerRadius = height * 0.5;
+        group.backgroundGlass.frame = group.bounds;
+        AWELayoutTopLiquidGroup(group, NO);
+    }
+    [CATransaction commit];
+    if (group && !group.hidden) [container bringSubviewToFront:group];
+    if (menuSlot && !menuSlot.hidden) [container bringSubviewToFront:menuSlot];
+    if (searchSlot && !searchSlot.hidden) [container bringSubviewToFront:searchSlot];
+}
+
 static void AWEUpdateTopLiquidGroup(UIView *container,
                                     BOOL bottomSearchVisible) {
     (void)bottomSearchVisible;
@@ -10301,7 +10505,7 @@ static void AWEScheduleTopActionContainerRefresh(UIView *container) {
             integerValue] + 1;
     objc_setAssociatedObject(container, &kAWETopActionRetryGenerationKey,
                              @(generation), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    NSArray<NSNumber *> *delays = @[@0.0, @0.12, @0.42, @0.96];
+    NSArray<NSNumber *> *delays = @[@0.0, @0.18, @0.55];
     __weak UIView *weakContainer = container;
     for (NSUInteger index = 0; index < delays.count; index++) {
         NSNumber *delay = delays[index];
@@ -10439,7 +10643,7 @@ static void AWERefreshHomeChromeImmediately(UIWindow *window) {
 @end
 
 static void AWEStartHomeChromeRecoverySampler(void) {
-    /* 1.0.47a: no continuous CADisplayLink. Lifecycle hooks and three bounded
+    /* 1.0.47b: no continuous CADisplayLink. Lifecycle hooks and three bounded
        reconciliation passes are sufficient and avoid the major heat source. */
 }
 
@@ -11650,7 +11854,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.47a";
+    self.title = @"LiquidBar 设置 · 1.0.47b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -12789,7 +12993,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.47a image=%@ ==========" ,
+            @"========== START build=1.0.47b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -12846,7 +13050,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.47a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.47b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -12861,7 +13065,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.47a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.47b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -13098,18 +13302,10 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)layoutSubviews {
     %orig;
-    /* Some feed builds relayout this stack continuously while video is
-       playing. Bound the hierarchy scan to 4 Hz; image/tint/subview hooks still
-       schedule immediate refreshes for real icon or selection changes. */
-    CFTimeInterval now = CACurrentMediaTime();
-    NSNumber *lastValue = objc_getAssociatedObject(
-        (UIView *)self, &kAWEHomeActionStackLastLayoutRefreshKey);
-    if (!lastValue || now - lastValue.doubleValue >= 0.25) {
-        objc_setAssociatedObject((UIView *)self,
-            &kAWEHomeActionStackLastLayoutRefreshKey, @(now),
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        AWERefreshHomeActionStack((UIView *)self);
-    }
+    /* Geometry-only pass. The source buttons and cached glass children move
+       together with the stack, so a full hierarchy scan on every video frame
+       only causes heat and material flashes. */
+    AWELayoutBoundHomeActionSlots((UIView *)self);
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -13139,41 +13335,23 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 }
 
 - (void)setFrame:(CGRect)frame {
-    CGRect previous = ((UIView *)self).frame;
     %orig(frame);
-    BOOL changed = fabs(CGRectGetMinX(previous) - CGRectGetMinX(frame)) > 0.5 ||
-                   fabs(CGRectGetMinY(previous) - CGRectGetMinY(frame)) > 0.5 ||
-                   fabs(CGRectGetWidth(previous) - CGRectGetWidth(frame)) > 0.5 ||
-                   fabs(CGRectGetHeight(previous) - CGRectGetHeight(frame)) > 0.5;
-    if (changed && ((UIView *)self).window) {
-        AWEScheduleHomeActionStackRefresh((UIView *)self);
-    }
+    AWELayoutBoundHomeActionSlots((UIView *)self);
 }
 
 - (void)setCenter:(CGPoint)center {
-    CGPoint previous = ((UIView *)self).center;
     %orig(center);
-    if (hypot(previous.x - center.x, previous.y - center.y) > 0.5 &&
-        ((UIView *)self).window) {
-        AWEScheduleHomeActionStackRefresh((UIView *)self);
-    }
 }
 
 - (void)setBounds:(CGRect)bounds {
-    CGRect previous = ((UIView *)self).bounds;
     %orig(bounds);
-    if (!CGRectEqualToRect(previous, bounds) && ((UIView *)self).window) {
-        AWEScheduleHomeActionStackRefresh((UIView *)self);
-    }
+    AWELayoutBoundHomeActionSlots((UIView *)self);
 }
 
 - (void)setTransform:(CGAffineTransform)transform {
-    /* Feed paging moves the stack by transform without relaying out children.
-       Re-scan on the coalesced scheduler when it comes back on screen. */
+    /* Children inherit the stack transform. Do not rebuild their glass while
+       the paging gesture is in flight. */
     %orig(transform);
-    if (((UIView *)self).window) {
-        AWEScheduleHomeActionStackRefresh((UIView *)self);
-    }
 }
 
 %end
@@ -13252,7 +13430,12 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)layoutSubviews {
     %orig;
-    AWERefreshTopActionContainer((UIView *)self);
+    AWELayoutExistingTopChrome((UIView *)self);
+    if (!objc_getAssociatedObject((UIView *)self, &kAWETopMenuSlotKey) &&
+        !objc_getAssociatedObject((UIView *)self, &kAWETopSearchSlotKey) &&
+        !objc_getAssociatedObject((UIView *)self, &kAWETopLiquidGroupViewKey)) {
+        AWEScheduleTopActionContainerRefresh((UIView *)self);
+    }
 }
 
 - (void)setHidden:(BOOL)hidden {
@@ -13267,7 +13450,6 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)setTransform:(CGAffineTransform)transform {
     %orig(transform);
-    if (((UIView *)self).window) AWEScheduleTopActionContainerRefresh((UIView *)self);
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -13297,15 +13479,32 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 - (void)layoutSubviews {
     %orig;
     AWEForceExactTopIndicatorSuppression((UIView *)self);
-    AWEConfigureTopActionGlass((UIView *)self);
     AWESyncTopSelectionPillToNativeIndicator((UIView *)self);
+    AWETrackTopSelectionPresentationIfNeeded((UIView *)self);
 }
 
 - (void)setFrame:(CGRect)frame {
     %orig(frame);
     AWEForceExactTopIndicatorSuppression((UIView *)self);
-    AWEConfigureTopActionGlass((UIView *)self);
     AWESyncTopSelectionPillToNativeIndicator((UIView *)self);
+    AWETrackTopSelectionPresentationIfNeeded((UIView *)self);
+}
+
+- (void)setCenter:(CGPoint)center {
+    %orig(center);
+    AWESyncTopSelectionPillToNativeIndicator((UIView *)self);
+    AWETrackTopSelectionPresentationIfNeeded((UIView *)self);
+}
+
+- (void)setBounds:(CGRect)bounds {
+    %orig(bounds);
+    AWESyncTopSelectionPillToNativeIndicator((UIView *)self);
+}
+
+- (void)setTransform:(CGAffineTransform)transform {
+    %orig(transform);
+    AWESyncTopSelectionPillToNativeIndicator((UIView *)self);
+    AWETrackTopSelectionPresentationIfNeeded((UIView *)self);
 }
 
 %end
@@ -14447,7 +14646,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.47a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.47b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
