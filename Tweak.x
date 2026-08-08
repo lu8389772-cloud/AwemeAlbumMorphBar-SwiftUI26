@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.49b — bottom interaction diagnostics + new-bar title/icon fixes + auth28
+ AwemeLiquidBar 1.0.49c — post-comment right-stack rebind + unified bottom icons + auth28
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -115,6 +115,8 @@ static UIView *AWEFindViewByExactRuntimeClass(UIView *root,
                                               NSUInteger depth);
 static void AWEScheduleTopActionContainerRefresh(UIView *container);
 static void AWEStartHomeChromeRecoverySampler(void);
+static void AWESchedulePostCommentRightRebind(NSString *reason);
+static NSString *AWECurrentRightActionStackSummary(void);
 
 static char kAWENativeBarKey;
 static char kAWEDelegateKey;
@@ -384,6 +386,9 @@ static CFTimeInterval gAWESensitiveEntrySuppressionUntil = 0.0;
 static NSHashTable *gAWESensitiveVisibleControllers = nil;
 static NSHashTable *gAWECommerceProductDetailMarkers = nil;
 static CFTimeInterval gAWECommerceSuppressionUntil = 0.0;
+static BOOL gAWECommentRightRebindPending = NO;
+static NSUInteger gAWECommentRightRebindGeneration = 0;
+static NSString *gAWECommentRightHostBefore = nil;
 
 
 #pragma mark - iOS 26/27 global glass style and adaptive foreground
@@ -737,7 +742,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.49c_interaction.log"] copy];
     });
     return path;
 }
@@ -806,7 +811,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.49c_probe.log"] copy];
     });
     return path;
 }
@@ -2859,14 +2864,15 @@ static void AWEEnsureHomeCustomIconsDirectory(void) {
               encoding:NSUTF8StringEncoding error:nil];
 }
 
-static NSString *AWEBottomSymbolKeyForTag(NSInteger tag, BOOL selected) {
+static NSString *AWEBottomSymbolKeyForTag(NSInteger tag, __unused BOOL selected) {
     NSArray<NSString *> *roles = @[
         @"home", AWESecondTabIsShop() ? @"shop" : @"friends",
         @"publish", @"messages", @"profile"
     ];
     if (tag < 0 || tag >= (NSInteger)roles.count) return nil;
-    return [NSString stringWithFormat:@"bottom.%@.%@", roles[(NSUInteger)tag],
-            selected ? @"selected" : @"normal"];
+    /* 1.0.49c: one artwork per destination. Selection is expressed only by
+       foreground/accent state; there is no second selected-icon preference. */
+    return [NSString stringWithFormat:@"bottom.%@.normal", roles[(NSUInteger)tag]];
 }
 
 static NSString *AWEHomeCustomPNGFilenameForKey(NSString *key) {
@@ -3084,24 +3090,17 @@ static void AWEApplyBottomTitleVisibility(UITabBar *nativeBar) {
 static void AWERefreshNativeBarSymbolItems(UITabBar *nativeBar) {
     if (!nativeBar || nativeBar.items.count < 5) return;
     BOOL shop = AWESecondTabIsShop();
-    NSArray<NSString *> *normalDefaults = @[
+    NSArray<NSString *> *defaults = @[
         @"sparkles", shop ? @"storefront" : @"hands.and.sparkles",
         @"pencil.and.outline", @"ellipsis.message", @"touchid"
-    ];
-    NSArray<NSString *> *selectedDefaults = @[
-        @"sparkles", shop ? @"storefront.fill" : @"hands.and.sparkles.fill",
-        @"pencil.and.outline", @"ellipsis.message.fill", @"touchid"
     ];
     NSMutableArray<NSString *> *signatureParts = [NSMutableArray arrayWithObjects:
         shop ? @"SHOP" : @"FRIENDS",
         AWEHideBottomTitlesEnabled() ? @"TITLES_HIDDEN" : @"TITLES_VISIBLE", nil];
     for (NSInteger index = 0; index < 5; index++) {
-        NSString *normalKey = AWEBottomSymbolKeyForTag(index, NO);
-        NSString *selectedKey = AWEBottomSymbolKeyForTag(index, YES);
-        NSString *normalName = AWEConfiguredSymbolName(normalKey, normalDefaults[(NSUInteger)index]);
-        NSString *selectedName = AWEConfiguredSymbolName(selectedKey, selectedDefaults[(NSUInteger)index]);
-        [signatureParts addObject:normalName ?: @""];
-        [signatureParts addObject:selectedName ?: @""];
+        NSString *key = AWEBottomSymbolKeyForTag(index, NO);
+        NSString *name = AWEConfiguredSymbolName(key, defaults[(NSUInteger)index]);
+        [signatureParts addObject:name ?: @""];
     }
     NSString *signature = [signatureParts componentsJoinedByString:@"|"];
     NSString *old = objc_getAssociatedObject(nativeBar, &kAWETabBarSymbolSignatureKey);
@@ -3112,12 +3111,11 @@ static void AWERefreshNativeBarSymbolItems(UITabBar *nativeBar) {
     for (NSInteger index = 0; index < 5; index++) {
         UITabBarItem *item = nativeBar.items[(NSUInteger)index];
         CGFloat size = index == 2 ? 20.475 : 19.5;
-        NSString *normalKey = AWEBottomSymbolKeyForTag(index, NO);
-        NSString *selectedKey = AWEBottomSymbolKeyForTag(index, YES);
-        item.image = AWEBottomConfiguredSymbolImage(
-            normalKey, normalDefaults[(NSUInteger)index], size, UIColor.whiteColor);
-        item.selectedImage = AWEBottomConfiguredSymbolImage(
-            selectedKey, selectedDefaults[(NSUInteger)index], size, AWEStoredAccentColor());
+        NSString *key = AWEBottomSymbolKeyForTag(index, NO);
+        UIImage *image = AWEBottomConfiguredSymbolImage(
+            key, defaults[(NSUInteger)index], size, UIColor.whiteColor);
+        item.image = image;
+        item.selectedImage = image;
     }
     [nativeBar setNeedsLayout];
 }
@@ -3140,15 +3138,14 @@ static UITabBarItem *AWEMakeItem(NSString *title,
                                  NSString *selectedSymbol,
                                  NSInteger tag) {
     CGFloat pointSize = (tag == 2) ? 20.475 : 19.5;
-    NSString *normalKey = AWEBottomSymbolKeyForTag(tag, NO);
-    NSString *selectedKey = AWEBottomSymbolKeyForTag(tag, YES);
+    NSString *iconKey = AWEBottomSymbolKeyForTag(tag, NO);
     BOOL hideTitle = AWEHideBottomTitlesEnabled();
+    UIImage *sharedImage = AWEBottomConfiguredSymbolImage(
+        iconKey, normalSymbol ?: selectedSymbol, pointSize, UIColor.whiteColor);
     UITabBarItem *item = [[UITabBarItem alloc]
         initWithTitle:(hideTitle ? nil : title)
-                image:AWEBottomConfiguredSymbolImage(normalKey, normalSymbol,
-                                                      pointSize, UIColor.whiteColor)
-        selectedImage:AWEBottomConfiguredSymbolImage(selectedKey,
-            selectedSymbol ?: normalSymbol, pointSize, AWEStoredAccentColor())];
+                image:sharedImage
+        selectedImage:sharedImage];
     item.tag = tag;
     item.accessibilityLabel = title;
     item.imageInsets = hideTitle
@@ -4070,8 +4067,8 @@ static void AWERegisterSensitiveDestination(UIViewController *controller) {
         (long)controller.modalPresentationStyle);
 }
 
-static void AWEUnregisterSensitiveDestination(UIViewController *controller) {
-    if (!controller) return;
+static BOOL AWEUnregisterSensitiveDestination(UIViewController *controller) {
+    if (!controller) return NO;
 
     [AWESensitiveVisibleControllers() removeObject:controller];
 
@@ -4099,6 +4096,7 @@ static void AWEUnregisterSensitiveDestination(UIViewController *controller) {
         NSStringFromClass(controller.class),
         controller.viewIfLoaded.window != nil,
         anotherSensitiveControllerIsVisible);
+    return anotherSensitiveControllerIsVisible;
 }
 
 static BOOL AWEShouldSuppressBarForSensitiveDestination(void) {
@@ -10891,6 +10889,60 @@ static void AWERefreshHomeChromeInWindow(UIWindow *window) {
     AWERefreshHomeActionStacksInView(window);
 }
 
+static NSString *AWECurrentRightActionStackSummary(void) {
+    UIWindow *window = AWEActiveMainWindow();
+    if (!window) return @"window=nil";
+    NSMutableArray<UIView *> *stacks = [NSMutableArray array];
+    AWECollectVisibleHomeActionStacks(window, stacks, 0);
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+    for (UIView *stack in stacks) {
+        CGRect frame = stack.window
+            ? [stack convertRect:stack.bounds toView:stack.window]
+            : CGRectZero;
+        NSArray<UIView *> *buttons = AWESortedVisibleHomeActionButtons(stack);
+        [parts addObject:[NSString stringWithFormat:
+            @"%p/%@ frame=%@ window=%d hidden=%d alpha=%.2f buttons=%lu",
+            stack, NSStringFromClass(stack.class), NSStringFromCGRect(frame),
+            stack.window != nil, stack.hidden, stack.alpha,
+            (unsigned long)buttons.count]];
+    }
+    return parts.count ? [parts componentsJoinedByString:@" || "] : @"none";
+}
+
+static void AWESchedulePostCommentRightRebind(NSString *reason) {
+    if (!AWEPluginFeaturesEnabled()) return;
+    NSUInteger generation = ++gAWECommentRightRebindGeneration;
+    NSString *before = gAWECommentRightHostBefore ?: @"unknown";
+    AWEInteractionDiagnosticWrite(
+        @"RIGHT_REBIND_SCHEDULE generation=%lu reason=%@ before=%@",
+        (unsigned long)generation, reason ?: @"comment.dismiss", before);
+
+    /* The comment route owns several nested controllers. Rebind only after the
+       last one has disappeared, then use three bounded main-thread passes.
+       This catches a profile-feed cell/stack replacement without a display
+       link, timer, or per-frame hierarchy scan. */
+    for (NSNumber *delay in @[@0.0, @0.10, @0.28]) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+            (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+            if (generation != gAWECommentRightRebindGeneration) return;
+            if (AWEShouldSuppressBarForSensitiveDestination()) return;
+            UIWindow *window = AWEActiveMainWindow();
+            if (!window) return;
+            NSMutableArray<UIView *> *stacks = [NSMutableArray array];
+            AWECollectVisibleHomeActionStacks(window, stacks, 0);
+            for (UIView *stack in stacks) {
+                AWERefreshHomeActionStack(stack);
+            }
+            NSString *after = AWECurrentRightActionStackSummary();
+            AWEInteractionDiagnosticWrite(
+                @"RIGHT_REBIND_PASS generation=%lu delay=%.2f stacks=%lu after=%@",
+                (unsigned long)generation, delay.doubleValue,
+                (unsigned long)stacks.count, after);
+        });
+    }
+}
+
 @interface AWEHomeChromeRecoveryTicker : NSObject
 - (void)alb_tick:(CADisplayLink *)displayLink;
 @end
@@ -11375,59 +11427,35 @@ static NSArray<NSDictionary *> *AWEIconDefinitionsForSection(NSInteger section) 
           @"candidates":@[@"square.and.arrow.up", @"arrowshape.turn.up.right", @"paperplane", @"link"]}
     ];
     return @[
-        @{@"key":@"bottom.home.normal", @"title":@"首页 · 未选中", @"default":@"sparkles",
-          @"candidates":@[@"sparkles", @"house", @"house.circle", @"play.rectangle"]},
-        @{@"key":@"bottom.home.selected", @"title":@"首页 · 已选中", @"default":@"sparkles",
-          @"candidates":@[@"sparkles", @"house.fill", @"house.circle.fill", @"play.rectangle.fill"]},
-        @{@"key":@"bottom.friends.normal", @"title":@"第二项·朋友 · 未选中", @"default":@"hands.and.sparkles",
-          @"candidates":@[@"hands.and.sparkles", @"person.2", @"person.2.circle", @"figure.2"]},
-        @{@"key":@"bottom.friends.selected", @"title":@"第二项·朋友 · 已选中", @"default":@"hands.and.sparkles.fill",
-          @"candidates":@[@"hands.and.sparkles.fill", @"person.2.fill", @"person.2.circle.fill", @"figure.2"]},
-        @{@"key":@"bottom.shop.normal", @"title":@"第二项·商城 · 未选中", @"default":@"storefront",
-          @"candidates":@[@"storefront", @"bag", @"cart", @"basket"]},
-        @{@"key":@"bottom.shop.selected", @"title":@"第二项·商城 · 已选中", @"default":@"storefront.fill",
-          @"candidates":@[@"storefront.fill", @"bag.fill", @"cart.fill", @"basket.fill"]},
-        @{@"key":@"bottom.publish.normal", @"title":@"发布 · 未选中", @"default":@"pencil.and.outline",
+        @{@"key":@"bottom.home.normal", @"title":@"首页", @"default":@"sparkles",
+          @"candidates":@[@"sparkles", @"house", @"house.fill", @"house.circle", @"play.rectangle"]},
+        @{@"key":@"bottom.friends.normal", @"title":@"第二项·朋友", @"default":@"hands.and.sparkles",
+          @"candidates":@[@"hands.and.sparkles", @"hands.and.sparkles.fill", @"person.2", @"person.2.fill", @"figure.2"]},
+        @{@"key":@"bottom.shop.normal", @"title":@"第二项·商城", @"default":@"storefront",
+          @"candidates":@[@"storefront", @"storefront.fill", @"bag", @"bag.fill", @"cart"]},
+        @{@"key":@"bottom.publish.normal", @"title":@"发布", @"default":@"pencil.and.outline",
           @"candidates":@[@"pencil.and.outline", @"plus.circle.fill", @"plus", @"camera.fill"]},
-        @{@"key":@"bottom.publish.selected", @"title":@"发布 · 已选中", @"default":@"pencil.and.outline",
-          @"candidates":@[@"pencil.and.outline", @"plus.circle.fill", @"plus", @"video.fill"]},
-        @{@"key":@"bottom.messages.normal", @"title":@"消息 · 未选中", @"default":@"ellipsis.message",
-          @"candidates":@[@"ellipsis.message", @"bubble.left.and.bubble.right", @"message", @"envelope"]},
-        @{@"key":@"bottom.messages.selected", @"title":@"消息 · 已选中", @"default":@"ellipsis.message.fill",
-          @"candidates":@[@"ellipsis.message.fill", @"bubble.left.and.bubble.right.fill", @"message.fill", @"envelope.fill"]},
-        @{@"key":@"bottom.profile.normal", @"title":@"我 · 未选中", @"default":@"touchid",
-          @"candidates":@[@"touchid", @"person", @"person.crop.circle", @"face.smiling"]},
-        @{@"key":@"bottom.profile.selected", @"title":@"我 · 已选中", @"default":@"touchid",
-          @"candidates":@[@"touchid", @"person.fill", @"person.crop.circle.fill", @"face.smiling.fill"]}
+        @{@"key":@"bottom.messages.normal", @"title":@"消息", @"default":@"ellipsis.message",
+          @"candidates":@[@"ellipsis.message", @"ellipsis.message.fill", @"message", @"message.fill", @"envelope"]},
+        @{@"key":@"bottom.profile.normal", @"title":@"我", @"default":@"touchid",
+          @"candidates":@[@"touchid", @"person", @"person.fill", @"person.crop.circle", @"person.crop.circle.fill"]}
     ];
 }
 
 static NSArray<NSDictionary *> *AWENewBarIconDefinitions(void) {
     return @[
-        @{@"key":@"newbar.home.normal", @"title":@"首页 · 未选中", @"default":@"photo.on.rectangle.angled",
-          @"candidates":@[@"photo.on.rectangle.angled", @"sparkles", @"house", @"play.rectangle"]},
-        @{@"key":@"newbar.home.selected", @"title":@"首页 · 已选中", @"default":@"photo.on.rectangle.angled",
-          @"candidates":@[@"photo.on.rectangle.angled", @"sparkles", @"house.fill", @"play.rectangle.fill"]},
-        @{@"key":@"newbar.friends.normal", @"title":@"朋友 · 未选中", @"default":@"hands.and.sparkles",
-          @"candidates":@[@"hands.and.sparkles", @"person.2", @"person.2.circle", @"figure.2"]},
-        @{@"key":@"newbar.friends.selected", @"title":@"朋友 · 已选中", @"default":@"hands.and.sparkles.fill",
-          @"candidates":@[@"hands.and.sparkles.fill", @"person.2.fill", @"person.2.circle.fill", @"figure.2"]},
-        @{@"key":@"newbar.shop.normal", @"title":@"商城 · 未选中", @"default":@"storefront",
-          @"candidates":@[@"storefront", @"bag", @"cart", @"basket"]},
-        @{@"key":@"newbar.shop.selected", @"title":@"商城 · 已选中", @"default":@"storefront.fill",
-          @"candidates":@[@"storefront.fill", @"bag.fill", @"cart.fill", @"basket.fill"]},
-        @{@"key":@"newbar.publish.normal", @"title":@"发布 · 未选中", @"default":@"plus",
+        @{@"key":@"newbar.home.normal", @"title":@"首页", @"default":@"photo.on.rectangle.angled",
+          @"candidates":@[@"photo.on.rectangle.angled", @"sparkles", @"house", @"house.fill", @"play.rectangle"]},
+        @{@"key":@"newbar.friends.normal", @"title":@"朋友", @"default":@"hands.and.sparkles",
+          @"candidates":@[@"hands.and.sparkles", @"hands.and.sparkles.fill", @"person.2", @"person.2.fill", @"figure.2"]},
+        @{@"key":@"newbar.shop.normal", @"title":@"商城", @"default":@"storefront",
+          @"candidates":@[@"storefront", @"storefront.fill", @"bag", @"bag.fill", @"cart"]},
+        @{@"key":@"newbar.publish.normal", @"title":@"发布", @"default":@"plus",
           @"candidates":@[@"plus", @"pencil.and.outline", @"plus.circle.fill", @"camera.fill"]},
-        @{@"key":@"newbar.publish.selected", @"title":@"发布 · 已选中", @"default":@"plus",
-          @"candidates":@[@"plus", @"pencil.and.outline", @"plus.circle.fill", @"video.fill"]},
-        @{@"key":@"newbar.messages.normal", @"title":@"消息 · 未选中", @"default":@"message",
-          @"candidates":@[@"message", @"ellipsis.message", @"bubble.left.and.bubble.right", @"envelope"]},
-        @{@"key":@"newbar.messages.selected", @"title":@"消息 · 已选中", @"default":@"message.fill",
-          @"candidates":@[@"message.fill", @"ellipsis.message.fill", @"bubble.left.and.bubble.right.fill", @"envelope.fill"]},
-        @{@"key":@"newbar.profile.normal", @"title":@"我 · 未选中", @"default":@"person.crop.circle",
-          @"candidates":@[@"person.crop.circle", @"touchid", @"person", @"face.smiling"]},
-        @{@"key":@"newbar.profile.selected", @"title":@"我 · 已选中", @"default":@"person.crop.circle.fill",
-          @"candidates":@[@"person.crop.circle.fill", @"touchid", @"person.fill", @"face.smiling.fill"]},
+        @{@"key":@"newbar.messages.normal", @"title":@"消息", @"default":@"message",
+          @"candidates":@[@"message", @"message.fill", @"ellipsis.message", @"ellipsis.message.fill", @"envelope"]},
+        @{@"key":@"newbar.profile.normal", @"title":@"我", @"default":@"person.crop.circle",
+          @"candidates":@[@"person.crop.circle", @"person.crop.circle.fill", @"touchid", @"person", @"person.fill"]},
         @{@"key":@"newbar.search.normal", @"title":@"搜索", @"default":@"magnifyingglass",
           @"candidates":@[@"magnifyingglass", @"sparkle.magnifyingglass", @"scope", @"text.magnifyingglass"]}
     ];
@@ -11578,7 +11606,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (self.newBarOnly && section == 0) {
-        return [NSString stringWithFormat:@"第二项当前识别为“%@”；搜索按钮是否显示仍由底栏按钮配置决定。未选中前景由系统管理，选中前景统一使用强调色。",
+        return [NSString stringWithFormat:@"第二项当前识别为“%@”；搜索按钮是否显示仍由底栏按钮配置决定。每个入口只使用一个图标，选中/未选中共用同一图形，状态仅由前景色/强调色表达。",
             AWESecondTabIsShop() ? @"商城" : @"朋友"];
     }
     return nil;
@@ -11631,7 +11659,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)resetAll:(id)sender {
     (void)sender;
     NSString *message = self.newBarOnly
-        ? @"恢复新底栏所有未选中/已选中图标名称。强调色设置不会改变。"
+        ? @"恢复新底栏所有图标名称。每个入口只有一个图标，强调色设置不会改变。"
         : @"恢复顶部与右侧所有 SF Symbols 名称、颜色模式和自定义颜色。透明 PNG 文件不会被删除。";
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"恢复全部图标"
         message:message preferredStyle:UIAlertControllerStyleAlert];
@@ -12135,7 +12163,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.49b";
+    self.title = @"LiquidBar 设置 · 1.0.49c";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -13300,7 +13328,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.49b image=%@ ==========" ,
+            @"========== START build=1.0.49c image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13367,7 +13395,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.49b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.49c diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13382,7 +13410,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.49b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.49c_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14849,12 +14877,23 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     if (AWEClassNameIsSensitiveDestination(departingClassName)) {
         AWEAlbumMorphProbeWrite(@"ROUTE_WILL_EXIT class=%@",
             departingClassName);
-        /* Start retries before dismissal completes. Early ticks remain
-           suppressed; later ticks restore immediately even if didDisappear is
-           skipped by a custom bottom-sheet transition. */
-        AWEForceAlbumMorphRouteRecovery(
-            [NSString stringWithFormat:@"willDismiss.%@",
-                                       departingClassName]);
+        BOOL commentRoute = [departingClassName.lowercaseString containsString:@"comment"];
+        if (commentRoute) {
+            gAWECommentRightRebindPending = YES;
+            if (!gAWECommentRightHostBefore.length) {
+                gAWECommentRightHostBefore = [AWECurrentRightActionStackSummary() copy];
+            }
+            AWEInteractionDiagnosticWrite(
+                @"RIGHT_HOST_BEFORE_COMMENT class=%@ hosts=%@",
+                departingClassName, gAWECommentRightHostBefore ?: @"none");
+        } else {
+            /* Non-comment sheets retain the historical pre-dismiss recovery.
+               Comment panels are nested, so recovering here only churns the
+               same generation three times before the actual feed cell exists. */
+            AWEForceAlbumMorphRouteRecovery(
+                [NSString stringWithFormat:@"willDismiss.%@",
+                                           departingClassName]);
+        }
     }
 
     /*
@@ -14883,10 +14922,19 @@ static BOOL AWEGetDoubleTapLocation(id sender,
             gAWEAlbumMorphPublishLaunchSuppressionUntil = 0.0;
             gAWEAlbumMorphPublishSourceController = nil;
         }
-        AWEUnregisterSensitiveDestination(self);
+        BOOL remainingSensitive = AWEUnregisterSensitiveDestination(self);
         AWEScheduleTransitionRecovery();
-        AWEForceAlbumMorphRouteRecovery(
-            [NSString stringWithFormat:@"dismiss.%@", className]);
+        BOOL commentRoute = [className.lowercaseString containsString:@"comment"];
+        if (!commentRoute || !remainingSensitive) {
+            AWEForceAlbumMorphRouteRecovery(
+                [NSString stringWithFormat:@"dismiss.%@", className]);
+        }
+        if (!remainingSensitive && gAWECommentRightRebindPending) {
+            gAWECommentRightRebindPending = NO;
+            AWESchedulePostCommentRightRebind(
+                [NSString stringWithFormat:@"dismiss.%@", className]);
+            gAWECommentRightHostBefore = nil;
+        }
     }
 
     AWELogBarSnapshot(@"vc.viewDidDisappear", self, YES);
@@ -14982,7 +15030,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49c os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

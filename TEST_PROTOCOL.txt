@@ -1,11 +1,17 @@
-AwemeLiquidBar 1.0.49b device test
+AwemeLiquidBar 1.0.49c device test
 1. Toggle 完全隐藏左上角按钮 ON: left entrance must disappear completely; top search remains.
 2. Toggle it OFF: normal left Liquid Glass/menu behavior returns with interaction restored.
 3. Recheck publish close, forward/share bottom controls, PNG @3x sizing, commerce/group-buy overlays.
 4. Authorization table contains 28 encrypted entries.
 
 
-1.0.49b focused checks:
+1.0.49c focused checks:
 1. Clean-install / clear plugin prefs, enable diagnostics, tap Home/Friends/Messages/Profile. Export log and verify ALBUM_HIT_TAB, ALBUM_MORPH_TAP_BEGIN and TAB_FORWARD_END entries.
 2. Enable Hide Bottom Titles while new bottom bar is active: titles must disappear immediately after refresh/re-entry.
 3. Set different normal and selected symbols for Home and Messages: selection must swap to the selected symbol and restore the normal symbol when deselected.
+
+1.0.49c additional checks:
+- User profile -> video -> comments -> close comments: avatar/like/comment/favorite/share stay visible and tappable. Repeat 5 times.
+- Diagnostic mode: export should contain RIGHT_HOST_BEFORE_COMMENT and RIGHT_REBIND_PASS after comment close.
+- New bottom icon center: exactly one icon row per Home/Friends-or-Shop/Publish/Messages/Profile/Search; no selected/unselected duplicate rows.
+- Change one bottom icon, select/deselect that destination: artwork remains the same while foreground/accent changes.

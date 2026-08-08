@@ -384,7 +384,6 @@ final class AWEAlbumMorphTabController:
     private var secondTitle = "朋友"
     private var explicitImagesByIdentifier: [String: (normal: UIImage?, selected: UIImage?)] = [:]
     private var secondNormalSymbol = "hands.and.sparkles"
-    private var secondSelectedSymbol = "hands.and.sparkles.fill"
     private var secondImageRole = "friends"
     private var cachedOriginalIndex = 0
     private var pendingUserIndex: Int?
@@ -445,34 +444,27 @@ final class AWEAlbumMorphTabController:
 
     private func makeRegularTab(
         title: String,
-        normalRole: String,
-        selectedRole: String,
-        normalFallback: String,
-        selectedFallback: String,
+        iconRole: String,
+        fallback: String,
         identifier: String,
         originalIndex: Int
     ) -> UITab {
-        let normalImage = albumMorphConfiguredImage(
-            key: normalRole,
-            fallback: normalFallback,
+        let image = albumMorphConfiguredImage(
+            key: iconRole,
+            fallback: fallback,
             pointSize: 22.0
         )
-        let selectedImage = albumMorphConfiguredImage(
-            key: selectedRole,
-            fallback: selectedFallback,
-            pointSize: 22.0
-        )
-        explicitImagesByIdentifier[identifier] = (normalImage, selectedImage)
+        explicitImagesByIdentifier[identifier] = (image, image)
         let tab = UITab(
             title: albumMorphHideTitles ? "" : title,
-            image: normalImage,
+            image: image,
             identifier: identifier
         ) { [weak self] _ in
             self?.makeProxy(originalIndex: originalIndex)
                 ?? UIViewController()
         }
         if #available(iOS 26.1, *) {
-            tab.selectedImage = selectedImage
+            tab.selectedImage = image
         }
         return tab
     }
@@ -496,50 +488,40 @@ final class AWEAlbumMorphTabController:
         case ItemKey.home:
             return makeRegularTab(
                 title: "首页",
-                normalRole: "newbar.home.normal",
-                selectedRole: "newbar.home.selected",
-                normalFallback: "photo.on.rectangle.angled",
-                selectedFallback: "photo.on.rectangle.angled",
+                iconRole: "newbar.home.normal",
+                fallback: "photo.on.rectangle.angled",
                 identifier: Identifier.home,
                 originalIndex: 0
             )
         case ItemKey.second:
             return makeRegularTab(
                 title: secondTitle,
-                normalRole: "newbar.\(secondImageRole).normal",
-                selectedRole: "newbar.\(secondImageRole).selected",
-                normalFallback: secondNormalSymbol,
-                selectedFallback: secondSelectedSymbol,
+                iconRole: "newbar.\(secondImageRole).normal",
+                fallback: secondNormalSymbol,
                 identifier: Identifier.second,
                 originalIndex: 1
             )
         case ItemKey.publish:
             return makeRegularTab(
                 title: "发布",
-                normalRole: "newbar.publish.normal",
-                selectedRole: "newbar.publish.selected",
-                normalFallback: "plus",
-                selectedFallback: "plus",
+                iconRole: "newbar.publish.normal",
+                fallback: "plus",
                 identifier: Identifier.publish,
                 originalIndex: 2
             )
         case ItemKey.messages:
             return makeRegularTab(
                 title: "消息",
-                normalRole: "newbar.messages.normal",
-                selectedRole: "newbar.messages.selected",
-                normalFallback: "message",
-                selectedFallback: "message.fill",
+                iconRole: "newbar.messages.normal",
+                fallback: "message",
                 identifier: Identifier.messages,
                 originalIndex: 3
             )
         case ItemKey.profile:
             return makeRegularTab(
                 title: "我",
-                normalRole: "newbar.profile.normal",
-                selectedRole: "newbar.profile.selected",
-                normalFallback: "person.crop.circle",
-                selectedFallback: "person.crop.circle.fill",
+                iconRole: "newbar.profile.normal",
+                fallback: "person.crop.circle",
                 identifier: Identifier.profile,
                 originalIndex: 4
             )
@@ -738,7 +720,6 @@ final class AWEAlbumMorphTabController:
     func configureSecondTab(asShop shop: Bool) {
         let newTitle = shop ? "商城" : "朋友"
         let newNormalSymbol = shop ? "storefront" : "hands.and.sparkles"
-        let newSelectedSymbol = shop ? "storefront.fill" : "hands.and.sparkles.fill"
         let newImageRole = shop ? "shop" : "friends"
         guard newTitle != secondTitle || newImageRole != secondImageRole else {
             return
@@ -746,7 +727,6 @@ final class AWEAlbumMorphTabController:
 
         secondTitle = newTitle
         secondNormalSymbol = newNormalSymbol
-        secondSelectedSymbol = newSelectedSymbol
         secondImageRole = newImageRole
         rebuildTabs(preservingOriginalIndex: cachedOriginalIndex)
     }

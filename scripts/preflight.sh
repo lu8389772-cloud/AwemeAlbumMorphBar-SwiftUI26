@@ -10,8 +10,8 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.49b']
-required_workflow = ['AwemeLiquidBar-1.0.49b-Xcode27-rootless']
+required_control = ['Version: 1.0.49c']
+required_workflow = ['AwemeLiquidBar-1.0.49c-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
@@ -22,8 +22,8 @@ required_swift = [
     'self.view.mask = self.visibilityMaskView',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.49b',
-    'LiquidBar 设置 · 1.0.49b',
+    'AwemeLiquidBar 1.0.49c',
+    'LiquidBar 设置 · 1.0.49c',
     'Telegram-style top liquid category group',
     'AWETopLiquidGroupView',
     'alb_swipedLeft:',
@@ -77,5 +77,15 @@ if '[[UISegmentedControl alloc]' in objc[top_start:top_end]:
 if 'AWEConfigureAdaptiveSystemGlassPlateButton(\n        group.backgroundGlass' not in objc:
     raise SystemExit('single top glass platter configuration missing')
 
-print('AwemeLiquidBar 1.0.49b bottom interaction + icon/title fix preflight passed')
+for forbidden in [
+    'newbar.home.selected', 'newbar.messages.selected', 'newbar.profile.selected',
+    'bottom.home.selected', 'bottom.messages.selected', 'bottom.profile.selected',
+]:
+    if forbidden in objc or forbidden in swift:
+        raise SystemExit(f'selected/unselected bottom icon option remains: {forbidden}')
+for required in ['RIGHT_REBIND_SCHEDULE', 'RIGHT_REBIND_PASS', 'gAWECommentRightRebindPending']:
+    if required not in objc:
+        raise SystemExit(f'missing post-comment right rebind token: {required}')
+
+print('AwemeLiquidBar 1.0.49c comment right rebind + unified bottom icon preflight passed')
 PY2
