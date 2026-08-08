@@ -10,8 +10,8 @@ objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 
-required_control = ['Version: 1.0.49c']
-required_workflow = ['AwemeLiquidBar-1.0.49c-Xcode27-rootless']
+required_control = ['Version: 1.0.49d']
+required_workflow = ['AwemeLiquidBar-1.0.49d-Xcode27-rootless']
 required_swift = [
     'tabBarMinimizeBehavior = .never',
     'let search = UISearchTab',
@@ -22,8 +22,8 @@ required_swift = [
     'self.view.mask = self.visibilityMaskView',
 ]
 required_objc = [
-    'AwemeLiquidBar 1.0.49c',
-    'LiquidBar 设置 · 1.0.49c',
+    'AwemeLiquidBar 1.0.49d',
+    'LiquidBar 设置 · 1.0.49d',
     'Telegram-style top liquid category group',
     'AWETopLiquidGroupView',
     'alb_swipedLeft:',
@@ -87,5 +87,5 @@ for required in ['RIGHT_REBIND_SCHEDULE', 'RIGHT_REBIND_PASS', 'gAWECommentRight
     if required not in objc:
         raise SystemExit(f'missing post-comment right rebind token: {required}')
 
-print('AwemeLiquidBar 1.0.49c comment right rebind + unified bottom icon preflight passed')
+print('AwemeLiquidBar 1.0.49d comment right rebind + unified bottom icon preflight passed')
 PY2

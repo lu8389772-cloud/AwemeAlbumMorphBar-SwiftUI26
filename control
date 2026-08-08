@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.49c
+Version: 1.0.49d
 Architecture: iphoneos-arm
 Description: Rebinds right-side Liquid Glass controls only after the full comment route exits, removes selected/unselected bottom-icon variants in favor of one icon per destination, and retains auth28 plus 1.0.48 stability fixes.
 Maintainer: xyy

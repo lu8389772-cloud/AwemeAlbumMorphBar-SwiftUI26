@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.49c — post-comment right-stack rebind + unified bottom icons + auth28
+ AwemeLiquidBar 1.0.49d — post-comment right-stack rebind + unified bottom icons + auth28
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -389,6 +389,7 @@ static CFTimeInterval gAWECommerceSuppressionUntil = 0.0;
 static BOOL gAWECommentRightRebindPending = NO;
 static NSUInteger gAWECommentRightRebindGeneration = 0;
 static NSString *gAWECommentRightHostBefore = nil;
+static __weak UIView *gAWECommentRightStackBefore = nil;
 
 
 #pragma mark - iOS 26/27 global glass style and adaptive foreground
@@ -742,7 +743,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49c_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.49d_interaction.log"] copy];
     });
     return path;
 }
@@ -811,7 +812,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49c_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.49d_probe.log"] copy];
     });
     return path;
 }
@@ -2870,7 +2871,7 @@ static NSString *AWEBottomSymbolKeyForTag(NSInteger tag, __unused BOOL selected)
         @"publish", @"messages", @"profile"
     ];
     if (tag < 0 || tag >= (NSInteger)roles.count) return nil;
-    /* 1.0.49c: one artwork per destination. Selection is expressed only by
+    /* 1.0.49d: one artwork per destination. Selection is expressed only by
        foreground/accent state; there is no second selected-icon preference. */
     return [NSString stringWithFormat:@"bottom.%@.normal", roles[(NSUInteger)tag]];
 }
@@ -10889,6 +10890,186 @@ static void AWERefreshHomeChromeInWindow(UIWindow *window) {
     AWERefreshHomeActionStacksInView(window);
 }
 
+static BOOL AWEClassNameIsCommentInputOnlyForRightRecovery(NSString *className) {
+    if (className.length == 0) return NO;
+    NSString *lower = className.lowercaseString;
+    return [lower containsString:@"comment"] &&
+           [lower containsString:@"input"];
+}
+
+static BOOL AWEClassNameIsCommentPanelForRightRecovery(NSString *className) {
+    if (className.length == 0) return NO;
+    NSString *lower = className.lowercaseString;
+    if (![lower containsString:@"comment"] ||
+        AWEClassNameIsCommentInputOnlyForRightRecovery(className)) {
+        return NO;
+    }
+    return [lower containsString:@"controller"] ||
+           [lower containsString:@"container"] ||
+           [lower containsString:@"panel"] ||
+           [lower containsString:@"list"];
+}
+
+static BOOL AWEAnyVisibleCommentPanelForRightRecovery(void) {
+    for (UIViewController *controller in AWESensitiveVisibleControllers()) {
+        if (!controller) continue;
+        NSString *className = NSStringFromClass(controller.class);
+        if (!AWEClassNameIsCommentPanelForRightRecovery(className)) continue;
+        UIView *view = controller.viewIfLoaded;
+        if (view.window || controller.isBeingPresented ||
+            controller.isMovingToParentViewController) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL AWEAnyBlockingSensitiveDestinationForRightRecovery(void) {
+    for (UIViewController *controller in AWESensitiveVisibleControllers()) {
+        if (!controller) continue;
+        UIView *view = controller.viewIfLoaded;
+        BOOL live = view.window || controller.isBeingPresented ||
+                    controller.isMovingToParentViewController;
+        if (!live) continue;
+        NSString *className = NSStringFromClass(controller.class);
+        /* AWECommentInputViewController commonly remains attached for several
+           seconds after the visible comment sheet has already disappeared.
+           It must not keep the feed-side action column suppressed. */
+        if (AWEClassNameIsCommentInputOnlyForRightRecovery(className)) continue;
+        return YES;
+    }
+    return NO;
+}
+
+static NSArray<UIWindow *> *AWEForegroundNormalWindowsForHomeChrome(void) {
+    NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
+    UIApplication *application = UIApplication.sharedApplication;
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in application.connectedScenes) {
+            if (![scene isKindOfClass:UIWindowScene.class]) continue;
+            if (scene.activationState != UISceneActivationStateForegroundActive &&
+                scene.activationState != UISceneActivationStateForegroundInactive) {
+                continue;
+            }
+            for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+                if (!window || window.hidden || window.alpha <= 0.01 ||
+                    window.windowLevel != UIWindowLevelNormal) {
+                    continue;
+                }
+                if (window == (UIWindow *)gAWEAlbumMorphOverlayWindow ||
+                    [NSStringFromClass(window.class) containsString:@"AWEAlbumMorphOverlayWindow"]) {
+                    continue;
+                }
+                [windows addObject:window];
+            }
+        }
+    }
+    UIWindow *active = AWEActiveMainWindow();
+    if (active && ![windows containsObject:active]) [windows insertObject:active atIndex:0];
+    return windows;
+}
+
+static BOOL AWEFrameLooksLikeCurrentRightActionStack(UIView *stack) {
+    UIWindow *window = stack.window;
+    if (!stack || !window) return NO;
+    CGRect frame = [stack convertRect:stack.bounds toView:window];
+    CGFloat screenW = CGRectGetWidth(window.bounds);
+    CGFloat width = CGRectGetWidth(frame);
+    CGFloat height = CGRectGetHeight(frame);
+    if (screenW < 200.0 || width < 44.0 || width > 140.0 ||
+        height < 180.0 || height > 620.0) {
+        return NO;
+    }
+    if (CGRectGetMidX(frame) < screenW * 0.74 ||
+        CGRectGetMaxX(frame) < screenW * 0.86) {
+        return NO;
+    }
+    CGRect visible = CGRectIntersection(frame, window.bounds);
+    if (CGRectIsNull(visible) || CGRectIsEmpty(visible) ||
+        CGRectGetHeight(visible) < 100.0) {
+        return NO;
+    }
+    /* An offscreen/recycled feed cell can remain in the same window. Reject it
+       when one of its ancestors is actually removed/hidden; ignore only the
+       stack's own alpha because Douyin deliberately fades that to zero while
+       the comment sheet is open. */
+    for (UIView *ancestor = stack.superview;
+         ancestor && ancestor != window;
+         ancestor = ancestor.superview) {
+        if (ancestor.hidden || ancestor.alpha < 0.01 ||
+            ancestor.layer.opacity < 0.01f) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
+static UIView *AWEFindCurrentRightActionStackAcrossWindows(void) {
+    UIView *previous = gAWECommentRightStackBefore;
+    if (previous && AWEFrameLooksLikeCurrentRightActionStack(previous)) {
+        return previous;
+    }
+
+    UIView *best = nil;
+    CGFloat bestScore = -CGFLOAT_MAX;
+    for (UIWindow *window in AWEForegroundNormalWindowsForHomeChrome()) {
+        NSMutableArray<UIView *> *stacks = [NSMutableArray array];
+        AWECollectVisibleHomeActionStacks(window, stacks, 0);
+        for (UIView *stack in stacks) {
+            if (!AWEFrameLooksLikeCurrentRightActionStack(stack)) continue;
+            CGRect frame = [stack convertRect:stack.bounds toView:window];
+            CGFloat score = CGRectGetHeight(frame) * 2.0 + CGRectGetMidX(frame);
+            if (AWEFindViewByExactRuntimeClass(
+                    stack, @"AWEPlayInteractionUserProfilePictureView", 0) ||
+                AWEFindViewByExactRuntimeClass(
+                    stack, @"AWEPlayInteractionUserProfileContainerView", 0)) {
+                score += 1000.0;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = stack;
+            }
+        }
+    }
+    return best;
+}
+
+static NSUInteger AWECountHomeActionStacksAcrossForegroundWindows(void) {
+    NSUInteger count = 0;
+    for (UIWindow *window in AWEForegroundNormalWindowsForHomeChrome()) {
+        NSMutableArray<UIView *> *stacks = [NSMutableArray array];
+        AWECollectVisibleHomeActionStacks(window, stacks, 0);
+        count += stacks.count;
+    }
+    return count;
+}
+
+static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack) {
+    if (!stack || !stack.window || !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
+        return NO;
+    }
+    BOOL changed = NO;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (stack.hidden) {
+        stack.hidden = NO;
+        changed = YES;
+    }
+    if (stack.alpha < 0.99) {
+        stack.alpha = 1.0;
+        changed = YES;
+    }
+    if (stack.layer.opacity < 0.99f) {
+        stack.layer.opacity = 1.0f;
+        changed = YES;
+    }
+    [CATransaction commit];
+
+    AWERefreshHomeActionStack(stack);
+    AWELayoutBoundHomeActionSlots(stack);
+    return changed || !stack.hidden;
+}
+
 static NSString *AWECurrentRightActionStackSummary(void) {
     UIWindow *window = AWEActiveMainWindow();
     if (!window) return @"window=nil";
@@ -10913,32 +11094,55 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
     if (!AWEPluginFeaturesEnabled()) return;
     NSUInteger generation = ++gAWECommentRightRebindGeneration;
     NSString *before = gAWECommentRightHostBefore ?: @"unknown";
+    UIView *captured = gAWECommentRightStackBefore;
     AWEInteractionDiagnosticWrite(
-        @"RIGHT_REBIND_SCHEDULE generation=%lu reason=%@ before=%@",
-        (unsigned long)generation, reason ?: @"comment.dismiss", before);
+        @"RIGHT_REBIND_SCHEDULE generation=%lu reason=%@ captured=%@ before=%@",
+        (unsigned long)generation, reason ?: @"comment.dismiss",
+        AWEInteractionObjectSummary(captured), before);
 
-    /* The comment route owns several nested controllers. Rebind only after the
-       last one has disappeared, then use three bounded main-thread passes.
-       This catches a profile-feed cell/stack replacement without a display
-       link, timer, or per-frame hierarchy scan. */
-    for (NSNumber *delay in @[@0.0, @0.10, @0.28]) {
+    /* Important: AWECommentInputViewController can remain attached for 4-8 s
+       after the visible panel is gone. 1.0.49c waited for it, so the user saw
+       an empty right column immediately after closing comments and some profile
+       feeds never reached the rebind at all. Rebind as soon as the last visible
+       comment panel disappears. Use a handful of bounded passes rather than a
+       display link/timer, and search every foreground normal-level app window
+       because the key window can temporarily be a transition/input host. */
+    NSArray<NSNumber *> *delays = @[@0.0, @0.08, @0.20, @0.45, @0.80, @1.20];
+    for (NSNumber *delay in delays) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
             (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
             dispatch_get_main_queue(), ^{
             if (generation != gAWECommentRightRebindGeneration) return;
-            if (AWEShouldSuppressBarForSensitiveDestination()) return;
-            UIWindow *window = AWEActiveMainWindow();
-            if (!window) return;
-            NSMutableArray<UIView *> *stacks = [NSMutableArray array];
-            AWECollectVisibleHomeActionStacks(window, stacks, 0);
-            for (UIView *stack in stacks) {
-                AWERefreshHomeActionStack(stack);
+            if (AWEAnyVisibleCommentPanelForRightRecovery() ||
+                AWEAnyBlockingSensitiveDestinationForRightRecovery()) {
+                AWEInteractionDiagnosticWrite(
+                    @"RIGHT_REBIND_PASS generation=%lu delay=%.2f blocked=1",
+                    (unsigned long)generation, delay.doubleValue);
+                return;
             }
-            NSString *after = AWECurrentRightActionStackSummary();
+
+            UIView *target = nil;
+            if (captured && AWEFrameLooksLikeCurrentRightActionStack(captured)) {
+                target = captured;
+            }
+            if (!target) target = AWEFindCurrentRightActionStackAcrossWindows();
+
+            BOOL restored = AWEForceRestoreRightActionStackAfterComment(target);
+            NSUInteger stacks = AWECountHomeActionStacksAcrossForegroundWindows();
+            NSString *after = target
+                ? [NSString stringWithFormat:@"%@ alpha=%.2f hidden=%d",
+                    AWEInteractionObjectSummary(target), target.alpha, target.hidden]
+                : @"none";
             AWEInteractionDiagnosticWrite(
-                @"RIGHT_REBIND_PASS generation=%lu delay=%.2f stacks=%lu after=%@",
+                @"RIGHT_REBIND_PASS generation=%lu delay=%.2f stacks=%lu target=%@ restored=%d",
                 (unsigned long)generation, delay.doubleValue,
-                (unsigned long)stacks.count, after);
+                (unsigned long)stacks, after, restored);
+
+            if (delay == delays.lastObject &&
+                generation == gAWECommentRightRebindGeneration) {
+                gAWECommentRightStackBefore = nil;
+                gAWECommentRightHostBefore = nil;
+            }
         });
     }
 }
@@ -12163,7 +12367,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.49c";
+    self.title = @"LiquidBar 设置 · 1.0.49d";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -13328,7 +13532,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.49c image=%@ ==========" ,
+            @"========== START build=1.0.49d image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13395,7 +13599,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.49c diagnostic export\n"
+                @"AwemeLiquidBar 1.0.49d diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13410,7 +13614,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.49c_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.49d_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14880,12 +15084,17 @@ static BOOL AWEGetDoubleTapLocation(id sender,
         BOOL commentRoute = [departingClassName.lowercaseString containsString:@"comment"];
         if (commentRoute) {
             gAWECommentRightRebindPending = YES;
+            if (!gAWECommentRightStackBefore || !gAWECommentRightStackBefore.window) {
+                gAWECommentRightStackBefore = AWEFindCurrentRightActionStackAcrossWindows();
+            }
             if (!gAWECommentRightHostBefore.length) {
                 gAWECommentRightHostBefore = [AWECurrentRightActionStackSummary() copy];
             }
             AWEInteractionDiagnosticWrite(
-                @"RIGHT_HOST_BEFORE_COMMENT class=%@ hosts=%@",
-                departingClassName, gAWECommentRightHostBefore ?: @"none");
+                @"RIGHT_HOST_BEFORE_COMMENT class=%@ target=%@ hosts=%@",
+                departingClassName,
+                AWEInteractionObjectSummary(gAWECommentRightStackBefore),
+                gAWECommentRightHostBefore ?: @"none");
         } else {
             /* Non-comment sheets retain the historical pre-dismiss recovery.
                Comment panels are nested, so recovering here only churns the
@@ -14929,11 +15138,23 @@ static BOOL AWEGetDoubleTapLocation(id sender,
             AWEForceAlbumMorphRouteRecovery(
                 [NSString stringWithFormat:@"dismiss.%@", className]);
         }
-        if (!remainingSensitive && gAWECommentRightRebindPending) {
-            gAWECommentRightRebindPending = NO;
-            AWESchedulePostCommentRightRebind(
-                [NSString stringWithFormat:@"dismiss.%@", className]);
-            gAWECommentRightHostBefore = nil;
+
+        /* The visible comment panel and AWECommentInputViewController have
+           different lifetimes. On profile-video feeds the input controller can
+           remain registered for several seconds after the sheet is already
+           gone (and may survive until the app resigns active). Restore the
+           right-side action column when the last *visible panel* disappears,
+           not when the input helper finally tears down. */
+        if (commentRoute && gAWECommentRightRebindPending) {
+            BOOL inputOnly = AWEClassNameIsCommentInputOnlyForRightRecovery(className);
+            BOOL panelStillVisible = AWEAnyVisibleCommentPanelForRightRecovery();
+            BOOL shouldRebindNow = (!inputOnly && !panelStillVisible) ||
+                                   !remainingSensitive;
+            if (shouldRebindNow) {
+                gAWECommentRightRebindPending = NO;
+                AWESchedulePostCommentRightRebind(
+                    [NSString stringWithFormat:@"panelDismiss.%@", className]);
+            }
         }
     }
 
@@ -15030,7 +15251,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49c os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49d os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
