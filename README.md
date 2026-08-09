@@ -1,4 +1,4 @@
-# AwemeLiquidBar 1.0.51b
+# AwemeLiquidBar 1.0.51c
 
 ## Stability / regression repair
 

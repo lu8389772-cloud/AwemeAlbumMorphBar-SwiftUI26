@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.51b — stability: downloader action capture + heat throttle + Friends persistence + elastic glass press + auth29
+ AwemeLiquidBar 1.0.51c — stability: downloader action capture + heat throttle + Friends persistence + elastic glass press + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -784,7 +784,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.51b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.51c_interaction.log"] copy];
     });
     return path;
 }
@@ -853,7 +853,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.51b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.51c_probe.log"] copy];
     });
     return path;
 }
@@ -7201,7 +7201,7 @@ static void AWETryPreferHighestPlaybackForStack(UIView *stack) {
     if (!best || best.sourceModel == video) return;
     gAWELastHighestPlaybackAttempt = now;
     /* Cache the attempted model before probing private playback selectors.
-       1.0.51b only cached on success, so unsupported Douyin builds retried the
+       1.0.51c only cached on success, so unsupported Douyin builds retried the
        same failed selector hundreds of times per minute and caused heat. */
     gAWELastHighestPlaybackModelKey = [identity copy];
 
@@ -7924,7 +7924,7 @@ static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
         }
         case UIGestureRecognizerStateEnded:
         case UIGestureRecognizerStateCancelled:
-        case UIGestureRecognizerStateFailed:
+        case UIGestureRecognizerStateFailed: {
             button.highlighted = NO;
             [button setNeedsUpdateConfiguration];
             [UIView animateWithDuration:0.34 delay:0
@@ -7933,6 +7933,7 @@ static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
                 animations:^{ button.transform = CGAffineTransformIdentity; }
                 completion:nil];
             break;
+        }
         default:
             break;
     }
@@ -8494,7 +8495,7 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
         }
         /* Capture the exact current model in the UIActions. Presenting UIMenu can
            temporarily reparent/reuse the feed stack, so resolving the model again
-           at action time made 1.0.51b appear to do nothing. */
+           at action time made 1.0.51c appear to do nothing. */
         slot.menuButton.menu = AWESelfDownloadMenuForAweme(aweme);
         slot.menuButton.userInteractionEnabled = YES;
         AWEConfigureAdaptiveSystemGlassIconButton(
@@ -13726,7 +13727,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.51b";
+    self.title = @"LiquidBar 设置 · 1.0.51c";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14970,7 +14971,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.51b image=%@ ==========" ,
+            @"========== START build=1.0.51c image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15037,7 +15038,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.51b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.51c diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15052,7 +15053,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.51b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.51c_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16740,7 +16741,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.51b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.51c os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

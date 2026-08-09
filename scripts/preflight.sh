@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.51b'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.51b-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.51b'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.51b'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.51b_interaction.log'),
+    ('control', control, 'Version: 1.0.51c'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.51c-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.51c'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.51c'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.51c_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -34,7 +34,7 @@ for token in [
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.51b', 'LiquidBar 设置 · 1.0.51b',
+    'AwemeLiquidBar 1.0.51c', 'LiquidBar 设置 · 1.0.51c',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWEVideoVariantsForVideo', 'bitrateModels_origin', 'bitrateModels',
@@ -99,5 +99,10 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.51b stability/download/Friends/press preflight passed')
+
+# Guard against Objective-C++ switch/case lifetime regression in glass press feedback.
+if "case UIGestureRecognizerStateFailed: {" not in objc:
+    raise SystemExit('glass press switch-case scope guard missing')
+
+print('AwemeLiquidBar 1.0.51c stability/download/Friends/press preflight passed')
 PY2
