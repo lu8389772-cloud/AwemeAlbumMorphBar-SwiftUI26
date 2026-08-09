@@ -1,4 +1,11 @@
-# AwemeLiquidBar 1.0.50b
+# AwemeLiquidBar 1.0.50c
+
+## 1.0.50c compile fix
+
+- Fixes the invalid UIKit selector `menuWithTitle:options:children:` used by the external-download inline submenu.
+- Uses the supported `menuWithTitle:image:identifier:options:children:` API instead.
+- Preflight now explicitly rejects the invalid selector so this exact build failure cannot regress silently.
+
 
 Consolidated compatibility/interaction update based on 1.0.49e. The encrypted authorization table remains **29 entries**.
 
@@ -18,7 +25,7 @@ The bridge does **not** copy or reimplement the other plugin's downloader. It pe
 
 ## Authorization
 
-Authorization remains the existing encrypted **auth29** table; no authorization entries were added or removed in 1.0.50b.
-## 1.0.50b top category centering fix
+Authorization remains the existing encrypted **auth29** table; no authorization entries were added or removed in 1.0.50c.
+## 1.0.50c top category centering fix
 
 The Telegram-style top category group is now always centered on the physical top-bar/container midpoint. When the left action, right search action, or both are hidden, the layout reserves symmetric side clearance so 1–4 visible category titles no longer drift horizontally. This is a geometry-only change on top of 1.0.50a; auth29 and the 1.0.50a feature set are retained.

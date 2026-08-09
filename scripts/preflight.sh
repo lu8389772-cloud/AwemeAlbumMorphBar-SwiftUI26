@@ -11,11 +11,11 @@ control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
 build_script = Path('build_no_install.sh').read_text()
 
-for token in ['Version: 1.0.50b']:
+for token in ['Version: 1.0.50c']:
     if token not in control: raise SystemExit(f'missing control token: {token}')
-for token in ['AwemeLiquidBar-1.0.50b-Xcode27-rootless']:
+for token in ['AwemeLiquidBar-1.0.50c-Xcode27-rootless']:
     if token not in workflow: raise SystemExit(f'missing workflow token: {token}')
-for token in ["EXPECTED_VERSION='1.0.50b'", 'LiquidBar 设置 · 1.0.50b', 'AwemeLiquidBar_1.0.50b_interaction.log']:
+for token in ["EXPECTED_VERSION='1.0.50c'", 'LiquidBar 设置 · 1.0.50c', 'AwemeLiquidBar_1.0.50c_interaction.log']:
     if token not in build_script: raise SystemExit(f'missing build script token: {token}')
 for token in [
     'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
@@ -25,7 +25,7 @@ for token in [
 ]:
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 for token in [
-    'AwemeLiquidBar 1.0.50b', 'LiquidBar 设置 · 1.0.50b',
+    'AwemeLiquidBar 1.0.50c', 'LiquidBar 设置 · 1.0.50c',
     'AWEInvokeCompatibleTabTapGesture', 'TAB_COMPAT_GESTURE',
     'AWEInvokeControllerTabRoute', 'TAB_CONTROLLER_ROUTE',
     'AWEExternalBridgePluginImageLoaded', 'saveCurrentVideo',
@@ -65,5 +65,13 @@ rows = [line for line in objc[start:end].splitlines() if line.strip().startswith
 if len(rows) != 29:
     raise SystemExit(f'auth digest row count is {len(rows)}, expected 29')
 
-print('AwemeLiquidBar 1.0.50b bridge/routes/gesture/badge/center preflight passed')
+
+# Reject the invalid UIKit convenience selector that caused the 1.0.50b Xcode compile failure.
+tweak = objc
+if 'menuWithTitle:@"" options:UIMenuOptionsDisplayInline' in tweak:
+    raise SystemExit('invalid UIMenu selector menuWithTitle:options:children: is still present')
+if 'menuWithTitle:@""\n                                         image:nil\n                                    identifier:nil\n                                       options:UIMenuOptionsDisplayInline' not in tweak:
+    raise SystemExit('expected full UIMenu menuWithTitle:image:identifier:options:children: call missing')
+
+print('AwemeLiquidBar 1.0.50c bridge/routes/gesture/badge/center preflight passed')
 PY2

@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.50b device test
+AwemeLiquidBar 1.0.50c device test
 
 Core regression
 1. Recheck publish close, share/forward bottom controls, PNG @3x sizing and commerce overlays.
@@ -35,10 +35,14 @@ Messages badge
 2. Turn `显示消息未读角标` ON with an unread count/dot present in Douyin; custom Messages item should show the same value/dot.
 3. Reorder Messages in the custom bottom layout: badge must follow the Messages item, not a fixed screen coordinate.
 4. Clear/read messages and confirm the mirrored badge updates/disappears.
-Top category centering (1.0.50b):
+Top category centering (1.0.50c):
 - Test visible category count 1 / 2 / 3 / 4.
 - Test both top side buttons visible.
 - Hide only the left menu button: category group must remain centered on screen.
 - Hide only the right/top search button: category group must remain centered on screen.
 - Hide both side buttons: category group must remain centered on screen.
 - Verify no category title overlaps a remaining side button.
+
+Compile regression check (1.0.50c):
+- GitHub Xcode 27 build must pass the UIMenu external bridge section that failed in 1.0.50b.
+- Verify the inline “open original plugin download panel” item still appears when its selector is available.

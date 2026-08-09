@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.50b
+Version: 1.0.50c
 Architecture: iphoneos-arm
 Description: Cross-version bottom routing fallback, optional external AwemeX download/copy bridge, profile-only settings gesture guard, Friends-feed bottom-bar persistence, native glass press feedback, message unread badge mirroring, centered top category layout, and auth29.
 Maintainer: xyy

@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.50b — cross-version tab routing + external action bridge + gesture/badge hardening + auth29
+ AwemeLiquidBar 1.0.50c — cross-version tab routing + external action bridge + gesture/badge hardening + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -769,7 +769,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.50b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.50c_interaction.log"] copy];
     });
     return path;
 }
@@ -838,7 +838,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.50b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.50c_probe.log"] copy];
     });
     return path;
 }
@@ -6496,10 +6496,13 @@ static UIMenu *AWEExternalBridgeMenu(void) {
     [items addObject:AWEExternalBridgeAction(@"保存音频", @"waveform", @"saveAudio")];
     [items addObject:AWEExternalBridgeAction(@"复制完整文案", @"doc.on.doc", @"copyCompleteText")];
     if (AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"tcShowDownloadOptions"))) {
-        [items addObject:[UIMenu menuWithTitle:@"" options:UIMenuOptionsDisplayInline
-            children:@[AWEExternalBridgeAction(@"打开原插件下载面板",
-                                                @"ellipsis.circle",
-                                                @"tcShowDownloadOptions")]]];
+        [items addObject:[UIMenu menuWithTitle:@""
+                                         image:nil
+                                    identifier:nil
+                                       options:UIMenuOptionsDisplayInline
+                                      children:@[AWEExternalBridgeAction(@"打开原插件下载面板",
+                                                                          @"ellipsis.circle",
+                                                                          @"tcShowDownloadOptions")]]];
     }
     return [UIMenu menuWithTitle:@"下载与复制" children:items];
 }
@@ -12925,7 +12928,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.50b";
+    self.title = @"LiquidBar 设置 · 1.0.50c";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14140,7 +14143,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.50b image=%@ ==========" ,
+            @"========== START build=1.0.50c image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -14207,7 +14210,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.50b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.50c diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -14222,7 +14225,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.50b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.50c_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -15892,7 +15895,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.50b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.50c os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
