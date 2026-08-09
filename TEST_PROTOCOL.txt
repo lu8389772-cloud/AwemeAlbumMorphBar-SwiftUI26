@@ -1,17 +1,44 @@
-AwemeLiquidBar 1.0.49e device test
-1. Toggle 完全隐藏左上角按钮 ON: left entrance must disappear completely; top search remains.
-2. Toggle it OFF: normal left Liquid Glass/menu behavior returns with interaction restored.
-3. Recheck publish close, forward/share bottom controls, PNG @3x sizing, commerce/group-buy overlays.
-4. Authorization table contains 28 encrypted entries.
+AwemeLiquidBar 1.0.50b device test
 
+Core regression
+1. Recheck publish close, share/forward bottom controls, PNG @3x sizing and commerce overlays.
+2. Verify the encrypted authorization table still contains 29 entries.
+3. Recheck single bottom artwork per destination and Hide Bottom Titles.
 
-1.0.49e focused checks:
-1. Clean-install / clear plugin prefs, enable diagnostics, tap Home/Friends/Messages/Profile. Export log and verify ALBUM_HIT_TAB, ALBUM_MORPH_TAP_BEGIN and TAB_FORWARD_END entries.
-2. Enable Hide Bottom Titles while new bottom bar is active: titles must disappear immediately after refresh/re-entry.
-3. Change the single Home or Messages icon: selected and unselected states must keep the same artwork; only foreground/accent state changes.
+Cross-version bottom routing
+1. Enable interaction diagnostics and tap Home/Friends(or Shop)/Messages/Profile repeatedly.
+2. A normal path should still use TAB_FORWARD control/gesture. On a previously incompatible build, fallback may log TAB_COMPAT_GESTURE or TAB_CONTROLLER_ROUTE instead of `reason=no-route`.
+3. Switching tabs must not launch the wrong destination.
 
-1.0.49e additional checks:
-- User profile -> video -> comments -> close comments: avatar/like/comment/favorite/share stay visible and tappable. Repeat 5 times.
-- Diagnostic mode: export should contain RIGHT_HOST_BEFORE_COMMENT target=... and RIGHT_REBIND_PASS target=... restored=... immediately after the visible comment panel closes, even if AWECommentInputViewController remains alive.
-- New bottom icon center: exactly one icon row per Home/Friends-or-Shop/Publish/Messages/Profile/Search; no selected/unselected duplicate rows.
-- Change one bottom icon, select/deselect that destination: artwork remains the same while foreground/accent changes.
+External AwemeX bridge
+1. With AwemeX installed, open a normal feed video and confirm a 46 pt glass download/menu button appears directly above the avatar.
+2. Press it: the menu should use native Liquid Glass morph. Test 保存当前视频 / 保存全部图片 / 保存音频 / 复制完整文案 as applicable.
+3. If an action does nothing, export diagnostics and inspect BRIDGE_ACTION selector=... result=NO reason=no-live-target.
+4. Remove/disable AwemeX: bridge button must disappear without affecting AwemeLiquidBar.
+
+Settings gesture
+1. Leave `双指长按仅在‘我’页面触发` ON. Two-finger long press on Home/Friends/immersive relax video must not open settings.
+2. Go to the main `我` page: two-finger long press must open settings.
+3. Turn the switch OFF: global gesture behavior returns.
+
+Friends-feed persistence
+1. Enter Friends and keep swiping until Douyin hides its original tab bar after a viewed batch.
+2. LiquidBar must remain visible and interactive while still on Friends.
+3. Enter a profile/search/share/comments/publish route: normal route suppression must still work.
+
+Glass press feedback
+1. Press/drag slightly on top Search, right Like/Comment/Favorite/Share, avatar and external bridge button.
+2. Visual glass should enter native highlighted deformation/expansion while the underlying Douyin action remains functional.
+
+Messages badge
+1. Default OFF: custom bottom bar remains clean.
+2. Turn `显示消息未读角标` ON with an unread count/dot present in Douyin; custom Messages item should show the same value/dot.
+3. Reorder Messages in the custom bottom layout: badge must follow the Messages item, not a fixed screen coordinate.
+4. Clear/read messages and confirm the mirrored badge updates/disappears.
+Top category centering (1.0.50b):
+- Test visible category count 1 / 2 / 3 / 4.
+- Test both top side buttons visible.
+- Hide only the left menu button: category group must remain centered on screen.
+- Hide only the right/top search button: category group must remain centered on screen.
+- Hide both side buttons: category group must remain centered on screen.
+- Verify no category title overlaps a remaining side button.

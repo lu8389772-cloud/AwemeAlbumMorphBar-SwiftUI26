@@ -395,6 +395,7 @@ final class AWEAlbumMorphTabController:
     private let visibilityMaskView = UIView(frame: .zero)
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
+    private var messageBadgeValue: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -547,6 +548,30 @@ final class AWEAlbumMorphTabController:
         tabBar.setNeedsLayout()
     }
 
+    private func applyMessageBadge() {
+        guard let messageTab = tab(forIdentifier: Identifier.messages) else { return }
+        let normalized = messageBadgeValue?.isEmpty == false ? messageBadgeValue : nil
+
+        // UITab badge API has shifted across SDK revisions. Keep the source
+        // compatible by using KVC first, then mirror onto the concrete
+        // UITabBarItem when UIKit has materialized it.
+        if messageTab.responds(to: NSSelectorFromString("setBadgeValue:")) {
+            messageTab.setValue(normalized, forKey: "badgeValue")
+        }
+        if let index = tabs.firstIndex(where: { $0 === messageTab }),
+           let items = tabBar.items, index < items.count {
+            items[index].badgeValue = normalized
+            items[index].badgeColor = .systemRed
+        }
+        tabBar.setNeedsLayout()
+    }
+
+    @objc(updateMessageBadgeValue:)
+    func updateMessageBadgeValue(_ value: String?) {
+        messageBadgeValue = value
+        applyMessageBadge()
+    }
+
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
@@ -602,6 +627,7 @@ final class AWEAlbumMorphTabController:
         suppressCallbacks = false
         applyStableVerticalOffset()
         applyFallbackCompactTransform(animated: false)
+        applyMessageBadge()
         albumMorphProbe(
             "VISIBLE_ITEMS_APPLIED items=\(visibleItemIdentifiers.joined(separator: ",")) " +
             "selected=\(resolvedIndex) tabFrame=\(tabBar.frame)"

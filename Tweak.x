@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.49e — post-comment right-stack rebind + unified bottom icons + auth29
+ AwemeLiquidBar 1.0.50b — cross-version tab routing + external action bridge + gesture/badge hardening + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -23,8 +23,12 @@
  - preserves the current top switcher, cached glass buttons, avatar glass,
    authorization table and low-frequency adaptive-material behavior.
 
- The goal of this release is to restore previously proven route isolation without
- rolling back the newer Liquid Glass interaction and caching work.
+ This release keeps the 1.0.49e route fixes and adds conservative compatibility paths:
+ - cross-version bottom-tab forwarding when Douyin changes its private button gesture;
+ - a soft runtime bridge to a separately installed download plugin without copying it;
+ - native Liquid Glass press feedback restoration for visual-only top/right controls;
+ - an optional profile-only two-finger settings gesture guard;
+ - Friends-feed bottom-bar persistence and a sortable Messages unread badge mirror.
 */
 
 @interface AWENormalModeTabBar : UIView
@@ -83,6 +87,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 @property(nonatomic, weak) id actionSink;
 - (void)configureSecondTabAsShop:(BOOL)shop;
 - (void)configureVisibleItemIdentifiers:(NSArray<NSString *> *)identifiers;
+- (void)updateMessageBadgeValue:(nullable NSString *)value;
 - (void)reloadConfiguredImages;
 - (void)updateAccentColor:(UIColor *)color;
 - (void)setForcedDark:(BOOL)forced;
@@ -158,6 +163,10 @@ static char kAWEHomeActionStackRetryGenerationKey;
 static char kAWEHomeActionStackApplyingKey;
 static char kAWEHomeActionStackRefreshPendingKey;
 static char kAWEHomeActionStackLastLayoutRefreshKey;
+static char kAWEGlassPressFeedbackRecognizerKey;
+static char kAWEGlassPressFeedbackTargetKey;
+static char kAWEExternalBridgeMenuSlotKey;
+static char kAWEExternalBridgeMenuButtonKey;
 static char kAWETopActionRefreshPendingKey;
 static char kAWEImageAverageColorCacheKey;
 static char kAWEAdaptiveGlassConfigurationSignatureKey;
@@ -341,6 +350,10 @@ static NSString * const kAWEHomeForceDarkGlassDefaultsKey =
     @"AwemeLiquidBarHomeForceDarkGlassV1";
 static NSString * const kAWEHideBottomTitlesDefaultsKey =
     @"AwemeLiquidBarHideBottomTitlesV1";
+static NSString * const kAWESettingsGestureMineOnlyDefaultsKey =
+    @"AwemeLiquidBarSettingsGestureMineOnlyV1";
+static NSString * const kAWEMessageBadgeEnabledDefaultsKey =
+    @"AwemeLiquidBarMessageBadgeEnabledV1";
 static NSString * const kAWEAlbumMorphStyleDefaultsKey =
     @"AwemeLiquidBarAlbumMorphStyleV1";
 static NSString * const kAWEAlbumMorphItemOrderDefaultsKey =
@@ -418,6 +431,19 @@ static BOOL AWEHomeForceDarkGlassEnabled(void) {
 static BOOL AWEHideBottomTitlesEnabled(void) {
     return [NSUserDefaults.standardUserDefaults
         boolForKey:kAWEHideBottomTitlesDefaultsKey];
+}
+
+static BOOL AWESettingsGestureMineOnlyEnabled(void) {
+    id stored = [NSUserDefaults.standardUserDefaults
+        objectForKey:kAWESettingsGestureMineOnlyDefaultsKey];
+    /* New installs default to the safer profile-only gesture. Existing users
+       can explicitly turn it off when they want the historical global gesture. */
+    return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
+}
+
+static BOOL AWEMessageBadgeEnabled(void) {
+    return [NSUserDefaults.standardUserDefaults
+        boolForKey:kAWEMessageBadgeEnabledDefaultsKey];
 }
 
 /* Swift native-tab bridge. Keep the exported ABI integer-based so the
@@ -743,7 +769,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49e_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.50b_interaction.log"] copy];
     });
     return path;
 }
@@ -812,7 +838,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.49e_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.50b_probe.log"] copy];
     });
     return path;
 }
@@ -1331,6 +1357,15 @@ static BOOL AWECurrentMainTabAppearsToBeMe(void) {
         }
     }
     return NO;
+}
+
+static BOOL AWECurrentPageAllowsSettingsGesture(void) {
+    if (!AWESettingsGestureMineOnlyEnabled()) return YES;
+    /* The gesture is intentionally keyed to the stable main-tab identity, not
+       a transient video/profile class name. This prevents immersive/relaxation
+       pages from recognizing our two-finger hold at the same time as their own
+       gesture and avoids the historical black-screen presentation collision. */
+    return AWECurrentMainTabAppearsToBeMe();
 }
 
 static BOOL AWEPageLooksLikeOwnProfile(UIViewController *controller,
@@ -4165,6 +4200,67 @@ static UIView *AWEStableTabBarWrapperInHost(UIView *host) {
     return best;
 }
 
+static UIView *AWEFindFirstDescendantWhoseClassContains(UIView *root,
+                                                          NSString *needle,
+                                                          NSUInteger depth) {
+    if (!root || !needle.length || depth > 10) return nil;
+    NSString *name = NSStringFromClass(root.class);
+    if ([name rangeOfString:needle options:NSCaseInsensitiveSearch].location != NSNotFound) {
+        return root;
+    }
+    for (UIView *child in root.subviews) {
+        UIView *found = AWEFindFirstDescendantWhoseClassContains(child, needle, depth + 1);
+        if (found) return found;
+    }
+    return nil;
+}
+
+static NSString *AWEFirstVisibleLabelText(UIView *root, NSUInteger depth) {
+    if (!root || depth > 8 || root.hidden || root.alpha <= 0.01) return nil;
+    if ([root isKindOfClass:UILabel.class]) {
+        NSString *text = [((UILabel *)root).text stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (text.length) return text;
+    }
+    for (UIView *child in root.subviews) {
+        NSString *text = AWEFirstVisibleLabelText(child, depth + 1);
+        if (text.length) return text;
+    }
+    return nil;
+}
+
+static NSString *AWECurrentOriginalMessagesBadgeValue(void) {
+    if (!AWEMessageBadgeEnabled()) return nil;
+    NSArray *buttons = AWEControllerButtons(gAWELastController);
+    if (buttons.count <= 3) return nil;
+    UIView *messageButton = [buttons[3] isKindOfClass:UIView.class] ? buttons[3] : nil;
+    if (!messageButton) return nil;
+    UIView *badge = AWEFindFirstDescendantWhoseClassContains(messageButton, @"Badge", 0);
+    if (!badge || badge.hidden || badge.alpha <= 0.01 || badge.layer.opacity <= 0.01f) {
+        return nil;
+    }
+    NSString *text = AWEFirstVisibleLabelText(badge, 0);
+    if (text.length) return text;
+    /* UITabBarItem uses a single blank as a compact dot badge. */
+    return @" ";
+}
+
+static void AWEUpdateAlbumMorphMessageBadge(void) {
+    if (!gAWEAlbumMorphController) return;
+    static NSString *lastValue = nil;
+    static BOOL initialized = NO;
+    NSString *value = AWECurrentOriginalMessagesBadgeValue();
+    BOOL same = initialized && ((lastValue == value) || [lastValue isEqualToString:value]);
+    if (same) return;
+    initialized = YES;
+    lastValue = [value copy];
+    [gAWEAlbumMorphController updateMessageBadgeValue:value];
+    if (AWEInteractionDiagnosticsEnabled()) {
+        AWEInteractionDiagnosticWrite(@"MESSAGE_BADGE enabled=%d value=%@",
+                                      AWEMessageBadgeEnabled(), value ?: @"<none>");
+    }
+}
+
 static void AWEAttachNativeBarWithForce(UIView *tabBar, BOOL forceVisible) {
     if (!AWEPluginFeaturesEnabled()) return;
     if (!tabBar || AWEIsApplying(tabBar) || CGRectIsEmpty(tabBar.bounds)) return;
@@ -4471,9 +4567,21 @@ AWECurrentBarTransitionCoordinator(void) {
 
 static BOOL AWEAlbumMorphSteadyWantsVisible(UIView *originalBar) {
     if (!originalBar || !originalBar.window || gAWESettingsVisible) return NO;
-    /* Exact 1.0.10b rule: Douyin's hidden flag is the durable route signal.
-       Route registries, alpha and temporary geometry all lag during custom
-       comment/profile returns and must not override the live tab-bar state. */
+
+    /* Some Douyin builds intentionally auto-hide the original tab bar after a
+       Friends-feed batch is exhausted. That hidden flag is content UI state,
+       not navigation state, and following it makes our resident LiquidBar
+       disappear permanently on the next batch. Keep the custom bar resident
+       on the real Friends destination while still honoring every route-level
+       suppression (profile, search, share, comments, publish, commerce...). */
+    if (!AWESecondTabIsShop() && AWECurrentOriginalMainTabIndex() == 1 &&
+        !AWECurrentRouteSuppressesBar()) {
+        return YES;
+    }
+
+    /* Exact 1.0.10b rule elsewhere: Douyin's hidden flag is the durable route
+       signal. Route registries, alpha and temporary geometry all lag during
+       custom comment/profile returns and must not override it. */
     return AWEOriginalBarSteadyWantsVisible(originalBar);
 }
 
@@ -5907,9 +6015,67 @@ static __attribute__((unused)) BOOL AWEInvokeGestureRecognizer(UIGestureRecogniz
     return invoked;
 }
 
+static BOOL AWEInvokeCompatibleTabTapGesture(UIView *buttonView) {
+    if (!buttonView) return NO;
+    for (UIGestureRecognizer *recognizer in buttonView.gestureRecognizers) {
+        NSString *recognizerName = NSStringFromClass(recognizer.class).lowercaseString;
+        if ([recognizerName containsString:@"long"] ||
+            [recognizerName containsString:@"pan"] ||
+            [recognizerName containsString:@"swipe"] ||
+            [recognizerName containsString:@"pinch"]) {
+            continue;
+        }
+        BOOL likelyTap = [recognizer isKindOfClass:UITapGestureRecognizer.class] ||
+            [recognizerName containsString:@"tap"] ||
+            ([recognizerName containsString:@"tab"] &&
+             [recognizerName containsString:@"button"]);
+        if (!likelyTap) continue;
+
+        id targetContainers = AWEObjectIvar(recognizer, "_targets");
+        if (![targetContainers isKindOfClass:NSArray.class]) {
+            @try { targetContainers = [recognizer valueForKey:@"_targets"]; }
+            @catch (__unused NSException *exception) { targetContainers = nil; }
+        }
+        for (id container in (NSArray *)targetContainers) {
+            id target = AWEObjectIvar(container, "_target");
+            SEL action = AWESelectorIvar(container, "_action");
+            if (!target || !action || ![target respondsToSelector:action]) continue;
+            NSString *actionName = NSStringFromSelector(action).lowercaseString;
+            BOOL likelyAction = [actionName containsString:@"tap"] ||
+                [actionName containsString:@"click"] ||
+                [actionName containsString:@"touchup"] ||
+                [actionName containsString:@"select"] ||
+                [actionName containsString:@"press"];
+            if (!likelyAction || [actionName containsString:@"long"]) continue;
+
+            NSInteger oldState = 0;
+            BOOL changedState = AWESetIntegerIvar(
+                recognizer, "_state_DO_NOT_USE_DIRECTLY",
+                UIGestureRecognizerStateEnded, &oldState);
+            BOOL sent = [[UIApplication sharedApplication] sendAction:action
+                                                                  to:target
+                                                                from:recognizer
+                                                            forEvent:nil];
+            if (changedState) {
+                AWESetIntegerIvar(recognizer, "_state_DO_NOT_USE_DIRECTLY",
+                                  oldState, NULL);
+            }
+            if (sent) {
+                AWEInteractionDiagnosticWrite(
+                    @"TAB_COMPAT_GESTURE recognizer=%@ action=%@ target=%@",
+                    NSStringFromClass(recognizer.class), NSStringFromSelector(action),
+                    AWEInteractionObjectSummary(target));
+                return YES;
+            }
+        }
+    }
+    return NO;
+}
+
 static BOOL AWEInvokeRealTabTapGestureInTree(UIView *root, NSUInteger depth) {
     if (!root || depth > 7) return NO;
     if (AWEInvokeRealTabTapGesture(root)) return YES;
+    if (AWEInvokeCompatibleTabTapGesture(root)) return YES;
     for (UIView *child in root.subviews) {
         if (AWEInvokeRealTabTapGestureInTree(child, depth + 1)) return YES;
     }
@@ -5934,6 +6100,32 @@ static NSArray<UIView *> *AWEFallbackOriginalButtonsFromTabBar(UIView *tabBar) {
         return NSOrderedSame;
     }];
     return result;
+}
+
+static BOOL AWEInvokeControllerTabRoute(id controller, NSInteger index) {
+    if (!controller || index < 0) return NO;
+    NSArray<NSString *> *candidates = @[
+        @"selectTabAtIndex:", @"switchToTabAtIndex:", @"selectIndex:",
+        @"setSelectedIndex:", @"setCurrentIndex:"
+    ];
+    for (NSString *name in candidates) {
+        SEL selector = NSSelectorFromString(name);
+        if (![controller respondsToSelector:selector]) continue;
+        NSMethodSignature *signature = [controller methodSignatureForSelector:selector];
+        if (!signature || signature.numberOfArguments < 3) continue;
+        const char *type = [signature getArgumentTypeAtIndex:2];
+        while (type && (*type == 'r' || *type == 'n' || *type == 'N' ||
+                        *type == 'o' || *type == 'O' || *type == 'R' || *type == 'V')) type++;
+        if (!type || !strchr("qQiIlLsScC", *type)) continue;
+        @try {
+            ((void (*)(id, SEL, NSInteger))objc_msgSend)(controller, selector, index);
+            AWEInteractionDiagnosticWrite(
+                @"TAB_CONTROLLER_ROUTE index=%ld selector=%@ controller=%@",
+                (long)index, name, AWEInteractionObjectSummary(controller));
+            return YES;
+        } @catch (__unused NSException *exception) {}
+    }
+    return NO;
 }
 
 static BOOL AWEForwardToOriginalButton(UIView *tabBar, NSInteger index) {
@@ -6006,6 +6198,13 @@ static BOOL AWEForwardToOriginalButton(UIView *tabBar, NSInteger index) {
         AWEInteractionDiagnosticWrite(
             @"TAB_FORWARD_END index=%ld result=YES path=accessibility button=%@",
             (long)index, AWEInteractionObjectSummary(buttonView));
+        return YES;
+    }
+
+    if (index != 2 && AWEInvokeControllerTabRoute(controller, index)) {
+        AWEInteractionDiagnosticWrite(
+            @"TAB_FORWARD_END index=%ld result=YES path=controller-route controller=%@",
+            (long)index, AWEInteractionObjectSummary(controller));
         return YES;
     }
 
@@ -6135,6 +6334,184 @@ typedef NS_ENUM(NSInteger, AWEHomeActionKind) {
 @end
 @implementation AWEHomeProfileGlassView
 @end
+
+@interface AWEExternalBridgeMenuSlotView : UIView
+@property(nonatomic, strong) UIButton *menuButton;
+@end
+@implementation AWEExternalBridgeMenuSlotView
+@end
+
+static BOOL AWEExternalBridgePluginImageLoaded(void) {
+    uint32_t count = _dyld_image_count();
+    for (uint32_t index = 0; index < count; index++) {
+        const char *name = _dyld_get_image_name(index);
+        if (!name) continue;
+        NSString *path = [NSString stringWithUTF8String:name].lowercaseString;
+        if ([path.lastPathComponent isEqualToString:@"awemex.dylib"] ||
+            [path containsString:@"/awemex.dylib"]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static NSMutableDictionary<NSString *, NSNumber *> *AWEExternalBridgeCapabilityCache(void) {
+    static NSMutableDictionary<NSString *, NSNumber *> *cache = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ cache = [NSMutableDictionary dictionary]; });
+    return cache;
+}
+
+static BOOL AWEExternalBridgeRuntimeHasSelector(SEL selector) {
+    if (!selector) return NO;
+    NSString *name = NSStringFromSelector(selector);
+    NSNumber *cached = AWEExternalBridgeCapabilityCache()[name];
+    if (cached) return cached.boolValue;
+    int count = objc_getClassList(NULL, 0);
+    if (count <= 0) return NO;
+    Class *classes = (__unsafe_unretained Class *)calloc((size_t)count, sizeof(Class));
+    if (!classes) return NO;
+    count = objc_getClassList(classes, count);
+    BOOL found = NO;
+    for (int index = 0; index < count && !found; index++) {
+        Class cls = classes[index];
+        if (!cls) continue;
+        if (class_getInstanceMethod(cls, selector) ||
+            class_getClassMethod(cls, selector)) {
+            found = YES;
+        }
+    }
+    free(classes);
+    AWEExternalBridgeCapabilityCache()[name] = @(found);
+    return found;
+}
+
+static id AWEFindObjectRespondingToSelectorInView(UIView *view,
+                                                    SEL selector,
+                                                    NSUInteger depth) {
+    if (!view || !selector || depth > 18) return nil;
+    if ([view respondsToSelector:selector] && view.window &&
+        !view.hidden && view.alpha > 0.01) return view;
+    /* Search front-most children first; the current feed cell is usually last. */
+    for (UIView *child in [view.subviews reverseObjectEnumerator]) {
+        id found = AWEFindObjectRespondingToSelectorInView(child, selector, depth + 1);
+        if (found) return found;
+    }
+    return nil;
+}
+
+static id AWEFindObjectRespondingToSelectorInController(UIViewController *controller,
+                                                          SEL selector,
+                                                          NSUInteger depth) {
+    if (!controller || !selector || depth > 12) return nil;
+    if ([controller respondsToSelector:selector] &&
+        controller.viewIfLoaded.window) return controller;
+    if (controller.presentedViewController &&
+        !controller.presentedViewController.isBeingDismissed) {
+        id found = AWEFindObjectRespondingToSelectorInController(
+            controller.presentedViewController, selector, depth + 1);
+        if (found) return found;
+    }
+    if ([controller isKindOfClass:UINavigationController.class]) {
+        id found = AWEFindObjectRespondingToSelectorInController(
+            ((UINavigationController *)controller).visibleViewController,
+            selector, depth + 1);
+        if (found) return found;
+    }
+    if ([controller isKindOfClass:UITabBarController.class]) {
+        id found = AWEFindObjectRespondingToSelectorInController(
+            ((UITabBarController *)controller).selectedViewController,
+            selector, depth + 1);
+        if (found) return found;
+    }
+    id viewFound = AWEFindObjectRespondingToSelectorInView(
+        controller.viewIfLoaded, selector, 0);
+    if (viewFound) return viewFound;
+    for (UIViewController *child in [controller.childViewControllers reverseObjectEnumerator]) {
+        id found = AWEFindObjectRespondingToSelectorInController(child, selector, depth + 1);
+        if (found) return found;
+    }
+    return nil;
+}
+
+static id AWEExternalBridgeFindLiveTarget(SEL selector) {
+    UIWindow *main = AWEActiveMainWindow();
+    if (main.rootViewController) {
+        id found = AWEFindObjectRespondingToSelectorInController(
+            main.rootViewController, selector, 0);
+        if (found) return found;
+    }
+    for (UIWindow *window in UIApplication.sharedApplication.windows.reverseObjectEnumerator) {
+        if (!window || window == main || window.hidden || window.alpha <= 0.01) continue;
+        id found = AWEFindObjectRespondingToSelectorInController(
+            window.rootViewController, selector, 0);
+        if (found) return found;
+        found = AWEFindObjectRespondingToSelectorInView(window, selector, 0);
+        if (found) return found;
+    }
+    return nil;
+}
+
+static BOOL AWEExternalBridgeInvokeSelectorName(NSString *selectorName) {
+    SEL selector = NSSelectorFromString(selectorName ?: @"");
+    if (!selector) return NO;
+    id target = AWEExternalBridgeFindLiveTarget(selector);
+    if (!target) {
+        AWEInteractionDiagnosticWrite(@"BRIDGE_ACTION selector=%@ result=NO reason=no-live-target",
+                                      selectorName ?: @"<nil>");
+        return NO;
+    }
+    @try {
+        ((void (*)(id, SEL))objc_msgSend)(target, selector);
+        AWEInteractionDiagnosticWrite(@"BRIDGE_ACTION selector=%@ result=YES target=%@",
+                                      selectorName, AWEInteractionObjectSummary(target));
+        return YES;
+    } @catch (NSException *exception) {
+        AWEInteractionDiagnosticWrite(@"BRIDGE_ACTION selector=%@ result=NO exception=%@",
+                                      selectorName, exception.name ?: @"unknown");
+        return NO;
+    }
+}
+
+static UIAction *AWEExternalBridgeAction(NSString *title,
+                                         NSString *systemImage,
+                                         NSString *selectorName) {
+    SEL selector = NSSelectorFromString(selectorName ?: @"");
+    BOOL available = AWEExternalBridgeRuntimeHasSelector(selector);
+    UIAction *action = [UIAction actionWithTitle:title
+        image:[UIImage systemImageNamed:systemImage]
+        identifier:nil
+        handler:^(__kindof UIAction * _Nonnull ignored) {
+            (void)ignored;
+            AWEExternalBridgeInvokeSelectorName(selectorName);
+        }];
+    if (!available) action.attributes = UIMenuElementAttributesDisabled;
+    return action;
+}
+
+static UIMenu *AWEExternalBridgeMenu(void) {
+    NSMutableArray<UIMenuElement *> *items = [NSMutableArray array];
+    [items addObject:AWEExternalBridgeAction(@"保存当前视频", @"arrow.down.circle", @"saveCurrentVideo")];
+    [items addObject:AWEExternalBridgeAction(@"保存全部图片", @"photo.on.rectangle.angled", @"saveImages")];
+    [items addObject:AWEExternalBridgeAction(@"保存音频", @"waveform", @"saveAudio")];
+    [items addObject:AWEExternalBridgeAction(@"复制完整文案", @"doc.on.doc", @"copyCompleteText")];
+    if (AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"tcShowDownloadOptions"))) {
+        [items addObject:[UIMenu menuWithTitle:@"" options:UIMenuOptionsDisplayInline
+            children:@[AWEExternalBridgeAction(@"打开原插件下载面板",
+                                                @"ellipsis.circle",
+                                                @"tcShowDownloadOptions")]]];
+    }
+    return [UIMenu menuWithTitle:@"下载与复制" children:items];
+}
+
+static BOOL AWEExternalBridgeAvailable(void) {
+    if (!AWEExternalBridgePluginImageLoaded()) return NO;
+    for (NSString *name in @[@"saveCurrentVideo", @"saveImages", @"saveAudio",
+                             @"copyCompleteText", @"tcShowDownloadOptions"]) {
+        if (AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(name))) return YES;
+    }
+    return NO;
+}
 
 typedef NS_ENUM(NSInteger, AWEHomeTopActionKind) {
     AWEHomeTopActionKindMenu = 1,
@@ -6778,6 +7155,67 @@ static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
     return automaticColor;
 }
 
+@interface AWEGlassPressFeedbackTarget : NSObject <UIGestureRecognizerDelegate>
+@property(nonatomic, weak) UIButton *glassButton;
+- (void)handlePress:(UILongPressGestureRecognizer *)gesture;
+@end
+
+@implementation AWEGlassPressFeedbackTarget
+- (void)handlePress:(UILongPressGestureRecognizer *)gesture {
+    UIButton *button = self.glassButton;
+    if (!button) return;
+    switch (gesture.state) {
+        case UIGestureRecognizerStateBegan:
+        case UIGestureRecognizerStateChanged:
+            button.highlighted = YES;
+            [button setNeedsUpdateConfiguration];
+            break;
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            button.highlighted = NO;
+            [button setNeedsUpdateConfiguration];
+            break;
+        default:
+            break;
+    }
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+        shouldRecognizeSimultaneouslyWithGestureRecognizer:
+            (UIGestureRecognizer *)otherGestureRecognizer {
+    (void)gestureRecognizer; (void)otherGestureRecognizer;
+    return YES;
+}
+@end
+
+static void AWEInstallGlassPressFeedback(UIView *touchOwner,
+                                         UIButton *glassButton) {
+    if (!touchOwner || !glassButton) return;
+    UILongPressGestureRecognizer *recognizer = objc_getAssociatedObject(
+        touchOwner, &kAWEGlassPressFeedbackRecognizerKey);
+    AWEGlassPressFeedbackTarget *target = objc_getAssociatedObject(
+        touchOwner, &kAWEGlassPressFeedbackTargetKey);
+    if (!target) {
+        target = [AWEGlassPressFeedbackTarget new];
+        objc_setAssociatedObject(touchOwner, &kAWEGlassPressFeedbackTargetKey,
+                                 target, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    target.glassButton = glassButton;
+    if (!recognizer) {
+        recognizer = [[UILongPressGestureRecognizer alloc]
+            initWithTarget:target action:@selector(handlePress:)];
+        recognizer.minimumPressDuration = 0.0;
+        recognizer.allowableMovement = 44.0;
+        recognizer.cancelsTouchesInView = NO;
+        recognizer.delaysTouchesBegan = NO;
+        recognizer.delaysTouchesEnded = NO;
+        recognizer.delegate = target;
+        [touchOwner addGestureRecognizer:recognizer];
+        objc_setAssociatedObject(touchOwner, &kAWEGlassPressFeedbackRecognizerKey,
+                                 recognizer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
 /*
  Custom top/right controls must stay on the same system-owned material path as
  the native UITabBar.  Direct SwiftUI glassEffect(.clear/.regular) pins a
@@ -7198,6 +7636,104 @@ static void AWEConfigureAdaptiveSystemGlassPlateButton(
     AWEApplyResolvedGlassStyleToAdaptiveButton(button);
 }
 
+static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *stack) {
+    if (!stack) return nil;
+    AWEExternalBridgeMenuSlotView *slot = objc_getAssociatedObject(
+        stack, &kAWEExternalBridgeMenuSlotKey);
+    UIView *host = stack.superview ?: stack;
+    if (!slot) {
+        slot = [[AWEExternalBridgeMenuSlotView alloc] initWithFrame:CGRectZero];
+        slot.backgroundColor = UIColor.clearColor;
+        slot.opaque = NO;
+        slot.clipsToBounds = NO;
+        slot.accessibilityIdentifier = @"AwemeLiquidBar.ExternalBridgeMenuSlot";
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+        button.backgroundColor = UIColor.clearColor;
+        button.opaque = NO;
+        button.clipsToBounds = NO;
+        button.accessibilityLabel = @"下载与复制";
+        button.showsMenuAsPrimaryAction = YES;
+        [slot addSubview:button];
+        slot.menuButton = button;
+        objc_setAssociatedObject(stack, &kAWEExternalBridgeMenuSlotKey,
+                                 slot, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (slot.superview != host) {
+        [slot removeFromSuperview];
+        [host addSubview:slot];
+    }
+    return slot;
+}
+
+static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
+    if (!stack) return;
+    AWEExternalBridgeMenuSlotView *slot = objc_getAssociatedObject(
+        stack, &kAWEExternalBridgeMenuSlotKey);
+    if (!slot) return;
+    AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
+        stack, &kAWEProfileGlassSlotKey);
+    UIView *host = stack.superview ?: stack;
+    if (!profile || profile.hidden || !profile.window || !host.window) {
+        slot.hidden = YES;
+        return;
+    }
+    if (slot.superview != host) {
+        [slot removeFromSuperview];
+        [host addSubview:slot];
+    }
+    CGPoint profileCenter = [stack convertPoint:profile.center toView:host];
+    const CGFloat diameter = 46.0;
+    slot.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
+    slot.center = CGPointMake(profileCenter.x, profileCenter.y - 61.0);
+    slot.menuButton.frame = slot.bounds;
+    slot.hidden = NO;
+    slot.alpha = 1.0;
+    [host bringSubviewToFront:slot];
+}
+
+static void AWERefreshExternalBridgeMenu(UIView *stack) {
+    if (!stack) return;
+    BOOL available = AWEExternalBridgeAvailable();
+    AWEExternalBridgeMenuSlotView *slot = available
+        ? AWEEnsureExternalBridgeMenuSlot(stack)
+        : objc_getAssociatedObject(stack, &kAWEExternalBridgeMenuSlotKey);
+    if (!slot) return;
+    if (!available) {
+        slot.hidden = YES;
+        return;
+    }
+    BOOL originalPNG = NO;
+    UIImage *image = AWEConfiguredRoleImage(
+        @"right.external.download",
+        @[@"square.and.arrow.down", @"arrow.down.circle"],
+        19.5, UIImageSymbolWeightSemibold, &originalPNG);
+    UIColor *foreground = nil;
+    if (!originalPNG) {
+        AWEConfiguredIconColorMode mode = AWEStoredSymbolColorMode(@"right.external.download");
+        if (mode != AWEConfiguredIconColorModeAutomatic) {
+            foreground = AWEApplyConfiguredIconColorMode(@"right.external.download", nil);
+        }
+    }
+    slot.menuButton.menu = AWEExternalBridgeMenu();
+    slot.menuButton.userInteractionEnabled = YES;
+    AWEConfigureAdaptiveSystemGlassIconButton(
+        slot.menuButton, image, @"right.external.download", 19.5,
+        foreground, originalPNG, AWEHomeTintedGlassEnabled(), YES);
+    AWELayoutExternalBridgeMenuForStack(stack);
+
+    static BOOL logged = NO;
+    if (!logged && AWEInteractionDiagnosticsEnabled()) {
+        logged = YES;
+        AWEInteractionDiagnosticWrite(
+            @"BRIDGE_PLUGIN_FOUND video=%d images=%d audio=%d copy=%d panel=%d",
+            AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"saveCurrentVideo")),
+            AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"saveImages")),
+            AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"saveAudio")),
+            AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"copyCompleteText")),
+            AWEExternalBridgeRuntimeHasSelector(NSSelectorFromString(@"tcShowDownloadOptions")));
+    }
+}
+
 static NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *
 AWEHomeActionSlotsForStack(UIView *stack) {
     NSMutableDictionary *slots = objc_getAssociatedObject(stack,
@@ -7318,6 +7854,7 @@ static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
             originalPNG,
             AWEHomeTintedGlassEnabled(),
             NO);
+        AWEInstallGlassPressFeedback(button, slot.systemGlassButton);
     } else {
         slot.hidden = YES;
     }
@@ -7453,6 +7990,7 @@ static void AWERefreshProfileAvatarGlass(UIView *stack) {
     avatar.clipsToBounds = YES;
     AWEConfigureAdaptiveSystemGlassPlateButton(
         slot.glassButton, @"right.profile.avatar", AWEHomeTintedGlassEnabled());
+    AWEInstallGlassPressFeedback(pictureHost, slot.glassButton);
 }
 
 static void AWEHideAndReleaseHomeActionSlot(AWEHomeActionSlotView *slot) {
@@ -7491,6 +8029,9 @@ static void AWERefreshHomeActionStack(UIView *stack) {
         AWEHomeProfileGlassView *profileSlot = objc_getAssociatedObject(
             stack, &kAWEProfileGlassSlotKey);
         profileSlot.hidden = YES;
+        AWEExternalBridgeMenuSlotView *bridgeSlot = objc_getAssociatedObject(
+            stack, &kAWEExternalBridgeMenuSlotKey);
+        bridgeSlot.hidden = YES;
         for (AWEHomeActionSlotView *slot in slots.allValues) {
             AWEHideAndReleaseHomeActionSlot(slot);
         }
@@ -7501,6 +8042,9 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     if (stack.hidden || stack.alpha < 0.01) {
         /* Keep visual slots and source bindings intact. They are children of
            the stack and naturally follow its temporary hidden/offscreen state. */
+        AWEExternalBridgeMenuSlotView *bridgeSlot = objc_getAssociatedObject(
+            stack, &kAWEExternalBridgeMenuSlotKey);
+        bridgeSlot.hidden = YES;
         objc_setAssociatedObject(stack, &kAWEHomeActionStackApplyingKey, nil,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         return;
@@ -7553,6 +8097,7 @@ static void AWERefreshHomeActionStack(UIView *stack) {
         }
     }
     AWERefreshProfileAvatarGlass(stack);
+    AWERefreshExternalBridgeMenu(stack);
     objc_setAssociatedObject(stack, &kAWEHomeActionStackApplyingKey, nil,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
@@ -7578,6 +8123,7 @@ static void AWELayoutBoundHomeActionSlots(UIView *stack) {
         slot.systemGlassButton.frame = slot.bounds;
         slot.hidden = NO;
     }
+    AWELayoutExternalBridgeMenuForStack(stack);
     [CATransaction commit];
 }
 
@@ -9518,6 +10064,7 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     [gAWEAlbumMorphController
         configureVisibleItemIdentifiers:AWEAlbumMorphVisibleItemIdentifiers()];
     [gAWEAlbumMorphController updateAccentColor:AWEStoredAccentColor()];
+    AWEUpdateAlbumMorphMessageBadge();
 
     AWEApplyAlbumMorphOriginalSuppression(originalBar, YES);
     AWEAlignAlbumMorphOverlayToOriginalBar(
@@ -9734,6 +10281,9 @@ static void AWEConfigureTopSlot(UIView *container,
             originalPNG,
             AWEHomeTintedGlassEnabled(),
             YES);
+        if (directSearchPassthrough) {
+            AWEInstallGlassPressFeedback(owner, materialButton);
+        }
         slot.systemGlassButton.hidden = !directSearchPassthrough;
     } else {
         slot.hidden = YES;
@@ -10327,6 +10877,39 @@ static void AWEHideTopLiquidGroup(UIView *container) {
     }
 }
 
+static CGRect AWEFrameForTopLiquidGroup(UIView *container,
+                                           AWETopLiquidGroupView *group,
+                                           NSInteger visibleCount) {
+    if (!container || !group || visibleCount < 1) return CGRectZero;
+
+    AWEHomeTopSlotView *menuSlot = objc_getAssociatedObject(
+        container, &kAWETopMenuSlotKey);
+    AWEHomeTopSlotView *searchSlot = objc_getAssociatedObject(
+        container, &kAWETopSearchSlotKey);
+    BOOL menuVisible = menuSlot && !menuSlot.hidden &&
+        menuSlot.alpha > 0.01 && menuSlot.layer.opacity > 0.01f;
+    BOOL searchVisible = searchSlot && !searchSlot.hidden &&
+        searchSlot.alpha > 0.01 && searchSlot.layer.opacity > 0.01f;
+
+    /* Keep the category group geometrically centered on the screen.
+       If only one side action exists, reserve the same clearance on the
+       opposite side instead of centering inside an asymmetric free region.
+       This also fixes the no-left/no-right case introduced by the old
+       hard-coded leftBoundary=82 / rightBoundary=14 calculation. */
+    CGFloat sideReserve = (menuVisible || searchVisible) ? 82.0 : 14.0;
+    CGFloat availableWidth = MAX(120.0,
+        CGRectGetWidth(container.bounds) - sideReserve * 2.0);
+    CGFloat perItemWidth = visibleCount == 1 ? 96.0 : 74.0;
+    CGFloat desiredWidth = MIN(availableWidth,
+        MAX(visibleCount == 1 ? 92.0 : 148.0,
+            visibleCount * perItemWidth));
+    CGFloat height = 44.0;
+    CGFloat centerX = CGRectGetMidX(container.bounds);
+    return CGRectMake(centerX - desiredWidth * 0.5,
+                      CGRectGetMidY(container.bounds) - height * 0.5,
+                      desiredWidth, height);
+}
+
 static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
                                     BOOL animated) {
     if (!group || group.definitions.count < 1 || CGRectIsEmpty(group.bounds)) return;
@@ -10486,21 +11069,9 @@ static void AWELayoutExistingTopChrome(UIView *container) {
     if (group && !group.hidden && group.definitions.count > 0) {
         NSInteger visibleCount = MIN([group alb_visibleCount],
                                      (NSInteger)group.definitions.count);
-        BOOL topSearchVisible = searchSlot && !searchSlot.hidden;
-        CGFloat height = 44.0;
-        CGFloat leftBoundary = 82.0;
-        CGFloat rightBoundary = topSearchVisible ? 82.0 : 14.0;
-        CGFloat availableWidth = MAX(120.0,
-            CGRectGetWidth(container.bounds) - leftBoundary - rightBoundary);
-        CGFloat perItemWidth = visibleCount == 1 ? 96.0 : 74.0;
-        CGFloat desiredWidth = MIN(availableWidth,
-            MAX(visibleCount == 1 ? 92.0 : 148.0,
-                visibleCount * perItemWidth));
-        CGFloat centerX = leftBoundary + availableWidth * 0.5;
-        group.frame = CGRectMake(centerX - desiredWidth * 0.5,
-                                 CGRectGetMidY(container.bounds) - height * 0.5,
-                                 desiredWidth, height);
-        group.layer.cornerRadius = height * 0.5;
+        group.frame = AWEFrameForTopLiquidGroup(
+            container, group, visibleCount);
+        group.layer.cornerRadius = CGRectGetHeight(group.bounds) * 0.5;
         group.backgroundGlass.frame = group.bounds;
         AWELayoutTopLiquidGroup(group, NO);
     }
@@ -10543,27 +11114,11 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
 
     AWETopLiquidGroupView *group = AWEEnsureTopLiquidGroup(container);
     if (!group) return;
-    AWEHomeTopSlotView *searchSlot = objc_getAssociatedObject(
-        container, &kAWETopSearchSlotKey);
-    BOOL topSearchVisible = searchSlot && !searchSlot.hidden;
-
-    CGFloat height = 44.0;
-    CGFloat leftBoundary = 82.0;
-    CGFloat rightBoundary = topSearchVisible ? 82.0 : 14.0;
-    CGFloat availableWidth = MAX(120.0,
-        CGRectGetWidth(container.bounds) - leftBoundary - rightBoundary);
     NSInteger visibleCount = MIN(AWETopTelegramVisibleCount(),
                                  (NSInteger)definitions.count);
-    CGFloat perItemWidth = visibleCount == 1 ? 96.0 : 74.0;
-    CGFloat desiredWidth = MIN(availableWidth,
-        MAX(visibleCount == 1 ? 92.0 : 148.0,
-            visibleCount * perItemWidth));
-    CGFloat centerX = leftBoundary + availableWidth * 0.5;
-    group.frame = CGRectMake(centerX - desiredWidth * 0.5,
-                             CGRectGetMidY(container.bounds) - height * 0.5,
-                             desiredWidth,
-                             height);
-    group.layer.cornerRadius = height * 0.5;
+    group.frame = AWEFrameForTopLiquidGroup(
+        container, group, visibleCount);
+    group.layer.cornerRadius = CGRectGetHeight(group.bounds) * 0.5;
     group.hidden = NO;
     group.userInteractionEnabled = YES;
     group.alpha = 1.0;
@@ -12334,6 +12889,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 @property (nonatomic, retain) NSArray<UILabel *> *themePrimaryLabels;
 @property (nonatomic, retain) NSArray<UILabel *> *themeSecondaryLabels;
 @property (nonatomic, retain) UISwitch *lowerHalfCommentSwitch;
+@property (nonatomic, retain) UISwitch *settingsGestureMineOnlySwitch;
 @property (nonatomic, retain) UISlider *verticalOffsetSlider;
 @property (nonatomic, retain) UILabel *verticalOffsetValueLabel;
 @property (nonatomic, retain) UISwitch *collapseSwitch;
@@ -12349,6 +12905,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 @property (nonatomic, retain) UISwitch *transparentGlassSwitch;
 @property (nonatomic, retain) UISwitch *albumMorphStyleSwitch;
 @property (nonatomic, retain) UISwitch *hideBottomTitlesSwitch;
+@property (nonatomic, retain) UISwitch *messageBadgeSwitch;
 @property (nonatomic, retain) UISwitch *forceDarkBottomBarSwitch;
 @property (nonatomic, retain) UISwitch *chatCapsuleSwitch;
 @property (nonatomic, retain) UISwitch *chatSeparateLeftSwitch;
@@ -12368,7 +12925,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.49e";
+    self.title = @"LiquidBar 设置 · 1.0.50b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -12599,9 +13156,27 @@ static void AWEClearStoredIconConfigurationForDefinitions(
           forControlEvents:UIControlEventValueChanged];
     self.doubleTapSplitSlider = splitSlider;
 
+    UILabel *settingsGestureMineOnlyLabel = [UILabel new];
+    settingsGestureMineOnlyLabel.text = @"双指长按仅在‘我’页面触发";
+    settingsGestureMineOnlyLabel.font =
+        [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
+    UISwitch *settingsGestureMineOnlySwitch = [UISwitch new];
+    settingsGestureMineOnlySwitch.on = AWESettingsGestureMineOnlyEnabled();
+    settingsGestureMineOnlySwitch.onTintColor = AWEStoredAccentColor();
+    [settingsGestureMineOnlySwitch addTarget:self
+        action:@selector(settingsGestureMineOnlySwitchChanged:)
+        forControlEvents:UIControlEventValueChanged];
+    self.settingsGestureMineOnlySwitch = settingsGestureMineOnlySwitch;
+    UIStackView *settingsGestureMineOnlyRow = [[UIStackView alloc]
+        initWithArrangedSubviews:@[settingsGestureMineOnlyLabel,
+                                  settingsGestureMineOnlySwitch]];
+    settingsGestureMineOnlyRow.axis = UILayoutConstraintAxisHorizontal;
+    settingsGestureMineOnlyRow.alignment = UIStackViewAlignmentCenter;
+    settingsGestureMineOnlyRow.distribution = UIStackViewDistributionEqualSpacing;
+
     UIStackView *gestureStack =
         [[UIStackView alloc] initWithArrangedSubviews:@[
-            gestureHeader, splitValue, splitSlider
+            gestureHeader, splitValue, splitSlider, settingsGestureMineOnlyRow
         ]];
     gestureStack.translatesAutoresizingMaskIntoConstraints = NO;
     gestureStack.axis = UILayoutConstraintAxisVertical;
@@ -12789,6 +13364,22 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     hideTitlesRow.axis = UILayoutConstraintAxisHorizontal;
     hideTitlesRow.alignment = UIStackViewAlignmentCenter;
     hideTitlesRow.distribution = UIStackViewDistributionEqualSpacing;
+
+    UILabel *messageBadgeLabel = [UILabel new];
+    messageBadgeLabel.text = @"显示消息未读角标";
+    messageBadgeLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
+    UISwitch *messageBadgeSwitch = [UISwitch new];
+    messageBadgeSwitch.on = AWEMessageBadgeEnabled();
+    messageBadgeSwitch.onTintColor = AWEStoredAccentColor();
+    [messageBadgeSwitch addTarget:self
+        action:@selector(messageBadgeSwitchChanged:)
+        forControlEvents:UIControlEventValueChanged];
+    self.messageBadgeSwitch = messageBadgeSwitch;
+    UIStackView *messageBadgeRow = [[UIStackView alloc]
+        initWithArrangedSubviews:@[messageBadgeLabel, messageBadgeSwitch]];
+    messageBadgeRow.axis = UILayoutConstraintAxisHorizontal;
+    messageBadgeRow.alignment = UIStackViewAlignmentCenter;
+    messageBadgeRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *forceDarkBottomBarLabel = [UILabel new];
     forceDarkBottomBarLabel.text = @"iOS 27 底栏强制深色";
@@ -12983,7 +13574,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
     UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         albumStyleRow, newBarIconCenterButton,
-        hideTitlesRow, forceDarkBottomBarRow,
+        hideTitlesRow, messageBadgeRow, forceDarkBottomBarRow,
         topRow, hideTopLeftButtonRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
         adaptiveGlassHint, transparentGlassRow,
         pngRow, pngHint, reloadPNG,
@@ -13055,7 +13646,8 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     ];
     self.themePrimaryLabels = @[
         masterTitle, headline, positionTitle, gestureTitle, chatTitle,
-        capsuleLabel, separateLabel, wanTitle, albumStyleLabel, hideTitlesLabel,
+        capsuleLabel, separateLabel, wanTitle, settingsGestureMineOnlyLabel,
+        albumStyleLabel, hideTitlesLabel, messageBadgeLabel,
         forceDarkBottomBarLabel, topLabel, topCategoryGroupLabel,
         topMenuMorphLabel, pngLabel, diagnosticLabel
     ];
@@ -13148,6 +13740,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     UIColor *accent = self.pendingAccentColor ?: AWEStoredAccentColor();
     self.previewView.backgroundColor = accent;
     self.lowerHalfCommentSwitch.onTintColor = accent;
+    self.settingsGestureMineOnlySwitch.onTintColor = accent;
     self.verticalOffsetSlider.minimumTrackTintColor = accent;
     self.collapseSwitch.onTintColor = accent;
     self.doubleTapSplitSlider.minimumTrackTintColor = accent;
@@ -13160,6 +13753,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     self.topMenuMorphSwitch.onTintColor = accent;
     self.transparentGlassSwitch.onTintColor = accent;
     self.hideBottomTitlesSwitch.onTintColor = accent;
+    self.messageBadgeSwitch.onTintColor = accent;
     self.albumMorphStyleSwitch.onTintColor = accent;
     self.masterSwitch.onTintColor = accent;
     self.interactionDiagnosticSwitch.onTintColor = accent;
@@ -13328,6 +13922,19 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         setDouble:sender.value
            forKey:kAWEDoubleTapLikeFractionDefaultsKey];
     [self updateDoubleTapSplitLabel];
+}
+
+- (void)settingsGestureMineOnlySwitchChanged:(UISwitch *)sender {
+    [NSUserDefaults.standardUserDefaults setBool:sender.isOn
+        forKey:kAWESettingsGestureMineOnlyDefaultsKey];
+    [NSUserDefaults.standardUserDefaults synchronize];
+}
+
+- (void)messageBadgeSwitchChanged:(UISwitch *)sender {
+    [NSUserDefaults.standardUserDefaults setBool:sender.isOn
+        forKey:kAWEMessageBadgeEnabledDefaultsKey];
+    [NSUserDefaults.standardUserDefaults synchronize];
+    AWEUpdateAlbumMorphMessageBadge();
 }
 
 - (void)lowerHalfCommentSwitchChanged:(UISwitch *)sender {
@@ -13533,7 +14140,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.49e image=%@ ==========" ,
+            @"========== START build=1.0.50b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -13600,7 +14207,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.49e diagnostic export\n"
+                @"AwemeLiquidBar 1.0.50b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -13615,7 +14222,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.49e_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.50b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -13684,6 +14291,13 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
 - (void)openSettingsFromGesture:(UILongPressGestureRecognizer *)gesture {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
+    if (gAWESettingsVisible || !AWECurrentPageAllowsSettingsGesture()) {
+        AWEInteractionDiagnosticWrite(
+            @"SETTINGS_GESTURE_BLOCKED mineOnly=%d mainTab=%ld",
+            AWESettingsGestureMineOnlyEnabled(),
+            (long)AWECurrentOriginalMainTabIndex());
+        return;
+    }
 
     UIWindow *window = AWEActiveMainWindow();
     UIViewController *top =
@@ -13734,10 +14348,16 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 }
 
 
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    (void)gestureRecognizer;
+    return AWECurrentPageAllowsSettingsGesture();
+}
+
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
         shouldRecognizeSimultaneouslyWithGestureRecognizer:
             (UIGestureRecognizer *)otherGestureRecognizer {
-    return YES;
+    (void)gestureRecognizer; (void)otherGestureRecognizer;
+    return AWECurrentPageAllowsSettingsGesture();
 }
 
 @end
@@ -14684,6 +15304,26 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 %end
 
+/* Mirror Douyin's message badge only when its dedicated tab badge container
+   lays out. This avoids polling and naturally follows count/dot updates. */
+%hook AWENormalModeTabBarBadgeContainerView
+
+- (void)layoutSubviews {
+    %orig;
+    if (AWEMessageBadgeEnabled()) {
+        AWEUpdateAlbumMorphMessageBadge();
+    }
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    if (AWEMessageBadgeEnabled()) {
+        AWEUpdateAlbumMorphMessageBadge();
+    }
+}
+
+%end
+
 %hook UITabBar
 
 - (void)layoutSubviews {
@@ -15252,7 +15892,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.49e os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.50b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

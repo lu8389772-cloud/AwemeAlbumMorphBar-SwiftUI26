@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.49e
+Version: 1.0.50b
 Architecture: iphoneos-arm
-Description: Authorization-only update based on 1.0.49d behavior: retains comment-panel right-side recovery, unified bottom icons, 1.0.48 stability fixes, and expands the encrypted authorization table to 29 entries.
+Description: Cross-version bottom routing fallback, optional external AwemeX download/copy bridge, profile-only settings gesture guard, Friends-feed bottom-bar persistence, native glass press feedback, message unread badge mirroring, centered top category layout, and auth29.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

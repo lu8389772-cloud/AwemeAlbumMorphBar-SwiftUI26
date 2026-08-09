@@ -1,25 +1,24 @@
-# AwemeLiquidBar 1.0.49e
+# AwemeLiquidBar 1.0.50b
 
-> Authorization-only update: adds one encrypted authorization entry (29 total). Functional behavior is unchanged from 1.0.49d.
+Consolidated compatibility/interaction update based on 1.0.49e. The encrypted authorization table remains **29 entries**.
 
-Incremental release based on 1.0.49c.
+## Changes
 
-- Adds an independent **完全隐藏左上角按钮** switch. When enabled, both the plugin Liquid Glass menu button and Douyin's original left entrance are suppressed; top search remains independent.
-- Preserves the 1.0.48a publish/share/forward/PNG/commerce stability restoration.
-- Extends the encrypted authorization table from 26 to 28 entries. Account plaintext is not stored in the release gate.
+- **Cross-version bottom-tab forwarding**: keeps the proven target/action path first, then adds compatible tap-gesture discovery and conservative controller index-route fallback for Douyin builds that return `TAB_FORWARD ... no-route`.
+- **External AwemeX bridge (soft dependency)**: when `AwemeX.dylib` is loaded and exposes supported runtime selectors, a native 46 pt Liquid Glass menu button is placed above the right-side avatar. The menu can bridge `saveCurrentVideo`, `saveImages`, `saveAudio`, `copyCompleteText`, and optionally `tcShowDownloadOptions`. If the external plugin is absent or no selector is available, the button stays hidden and AwemeLiquidBar remains independent.
+- **Two-finger settings gesture guard**: adds `双指长按仅在‘我’页面触发`; default is ON to avoid collisions with immersive/relax-video gestures. Turning it OFF restores global behavior.
+- **Friends-feed bottom-bar persistence**: on a real Friends second tab (not Shop), Douyin's content-driven hidden flag no longer removes the resident LiquidBar; route-level hiding for profile/search/share/comments/publish/commerce is still respected.
+- **Native glass press feedback**: search, right-side actions, avatar and the external bridge menu forward the real touch owner's press state into the visual system glass button, restoring UIKit highlight/deformation without stealing the original action.
+- **Messages unread badge**: optional `显示消息未读角标` switch (default OFF). The original message badge value/dot is mirrored onto the Messages `UITab`, so it follows custom item ordering automatically.
+- Keeps the 1.0.48 publish/share/PNG/commerce stability fixes, single-artwork bottom-icon model, and existing right-side comment recovery diagnostics.
 
+## External bridge notes
 
-## 1.0.49e fixes
-- New native bottom bar now obeys Hide Bottom Titles directly in the Swift UITab model.
-- Normal/selected icon artwork is explicitly swapped on selection, so separate icon overrides cannot be lost to UIKit selected-image caching.
-- Fresh-install tap forwarding reacquires the original Douyin tab bar when its weak cache is not ready.
-- Diagnostic export now records bottom-bar hit-testing, selected index, overlay state and forwarding route.
+The bridge does **not** copy or reimplement the other plugin's downloader. It performs runtime capability detection and sends the action only to a currently live object that responds to the corresponding selector. Direct selector availability is statically detectable, but the exact live target still requires device validation with that plugin/version installed. Diagnostic mode records `BRIDGE_PLUGIN_FOUND` and `BRIDGE_ACTION`.
 
+## Authorization
 
-## 1.0.49e regression cleanup
+Authorization remains the existing encrypted **auth29** table; no authorization entries were added or removed in 1.0.50b.
+## 1.0.50b top category centering fix
 
-- Fixes the remaining profile-video comment-close disappearance. Douyin keeps `AWECommentInputViewController` alive for several seconds after the visible comment panel is gone; right-side recovery now fires when the last visible comment panel exits instead of waiting for that input helper.
-- Keeps a weak reference to the live right action stack before the comment transition and searches all foreground normal-level app windows as a fallback, avoiding temporary key/input-window mismatches.
-- After the panel is gone, the visible right-column `AWEElementStackView` is restored and rebound with six bounded passes (0/80/200/450/800/1200 ms); no continuous polling is added.
-- Diagnostic export records captured target, cross-window stack count and each restore result.
-- Bottom-bar icon customization remains one icon per destination. Selected/unselected artwork choices are removed; selection is represented by foreground/accent state only.
+The Telegram-style top category group is now always centered on the physical top-bar/container midpoint. When the left action, right search action, or both are hidden, the layout reserves symmetric side clearance so 1–4 visible category titles no longer drift horizontally. This is a geometry-only change on top of 1.0.50a; auth29 and the 1.0.50a feature set are retained.

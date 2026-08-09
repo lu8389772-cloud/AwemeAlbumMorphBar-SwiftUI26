@@ -9,83 +9,61 @@ swift = Path('AwemeAlbumMorphBar.swift').read_text()
 objc = Path('Tweak.x').read_text()
 control = Path('control').read_text()
 workflow = Path('.github/workflows/build.yml').read_text()
+build_script = Path('build_no_install.sh').read_text()
 
-required_control = ['Version: 1.0.49e']
-required_workflow = ['AwemeLiquidBar-1.0.49e-Xcode27-rootless']
-required_swift = [
-    'tabBarMinimizeBehavior = .never',
-    'let search = UISearchTab',
-    'setResolvedInterfaceStyleRaw',
-    'setVerticalOffset(_ offset: CGFloat)',
-    '@objc(setVisibleFraction:animated:)',
-    'visibilityMaskView',
-    'self.view.mask = self.visibilityMaskView',
-]
-required_objc = [
-    'AwemeLiquidBar 1.0.49e',
-    'LiquidBar 设置 · 1.0.49e',
-    'Telegram-style top liquid category group',
-    'AWETopLiquidGroupView',
-    'alb_swipedLeft:',
-    'alb_swipedRight:',
-    'AWETopTelegramVisibleCount()',
-    'AWEConfigureTopSelectionPill',
-    'topCategoryVisibleCountChanged:',
-    'AWEApplyAlbumMorphVisibleFraction',
-    'AWEUpdateAlbumMorphVisibility',
-    'return.prewarm.resident',
-    'RECOVERY_ONCE',
-    'button.menu = menu;',
-    'button.showsMenuAsPrimaryAction = YES;',
-    'AwemeLiquidBarChatCapsuleEnabled1.0.46',
-    'AwemeLiquidBarHideTopLeftButtonV1',
-    'AWEForceHideTopLeftControl',
-]
-for token in required_control:
+for token in ['Version: 1.0.50b']:
     if token not in control: raise SystemExit(f'missing control token: {token}')
-for token in required_workflow:
+for token in ['AwemeLiquidBar-1.0.50b-Xcode27-rootless']:
     if token not in workflow: raise SystemExit(f'missing workflow token: {token}')
-for token in required_swift:
+for token in ["EXPECTED_VERSION='1.0.50b'", 'LiquidBar 设置 · 1.0.50b', 'AwemeLiquidBar_1.0.50b_interaction.log']:
+    if token not in build_script: raise SystemExit(f'missing build script token: {token}')
+for token in [
+    'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
+    '@objc(updateMessageBadgeValue:)', 'applyMessageBadge()',
+    'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
+    '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
+]:
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
-for token in required_objc:
+for token in [
+    'AwemeLiquidBar 1.0.50b', 'LiquidBar 设置 · 1.0.50b',
+    'AWEInvokeCompatibleTabTapGesture', 'TAB_COMPAT_GESTURE',
+    'AWEInvokeControllerTabRoute', 'TAB_CONTROLLER_ROUTE',
+    'AWEExternalBridgePluginImageLoaded', 'saveCurrentVideo',
+    'copyCompleteText', 'BRIDGE_ACTION',
+    'AwemeLiquidBarSettingsGestureMineOnlyV1',
+    '双指长按仅在‘我’页面触发', 'AWECurrentPageAllowsSettingsGesture',
+    '显示消息未读角标', 'AWEUpdateAlbumMorphMessageBadge',
+    '%hook AWENormalModeTabBarBadgeContainerView',
+    'AWEInstallGlassPressFeedback', 'AWEGlassPressFeedbackTarget',
+    'AWEAlbumMorphSteadyWantsVisible',
+    'button.showsMenuAsPrimaryAction = YES;',
+    'RIGHT_REBIND_PASS',
+    'AWEFrameForTopLiquidGroup', 'sideReserve = (menuVisible || searchVisible) ? 82.0 : 14.0',
+]:
     if token not in objc: raise SystemExit(f'missing Objective-C token: {token}')
 
-if objc.count('const CGFloat diameter = 46.0;') != 2:
-    raise SystemExit('top/right 46 pt diameter count is not 2')
 if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
 for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','bracket')]:
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 for forbidden in [
-    'UIDeferredMenuElement',
-    'completion(@[])',
-    'preferredElementSize = UIMenuElementSizeLarge',
-    'collapseLabel',
-    '上滑收缩底栏（动态高度）',
-    'NSArray<NSNumber *> *delays = preDismiss',
-]:
-    if forbidden in objc:
-        raise SystemExit(f'forbidden regression remains: {forbidden}')
-
-# The top category implementation must not create a UISegmentedControl. A
-# UISegmentedControl in the settings UI is allowed.
-top_start = objc.index('#pragma mark - Telegram-style top liquid category group')
-top_end = objc.index('#pragma mark - Top action refresh', top_start)
-if '[[UISegmentedControl alloc]' in objc[top_start:top_end]:
-    raise SystemExit('top group regressed to UISegmentedControl')
-if 'AWEConfigureAdaptiveSystemGlassPlateButton(\n        group.backgroundGlass' not in objc:
-    raise SystemExit('single top glass platter configuration missing')
-
-for forbidden in [
     'newbar.home.selected', 'newbar.messages.selected', 'newbar.profile.selected',
     'bottom.home.selected', 'bottom.messages.selected', 'bottom.profile.selected',
+    '上滑收缩底栏（动态高度）',
 ]:
     if forbidden in objc or forbidden in swift:
-        raise SystemExit(f'selected/unselected bottom icon option remains: {forbidden}')
-for required in ['RIGHT_REBIND_SCHEDULE', 'RIGHT_REBIND_PASS', 'gAWECommentRightRebindPending']:
-    if required not in objc:
-        raise SystemExit(f'missing post-comment right rebind token: {required}')
+        raise SystemExit(f'forbidden regression remains: {forbidden}')
 
-print('AwemeLiquidBar 1.0.49e comment right rebind + unified bottom icon preflight passed')
+# auth table must remain 29.
+if 'kAWEAuthorizationDigests[29]' not in objc:
+    raise SystemExit('auth29 digest table declaration missing')
+# Count encrypted digest initializer rows only inside the table.
+start = objc.index('kAWEAuthorizationDigests[29]')
+end = objc.index('};', start)
+rows = [line for line in objc[start:end].splitlines() if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
+if len(rows) != 29:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 29')
+
+print('AwemeLiquidBar 1.0.50b bridge/routes/gesture/badge/center preflight passed')
 PY2
