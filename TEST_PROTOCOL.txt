@@ -1,0 +1,40 @@
+AwemeLiquidBar 1.0.51a device test
+
+1. Basic launch
+- Kill Douyin completely and relaunch.
+- Confirm LiquidBar loads and Settings can still be opened.
+- Confirm auth status remains valid.
+
+2. Native download menu
+- Open a normal video and tap the download button above the avatar.
+- Opening the menu must NOT move the feed vertically.
+- Tap “保存当前视频（智能高清）”; confirm it saves to Photos.
+- Open an album/image post; confirm “保存全部图片” shows the image count and saves the images.
+- Tap “保存音频”; confirm the system export/share sheet appears after download.
+- Tap “复制完整文案”; confirm the full caption is on the pasteboard.
+- Test with AwemeX installed and uninstalled; this release must not depend on it.
+
+3. Quality selection
+- Keep “优先最高画质播放（可能增加流量）” enabled.
+- Open several videos with different quality ladders.
+- With diagnostics enabled, inspect PLAYBACK_HIGHEST and DOWNLOAD_VIDEO lines.
+- Confirm the selected download stream favors high resolution/high FPS and HEVC when available.
+- Disable the switch and confirm subsequent videos no longer log successful PLAYBACK_HIGHEST switching attempts.
+
+4. Friends feed
+- Enter Friends and keep scrolling until “近期作品已看完” or the next batch is loaded.
+- The LiquidBar must remain visible at the Friends root even if Douyin hides/detaches its native bar.
+- Open a profile/search/comment/share route from Friends; the LiquidBar must still hide where appropriate.
+- Return to Friends; the LiquidBar must recover.
+
+5. Regression checks
+- Top category group remains physically centered with left button only, right button only, both, or neither.
+- Search and right action buttons retain Liquid Glass press feedback.
+- Message badge option follows the Messages item after custom bottom-bar sorting.
+- Publish page opens and closes normally.
+- Share/forward lower controls are not blocked by the custom bottom bar.
+- Two-finger settings gesture works globally by default; profile-only restriction remains opt-in.
+
+6. Diagnostics
+- If a download fails, export diagnostics immediately after one attempt.
+- Useful markers: NATIVE_DOWNLOAD_READY, DOWNLOAD_VIDEO, PLAYBACK_HIGHEST, TAB_FORWARD_END, VISIBILITY_MASK.

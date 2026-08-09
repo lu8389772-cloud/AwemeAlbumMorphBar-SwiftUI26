@@ -1,0 +1,12 @@
+Package: com.xyy.awemeliquidbar
+Name: AwemeLiquidBar
+Version: 1.0.51a
+Architecture: iphoneos-arm
+Description: Native current-item smart downloader, highest-quality playback preference, independent download menu overlay, cross-version bottom routing, Friends-feed bar persistence, message badge mirroring, centered top categories, and auth29.
+Maintainer: xyy
+Author: xyy
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 15.0)
+Conflicts: com.xyy.awemeliquidbar.r2force, com.xyy.awemeliquidbar.homenativebuttons
+Replaces: com.xyy.awemeliquidbar.r2force, com.xyy.awemeliquidbar.homenativebuttons
+Provides: com.xyy.awemeliquidbar.homenativebuttons
