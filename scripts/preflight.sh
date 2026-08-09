@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.51a'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.51a-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.51a'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.51a'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.51a_interaction.log'),
+    ('control', control, 'Version: 1.0.51b'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.51b-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.51b'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.51b'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.51b_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -34,7 +34,7 @@ for token in [
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.51a', 'LiquidBar 设置 · 1.0.51a',
+    'AwemeLiquidBar 1.0.51b', 'LiquidBar 设置 · 1.0.51b',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWEVideoVariantsForVideo', 'bitrateModels_origin', 'bitrateModels',
@@ -99,5 +99,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.51a native downloader/quality/Friends preflight passed')
+print('AwemeLiquidBar 1.0.51b stability/download/Friends/press preflight passed')
 PY2

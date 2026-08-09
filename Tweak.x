@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.51a — native smart downloader + highest-playback preference + Friends persistence + auth29
+ AwemeLiquidBar 1.0.51b — stability: downloader action capture + heat throttle + Friends persistence + elastic glass press + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -169,6 +169,9 @@ static char kAWEGlassPressFeedbackRecognizerKey;
 static char kAWEGlassPressFeedbackTargetKey;
 static char kAWEExternalBridgeMenuSlotKey;
 static char kAWEExternalBridgeMenuButtonKey;
+static char kAWEExternalBridgeMenuModelIdentityKey;
+static char kAWEExternalBridgeMenuConfigGenerationKey;
+static char kAWEHighestPlaybackScheduledIdentityKey;
 static char kAWETopActionRefreshPendingKey;
 static char kAWEImageAverageColorCacheKey;
 static char kAWEAdaptiveGlassConfigurationSignatureKey;
@@ -781,7 +784,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.51a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.51b_interaction.log"] copy];
     });
     return path;
 }
@@ -850,7 +853,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.51a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.51b_probe.log"] copy];
     });
     return path;
 }
@@ -3978,7 +3981,9 @@ static BOOL AWEClassNameLooksLikeTransientCommerceDestination(NSString *classNam
            [lower containsString:@"group_buy"] ||
            [lower containsString:@"poi"] ||
            [lower containsString:@"ecommerce"] ||
-           [lower containsString:@"ecom"] ||
+           [lower hasPrefix:@"ecom"] ||
+           [lower containsString:@".ecom"] ||
+           [lower containsString:@"_ecom"] ||
            [lower containsString:@"commerce"] ||
            [lower containsString:@"life"] ||
            [lower containsString:@"goods"] ||
@@ -6772,7 +6777,13 @@ static NSMutableURLRequest *AWEMediaRequest(NSString *urlString) {
         cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:75.0];
     request.HTTPShouldHandleCookies = YES;
     [request setValue:@"*/*" forHTTPHeaderField:@"Accept"];
+    [request setValue:@"identity" forHTTPHeaderField:@"Accept-Encoding"];
     [request setValue:@"https://www.douyin.com/" forHTTPHeaderField:@"Referer"];
+    NSString *userAgent = [NSUserDefaults.standardUserDefaults stringForKey:@"UserAgent"];
+    if (userAgent.length == 0) {
+        userAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 aweme";
+    }
+    [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     return request;
 }
 
@@ -6850,11 +6861,15 @@ static void AWEDownloadSmartVideoForAweme(id aweme) {
     NSURLSessionDownloadTask *task = [NSURLSession.sharedSession
         downloadTaskWithRequest:request
         completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
-            if (error || !location) {
-                AWEShowDownloadToast(@"视频下载失败");
+            NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class]
+                ? ((NSHTTPURLResponse *)response).statusCode : 0;
+            AWEInteractionDiagnosticWrite(@"DOWNLOAD_VIDEO_HTTP status=%ld bytes=%lld error=%@",
+                (long)status, response.expectedContentLength, error.localizedDescription ?: @"none");
+            if (error || !location || (status >= 400 && status != 0)) {
+                AWEShowDownloadToast([NSString stringWithFormat:@"视频下载失败%@",
+                    status > 0 ? [NSString stringWithFormat:@"（HTTP %ld）", (long)status] : @""]);
                 return;
             }
-            (void)response;
             NSURL *fileURL = AWEMoveDownloadedFile(location, @"mp4");
             if (!fileURL) { AWEShowDownloadToast(@"视频临时文件保存失败"); return; }
             AWESaveVideoFileToPhotos(fileURL, ^(BOOL success) {
@@ -6981,24 +6996,27 @@ static void AWECopyCompleteTextForAweme(id aweme) {
 
 static UIAction *AWESelfDownloadAction(NSString *title,
                                        NSString *systemImage,
-                                       UIView *stack,
+                                       id aweme,
                                        void (^handler)(id aweme)) {
-    __weak UIView *weakStack = stack;
+    id capturedAweme = aweme;
     UIAction *action = [UIAction actionWithTitle:title
         image:[UIImage systemImageNamed:systemImage]
         identifier:nil
         handler:^(__kindof UIAction * _Nonnull ignored) {
             (void)ignored;
-            UIView *strongStack = weakStack;
-            id aweme = AWECurrentAwemeModelForStack(strongStack);
-            if (!aweme) { AWEShowDownloadToast(@"未识别到当前作品，请稍后重试"); return; }
-            if (handler) handler(aweme);
+            if (!capturedAweme) {
+                AWEShowDownloadToast(@"未识别到当前作品，请稍后重试");
+                AWEInteractionDiagnosticWrite(@"DOWNLOAD_ACTION model=nil title=%@", title ?: @"");
+                return;
+            }
+            AWEInteractionDiagnosticWrite(@"DOWNLOAD_ACTION model=%@ title=%@",
+                AWEAwemeIdentity(capturedAweme), title ?: @"");
+            if (handler) handler(capturedAweme);
         }];
     return action;
 }
 
-static UIMenu *AWESelfDownloadMenu(UIView *stack) {
-    id aweme = AWECurrentAwemeModelForStack(stack);
+static UIMenu *AWESelfDownloadMenuForAweme(id aweme) {
     id video = AWESafeValueForKey(aweme, @"video");
     NSArray *images = AWEAlbumImagesForAweme(aweme);
     NSString *audioURL = AWEAudioURLForAweme(aweme);
@@ -7007,22 +7025,22 @@ static UIMenu *AWESelfDownloadMenu(UIView *stack) {
 
     NSMutableArray<UIMenuElement *> *items = [NSMutableArray array];
     UIAction *videoAction = AWESelfDownloadAction(@"保存当前视频（智能高清）",
-        @"arrow.down.circle", stack, ^(id model) { AWEDownloadSmartVideoForAweme(model); });
+        @"arrow.down.circle", aweme, ^(id model) { AWEDownloadSmartVideoForAweme(model); });
     if (!video) videoAction.attributes = UIMenuElementAttributesDisabled;
     [items addObject:videoAction];
 
     UIAction *imagesAction = AWESelfDownloadAction(
         images.count > 0 ? [NSString stringWithFormat:@"保存全部图片（%lu）", (unsigned long)images.count] : @"保存全部图片",
-        @"photo.on.rectangle.angled", stack, ^(id model) { AWEDownloadAllImagesForAweme(model); });
+        @"photo.on.rectangle.angled", aweme, ^(id model) { AWEDownloadAllImagesForAweme(model); });
     if (images.count == 0) imagesAction.attributes = UIMenuElementAttributesDisabled;
     [items addObject:imagesAction];
 
-    UIAction *audioAction = AWESelfDownloadAction(@"保存音频", @"waveform", stack,
+    UIAction *audioAction = AWESelfDownloadAction(@"保存音频", @"waveform", aweme,
         ^(id model) { AWEDownloadAudioForAweme(model); });
     if (audioURL.length == 0) audioAction.attributes = UIMenuElementAttributesDisabled;
     [items addObject:audioAction];
 
-    UIAction *copyAction = AWESelfDownloadAction(@"复制完整文案", @"doc.on.doc", stack,
+    UIAction *copyAction = AWESelfDownloadAction(@"复制完整文案", @"doc.on.doc", aweme,
         ^(id model) { AWECopyCompleteTextForAweme(model); });
     if (text.length == 0) copyAction.attributes = UIMenuElementAttributesDisabled;
     [items addObject:copyAction];
@@ -7182,6 +7200,10 @@ static void AWETryPreferHighestPlaybackForStack(UIView *stack) {
     AWEVideoVariant *best = AWEChooseHighestPlaybackVariant(variants);
     if (!best || best.sourceModel == video) return;
     gAWELastHighestPlaybackAttempt = now;
+    /* Cache the attempted model before probing private playback selectors.
+       1.0.51b only cached on success, so unsupported Douyin builds retried the
+       same failed selector hundreds of times per minute and caused heat. */
+    gAWELastHighestPlaybackModelKey = [identity copy];
 
     BOOL success = NO;
     NSString *path = @"none";
@@ -7199,7 +7221,6 @@ static void AWETryPreferHighestPlaybackForStack(UIView *stack) {
             if (success) path = @"setResolutionWithIndex";
         }
     }
-    if (success) gAWELastHighestPlaybackModelKey = [identity copy];
     if (AWEInteractionDiagnosticsEnabled()) {
         AWEInteractionDiagnosticWrite(@"PLAYBACK_HIGHEST model=%@ success=%d path=%@ variant=%@ target=%@",
             identity, success, path, AWEVariantSummary(best), AWEInteractionObjectSummary(target));
@@ -7207,15 +7228,22 @@ static void AWETryPreferHighestPlaybackForStack(UIView *stack) {
 }
 
 static void AWESchedulePreferHighestPlaybackForStack(UIView *stack) {
-    if (!AWEPreferHighestPlaybackEnabled() || !stack) return;
+    if (!AWEPreferHighestPlaybackEnabled() || !stack || !stack.window) return;
+    id aweme = AWECurrentAwemeModelForStack(stack);
+    if (!aweme) return;
+    NSString *identity = AWEAwemeIdentity(aweme);
+    NSString *scheduled = objc_getAssociatedObject(
+        stack, &kAWEHighestPlaybackScheduledIdentityKey);
+    if ([scheduled isEqualToString:identity]) return;
+    objc_setAssociatedObject(stack, &kAWEHighestPlaybackScheduledIdentityKey,
+                             identity, OBJC_ASSOCIATION_COPY_NONATOMIC);
     __weak UIView *weakStack = stack;
-    for (NSNumber *delay in @[@0.08, @0.32]) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-            (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            UIView *strongStack = weakStack;
-            if (strongStack) AWETryPreferHighestPlaybackForStack(strongStack);
-        });
-    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+        (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIView *strongStack = weakStack;
+        if (!strongStack || !strongStack.window) return;
+        AWETryPreferHighestPlaybackForStack(strongStack);
+    });
 }
 
 typedef NS_ENUM(NSInteger, AWEHomeTopActionKind) {
@@ -7862,6 +7890,7 @@ static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
 
 @interface AWEGlassPressFeedbackTarget : NSObject <UIGestureRecognizerDelegate>
 @property(nonatomic, weak) UIButton *glassButton;
+@property(nonatomic, assign) CGPoint startPoint;
 - (void)handlePress:(UILongPressGestureRecognizer *)gesture;
 @end
 
@@ -7869,17 +7898,40 @@ static UIColor *AWEHomeDiagnosticForegroundOverride(UIColor *automaticColor) {
 - (void)handlePress:(UILongPressGestureRecognizer *)gesture {
     UIButton *button = self.glassButton;
     if (!button) return;
+    CGPoint point = [gesture locationInView:gesture.view];
     switch (gesture.state) {
-        case UIGestureRecognizerStateBegan:
-        case UIGestureRecognizerStateChanged:
+        case UIGestureRecognizerStateBegan: {
+            self.startPoint = point;
             button.highlighted = YES;
             [button setNeedsUpdateConfiguration];
+            [UIView animateWithDuration:0.12 delay:0
+                options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseOut
+                animations:^{
+                    button.transform = CGAffineTransformMakeScale(1.10, 1.10);
+                } completion:nil];
             break;
+        }
+        case UIGestureRecognizerStateChanged: {
+            CGFloat dx = point.x - self.startPoint.x;
+            CGFloat dy = point.y - self.startPoint.y;
+            CGFloat ax = MIN(fabs(dx), 34.0);
+            CGFloat ay = MIN(fabs(dy), 34.0);
+            CGFloat sx = 1.10 + ax / 240.0 - ay / 520.0;
+            CGFloat sy = 1.10 + ay / 240.0 - ax / 520.0;
+            CGAffineTransform t = CGAffineTransformMakeTranslation(dx * 0.055, dy * 0.055);
+            button.transform = CGAffineTransformScale(t, sx, sy);
+            break;
+        }
         case UIGestureRecognizerStateEnded:
         case UIGestureRecognizerStateCancelled:
         case UIGestureRecognizerStateFailed:
             button.highlighted = NO;
             [button setNeedsUpdateConfiguration];
+            [UIView animateWithDuration:0.34 delay:0
+                usingSpringWithDamping:0.62 initialSpringVelocity:0.35
+                options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+                animations:^{ button.transform = CGAffineTransformIdentity; }
+                completion:nil];
             break;
         default:
             break;
@@ -8414,37 +8466,59 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
     if (!slot) return;
     if (!aweme) {
         slot.hidden = YES;
+        objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuModelIdentityKey,
+                                 nil, OBJC_ASSOCIATION_ASSIGN);
         return;
     }
-    BOOL originalPNG = NO;
-    UIImage *image = AWEConfiguredRoleImage(
-        @"right.external.download",
-        @[@"square.and.arrow.down", @"arrow.down.circle"],
-        19.5, UIImageSymbolWeightSemibold, &originalPNG);
-    UIColor *foreground = nil;
-    if (!originalPNG) {
-        AWEConfiguredIconColorMode mode = AWEStoredSymbolColorMode(@"right.external.download");
-        if (mode != AWEConfiguredIconColorModeAutomatic) {
-            foreground = AWEApplyConfiguredIconColorMode(@"right.external.download", nil);
+
+    NSString *identity = AWEAwemeIdentity(aweme);
+    NSString *previousIdentity = objc_getAssociatedObject(
+        slot, &kAWEExternalBridgeMenuModelIdentityKey);
+    NSNumber *previousGeneration = objc_getAssociatedObject(
+        slot, &kAWEExternalBridgeMenuConfigGenerationKey);
+    BOOL needsRebuild = ![previousIdentity isEqualToString:identity] ||
+        previousGeneration.unsignedIntegerValue != gAWEConfiguredIconGeneration;
+
+    if (needsRebuild) {
+        BOOL originalPNG = NO;
+        UIImage *image = AWEConfiguredRoleImage(
+            @"right.external.download",
+            @[@"square.and.arrow.down", @"arrow.down.circle"],
+            19.5, UIImageSymbolWeightSemibold, &originalPNG);
+        UIColor *foreground = nil;
+        if (!originalPNG) {
+            AWEConfiguredIconColorMode mode = AWEStoredSymbolColorMode(@"right.external.download");
+            if (mode != AWEConfiguredIconColorModeAutomatic) {
+                foreground = AWEApplyConfiguredIconColorMode(@"right.external.download", nil);
+            }
+        }
+        /* Capture the exact current model in the UIActions. Presenting UIMenu can
+           temporarily reparent/reuse the feed stack, so resolving the model again
+           at action time made 1.0.51b appear to do nothing. */
+        slot.menuButton.menu = AWESelfDownloadMenuForAweme(aweme);
+        slot.menuButton.userInteractionEnabled = YES;
+        AWEConfigureAdaptiveSystemGlassIconButton(
+            slot.menuButton, image, @"right.external.download", 19.5,
+            foreground, originalPNG, AWEHomeTintedGlassEnabled(), YES);
+        objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuModelIdentityKey,
+                                 identity, OBJC_ASSOCIATION_COPY_NONATOMIC);
+        objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuConfigGenerationKey,
+                                 @(gAWEConfiguredIconGeneration),
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        if (AWEInteractionDiagnosticsEnabled()) {
+            NSArray<AWEVideoVariant *> *variants = AWEVideoVariantsForVideo(
+                AWESafeValueForKey(aweme, @"video"), NO);
+            AWEInteractionDiagnosticWrite(
+                @"NATIVE_DOWNLOAD_READY model=%@ variants=%lu images=%lu audio=%d",
+                identity, (unsigned long)variants.count,
+                (unsigned long)AWEAlbumImagesForAweme(aweme).count,
+                AWEAudioURLForAweme(aweme).length > 0);
         }
     }
-    slot.menuButton.menu = AWESelfDownloadMenu(stack);
-    slot.menuButton.userInteractionEnabled = YES;
-    AWEConfigureAdaptiveSystemGlassIconButton(
-        slot.menuButton, image, @"right.external.download", 19.5,
-        foreground, originalPNG, AWEHomeTintedGlassEnabled(), YES);
+
     AWELayoutExternalBridgeMenuForStack(stack);
     AWESchedulePreferHighestPlaybackForStack(stack);
-
-    if (AWEInteractionDiagnosticsEnabled()) {
-        NSArray<AWEVideoVariant *> *variants = AWEVideoVariantsForVideo(
-            AWESafeValueForKey(aweme, @"video"), NO);
-        AWEInteractionDiagnosticWrite(
-            @"NATIVE_DOWNLOAD_READY model=%@ variants=%lu images=%lu audio=%d",
-            AWEAwemeIdentity(aweme), (unsigned long)variants.count,
-            (unsigned long)AWEAlbumImagesForAweme(aweme).count,
-            AWEAudioURLForAweme(aweme).length > 0);
-    }
 }
 
 static NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *
@@ -10216,12 +10290,22 @@ static void AWEAlignAlbumMorphOverlayToOriginalBar(
     }
 
     CGFloat savedOffset = AWEStoredVerticalOffset();
-    [gAWEAlbumMorphController setVerticalOffset:savedOffset];
-    AWEAlbumMorphProbeWrite(
-        @"HEIGHT_SYNC_FIXED saved=%.2f overlay=%@ tabBar=%@",
-        savedOffset,
-        NSStringFromCGRect(overlayWindow.frame),
-        NSStringFromCGRect(gAWEAlbumMorphController.tabBar.frame));
+    static CGFloat lastAppliedOffset = CGFLOAT_MAX;
+    static __weak id lastOffsetController = nil;
+    BOOL offsetChanged = lastOffsetController != gAWEAlbumMorphController ||
+        fabs(lastAppliedOffset - savedOffset) > 0.01;
+    if (offsetChanged) {
+        [gAWEAlbumMorphController setVerticalOffset:savedOffset];
+        lastAppliedOffset = savedOffset;
+        lastOffsetController = gAWEAlbumMorphController;
+    }
+    if (changed || offsetChanged) {
+        AWEAlbumMorphProbeWrite(
+            @"HEIGHT_SYNC_FIXED saved=%.2f overlay=%@ tabBar=%@",
+            savedOffset,
+            NSStringFromCGRect(overlayWindow.frame),
+            NSStringFromCGRect(gAWEAlbumMorphController.tabBar.frame));
+    }
 }
 
 static UIUserInterfaceStyle AWEAlbumMorphResolvedInterfaceStyle(
@@ -13642,7 +13726,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.51a";
+    self.title = @"LiquidBar 设置 · 1.0.51b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14886,7 +14970,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.51a image=%@ ==========" ,
+            @"========== START build=1.0.51b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -14953,7 +15037,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.51a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.51b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -14968,7 +15052,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.51a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.51b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -15182,18 +15266,22 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 }
 
 - (void)setHidden:(BOOL)hidden {
+    BOOL changed = ((UIView *)self).hidden != hidden;
     %orig(hidden);
-    AWEScheduleHomeActionRefreshForButton((UIView *)self);
+    if (changed) AWEScheduleHomeActionRefreshForButton((UIView *)self);
 }
 
 - (void)setAlpha:(CGFloat)alpha {
+    BOOL changed = fabs(((UIView *)self).alpha - alpha) > 0.01;
     %orig(alpha);
-    AWEScheduleHomeActionRefreshForButton((UIView *)self);
+    if (changed) AWEScheduleHomeActionRefreshForButton((UIView *)self);
 }
 
 - (void)setAccessibilityLabel:(NSString *)label {
+    NSString *before = ((UIView *)self).accessibilityLabel;
+    BOOL changed = !((before == label) || [before isEqualToString:label]);
     %orig(label);
-    AWEScheduleHomeActionRefreshForButton((UIView *)self);
+    if (changed) AWEScheduleHomeActionRefreshForButton((UIView *)self);
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -15231,17 +15319,18 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 }
 
 - (void)setHidden:(BOOL)hidden {
+    BOOL changed = ((UIView *)self).hidden != hidden;
     %orig(hidden);
-    if (!hidden) {
-        AWERefreshHomeActionStack((UIView *)self);
+    if (changed && !hidden) {
         AWEScheduleHomeActionStackRefresh((UIView *)self);
     }
 }
 
 - (void)setAlpha:(CGFloat)alpha {
+    CGFloat before = ((UIView *)self).alpha;
+    BOOL changed = fabs(before - alpha) > 0.01;
     %orig(alpha);
-    if (alpha > 0.01) {
-        AWERefreshHomeActionStack((UIView *)self);
+    if (changed && alpha > 0.01) {
         AWEScheduleHomeActionStackRefresh((UIView *)self);
     }
 }
@@ -16229,8 +16318,20 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 }
 
 - (void)setHidden:(BOOL)hidden {
-    BOOL changed = self.hidden != hidden;
-    %orig(hidden);
+    BOOL preserveFriendsLayout = hidden && !AWESecondTabIsShop() &&
+        (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched) &&
+        !AWECurrentRouteSuppressesBar() && !gAWESettingsVisible;
+    BOOL effectiveHidden = preserveFriendsLayout ? NO : hidden;
+    BOOL changed = self.hidden != effectiveHidden;
+    %orig(effectiveHidden);
+    if (preserveFriendsLayout) {
+        /* Keep Douyin's native tab-bar layout footprint alive while our bar
+           remains the only visible bar. This preserves the Friends caption/
+           recommendation safe area instead of letting content fall underneath
+           the custom LiquidBar after the native bar auto-hides. */
+        AWEApplyAlbumMorphOriginalSuppression((UIView *)self, YES);
+        AWEAlbumMorphProbeWrite(@"FRIENDS_NATIVE_HIDE_BLOCKED requested=1");
+    }
     if (!AWEIsApplying((UIView *)self)) {
         AWEStartBarVisibilityDriver();
         AWEAttachNativeBar((UIView *)self);
@@ -16639,7 +16740,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.51a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.51b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
