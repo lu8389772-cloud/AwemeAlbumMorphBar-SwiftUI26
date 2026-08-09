@@ -1,6 +1,14 @@
-# AwemeLiquidBar 1.0.50c
+# AwemeLiquidBar 1.0.50d
 
-## 1.0.50c compile fix
+## 1.0.50d settings gesture recovery
+
+- Fixes the profile-only two-finger long-press guard incorrectly blocking the real Me tab on some Douyin builds.
+- Resolves the current tab through the LiquidBar/native bridge first (`originalIndex == 4`), with the old private-controller detector retained only as a fallback.
+- The new profile-only setting is now opt-in by default, preserving the historical global two-finger gesture and preventing settings lockout after upgrade.
+- auth29 and all prior bridge/category/badge changes are unchanged.
+
+
+## 1.0.50d compile fix
 
 - Fixes the invalid UIKit selector `menuWithTitle:options:children:` used by the external-download inline submenu.
 - Uses the supported `menuWithTitle:image:identifier:options:children:` API instead.
@@ -25,7 +33,7 @@ The bridge does **not** copy or reimplement the other plugin's downloader. It pe
 
 ## Authorization
 
-Authorization remains the existing encrypted **auth29** table; no authorization entries were added or removed in 1.0.50c.
-## 1.0.50c top category centering fix
+Authorization remains the existing encrypted **auth29** table; no authorization entries were added or removed in 1.0.50d.
+## 1.0.50d top category centering fix
 
 The Telegram-style top category group is now always centered on the physical top-bar/container midpoint. When the left action, right search action, or both are hidden, the layout reserves symmetric side clearance so 1–4 visible category titles no longer drift horizontally. This is a geometry-only change on top of 1.0.50a; auth29 and the 1.0.50a feature set are retained.

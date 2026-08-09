@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.50c — cross-version tab routing + external action bridge + gesture/badge hardening + auth29
+ AwemeLiquidBar 1.0.50d — cross-version tab routing + external action bridge + gesture/badge hardening + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -436,9 +436,10 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 static BOOL AWESettingsGestureMineOnlyEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWESettingsGestureMineOnlyDefaultsKey];
-    /* New installs default to the safer profile-only gesture. Existing users
-       can explicitly turn it off when they want the historical global gesture. */
-    return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
+    /* Keep the historical global gesture as the compatibility default. The
+       profile-only guard is opt-in so a tab-identification mismatch can never
+       lock a user out of the settings page after an update. */
+    return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
 
 static BOOL AWEMessageBadgeEnabled(void) {
@@ -769,7 +770,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.50c_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.50d_interaction.log"] copy];
     });
     return path;
 }
@@ -838,7 +839,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.50c_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.50d_probe.log"] copy];
     });
     return path;
 }
@@ -1361,11 +1362,19 @@ static BOOL AWECurrentMainTabAppearsToBeMe(void) {
 
 static BOOL AWECurrentPageAllowsSettingsGesture(void) {
     if (!AWESettingsGestureMineOnlyEnabled()) return YES;
-    /* The gesture is intentionally keyed to the stable main-tab identity, not
-       a transient video/profile class name. This prevents immersive/relaxation
-       pages from recognizing our two-finger hold at the same time as their own
-       gesture and avoids the historical black-screen presentation collision. */
-    return AWECurrentMainTabAppearsToBeMe();
+
+    /* Prefer the canonical tab identity exposed by the custom/native bridge.
+       On some Douyin builds the underlying AWENormalModeTabBarController no
+       longer reports selectedIndex/isSelected in the way older builds did;
+       using only that private state made the opt-in guard reject the real Me
+       page and could lock the settings gesture out completely. */
+    NSInteger resolvedIndex = AWECurrentMainTabIndex();
+    if (resolvedIndex == 4) return YES;
+
+    /* Keep the older detector as a secondary compatibility signal. */
+    if (AWECurrentMainTabAppearsToBeMe()) return YES;
+
+    return NO;
 }
 
 static BOOL AWEPageLooksLikeOwnProfile(UIViewController *controller,
@@ -12928,7 +12937,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.50c";
+    self.title = @"LiquidBar 设置 · 1.0.50d";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14143,7 +14152,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.50c image=%@ ==========" ,
+            @"========== START build=1.0.50d image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -14210,7 +14219,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.50c diagnostic export\n"
+                @"AwemeLiquidBar 1.0.50d diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -14225,7 +14234,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.50c_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.50d_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -14296,9 +14305,10 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     if (gAWESettingsVisible || !AWECurrentPageAllowsSettingsGesture()) {
         AWEInteractionDiagnosticWrite(
-            @"SETTINGS_GESTURE_BLOCKED mineOnly=%d mainTab=%ld",
+            @"SETTINGS_GESTURE_BLOCKED mineOnly=%d mainTab=%ld resolvedTab=%ld",
             AWESettingsGestureMineOnlyEnabled(),
-            (long)AWECurrentOriginalMainTabIndex());
+            (long)AWECurrentOriginalMainTabIndex(),
+            (long)AWECurrentMainTabIndex());
         return;
     }
 
@@ -15895,7 +15905,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.50c os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.50d os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
