@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.52i device test
+AwemeLiquidBar 1.0.52j device test
 
 1. Home feed: continuously swipe through at least 20 posts. As long as the profile avatar/right action column is visibly present, the download button must remain continuously visible with no off/on flash.
 2. During a slow interactive swipe between two posts, the button must stay on the same right-column center line. It may update its menu model after the new post settles, but the glass control itself must not disappear.

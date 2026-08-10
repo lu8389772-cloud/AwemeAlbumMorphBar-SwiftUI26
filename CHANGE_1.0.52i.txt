@@ -1,8 +1,0 @@
-AwemeLiquidBar 1.0.52i
-
-- Moves the download singleton out of recycled feed-cell hosts and onto the stable normal app UIWindow.
-- Keeps geometry avatar-bound while decoupling compositing lifetime from the current AWEElementStackView.
-- Adds a 0.58 s owner-gap hold so transient paging tree gaps cannot toggle hidden/alpha and create visible flashing.
-- Removes a fullscreen recovery hard-hide path that could fire exactly between two feed cells.
-- Corrects unread badge direction based on device behavior: normal +6 pt and selected +10 pt badgePositionAdjustment move the badge visually left in this iOS 26 Liquid Glass layout.
-- Preserves auth30, download toggle, downloader actions, and prior route protections.

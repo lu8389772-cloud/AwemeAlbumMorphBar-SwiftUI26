@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52i — stable-window download singleton + true left badge offset + auth30
+ AwemeLiquidBar 1.0.52j — stable root-view download host + identical badge position + auth30
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -805,7 +805,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52i_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52j_interaction.log"] copy];
     });
     return path;
 }
@@ -8539,20 +8539,36 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52i: this is a true floating control, not a feed-cell child.
-       Hosting it inside a recycled play/feed cell was the remaining source of
-       the visible blink: every swipe temporarily reparents/removes that cell,
-       so even a correct avatar owner can lose compositing for one frame. Keep
-       one singleton on the stable normal app UIWindow and only read geometry
-       from the current avatar. This mirrors the stability principle used by
-       mature floating-button tweaks: stable host + centralized visibility. */
-    return stack.window;
+    /* 1.0.52j: keep the downloader outside every recycled feed/player cell,
+       but do NOT attach the glass UIButton directly to UIWindow. 1.0.52i proved
+       that the raw-window host can leave the menu fully configured while its
+       visual never composites on the user's feed. The root controller's view is
+       stable across vertical paging, participates in the normal UIKit view
+       hierarchy/traits, and gives the singleton one persistent visual host. */
+    UIWindow *window = stack.window;
+    UIViewController *rootController = window.rootViewController;
+    UIView *rootView = rootController.viewIfLoaded ?: rootController.view;
+    if (rootView && rootView.window == window &&
+        CGRectGetWidth(rootView.bounds) > 100.0 &&
+        CGRectGetHeight(rootView.bounds) > 100.0) {
+        return rootView;
+    }
+
+    /* Conservative fallback: use the highest stable ancestor directly below
+       the window, never the AWEElementStackView/feed cell itself. */
+    UIView *cursor = stack;
+    UIView *highest = nil;
+    while (cursor.superview && cursor.superview != window) {
+        cursor = cursor.superview;
+        if (cursor.window == window) highest = cursor;
+    }
+    return highest ?: stack.superview;
 }
 
 static UIView *AWEDownloadMenuProfileAnchorForStack(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52i: the download control follows the avatar itself.  The profile
+    /* 1.0.52j: the download control follows the avatar itself.  The profile
        glass slot is only a decoration; the native avatar/picture host is the
        source of truth for whether the user can actually see an avatar. */
     AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
@@ -8626,7 +8642,7 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     }
 
     UIView *avatarAnchor = AWEDownloadMenuProfileAnchorForStack(stack);
-    /* 1.0.52i hard visibility contract: avatar visible -> download visible;
+    /* 1.0.52j hard visibility contract: avatar visible -> download visible;
        avatar gone/hidden -> download gone. This deliberately replaces the old
        strict stack-frame gate, which could reject a valid current cell while
        its avatar was plainly still on screen. */
@@ -8795,7 +8811,7 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
         ? AWEDownloadMenuProfileAnchorForStack(bestStack)
         : nil;
 
-    /* 1.0.52i: the visible avatar is now authoritative for BOTH geometry and
+    /* 1.0.52j: the visible avatar is now authoritative for BOTH geometry and
        singleton ownership. The caller is just a refresh hint. A preloaded
        previous/next AWEElementStackView can no longer steal ownership or make
        the button disappear merely because its hidden/alpha state changed. */
@@ -9167,7 +9183,7 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
         AWEHomeActionSlotsForStack(stack);
     if (!stack.window) {
-        // 1.0.52i: a recycled/preloaded stack losing its window must not blank
+        // 1.0.52j: a recycled/preloaded stack losing its window must not blank
         // the singleton. Resolve ownership again from the avatar that is
         // actually visible right now.
         if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
@@ -14253,7 +14269,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52i";
+    self.title = @"LiquidBar 设置 · 1.0.52j";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {

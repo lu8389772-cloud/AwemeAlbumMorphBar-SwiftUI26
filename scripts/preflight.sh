@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52i'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52i-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52i'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52i'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52i_interaction.log'),
+    ('control', control, 'Version: 1.0.52j'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52j-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52j'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52j'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52j_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -28,14 +28,14 @@ for name, text, token in checks:
 for token in [
     'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
     '@objc(updateMessageBadgeValue:)', 'applyMessageBadge()',
-    'layout.selected.badgePositionAdjustment = selectedOffset',
+    'layout.selected.badgePositionAdjustment = fixedOffset',
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
 ]:
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52i', 'LiquidBar 设置 · 1.0.52i',
+    'AwemeLiquidBar 1.0.52j', 'LiquidBar 设置 · 1.0.52j',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -147,22 +147,24 @@ for token in [
     'if (bestStack && bestAvatar) {',
     'const CGFloat avatarEdgeGap = 8.0;',
     'avatarCenter.y - avatarVisualDiameter * 0.5 - avatarEdgeGap - diameter * 0.5',
-    'return stack.window;',
+    'UIViewController *rootController = window.rootViewController;',
+    'return rootView;',
     'kAWEDownloadOwnerGapGrace = 0.58;',
     'AWEHoldVisibleDownloadDuringOwnerGap',
     'DOWNLOAD_OWNER_GAP_HOLD',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52i stability token missing: {token}')
+        raise SystemExit(f'1.0.52j root-host stability token missing: {token}')
 
 
 for token in [
-    'let normalOffset = UIOffset(horizontal: 6.0, vertical: 0.0)',
-    'let selectedOffset = UIOffset(horizontal: 10.0, vertical: 0.0)',
+    'let fixedOffset = UIOffset(horizontal: 10.0, vertical: 0.0)',
+    'layout.normal.badgePositionAdjustment = fixedOffset',
+    'layout.selected.badgePositionAdjustment = fixedOffset',
     'self?.applyMessageBadge()',
 ]:
     if token not in swift:
-        raise SystemExit(f'1.0.52i badge direction token missing: {token}')
+        raise SystemExit(f'1.0.52j badge fixed-position token missing: {token}')
 
 for token in [
     'score += strictGeometry ? 12000.0 : 8000.0;',
@@ -170,7 +172,7 @@ for token in [
     'if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52i avatar ownership token missing: {token}')
+        raise SystemExit(f'1.0.52j avatar ownership token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52i stable-window download/badge-left preflight passed')
+print('AwemeLiquidBar 1.0.52j root-host download/same-badge-position preflight passed')
 PY2

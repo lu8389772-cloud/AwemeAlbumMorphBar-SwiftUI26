@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52i
+Version: 1.0.52j
 Architecture: iphoneos-arm
 Description: Stable-window singleton Liquid Glass download menu with avatar geometry and owner-gap hold, native current-item downloader, profile-fullscreen recovery, Friends persistence, corrected leftward message badge placement, centered top categories, and auth30.
 Maintainer: xyy
