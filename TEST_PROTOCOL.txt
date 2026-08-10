@@ -1,32 +1,30 @@
-AwemeLiquidBar 1.0.52r test protocol
+AwemeLiquidBar 1.0.52s focused test protocol
 
-A. Other-profile fullscreen / video right actions
-1. Enable the third-party fullscreen playback tweak.
-2. Enter another user's profile and open a VIDEO post.
-3. Repeat 10 times: open comments -> close comments.
-4. Confirm avatar/like/comment/favorite/share remain present after every close.
-5. Wait at least 7 seconds after one close and confirm the right column stays present.
-6. Swipe to several VIDEO posts and repeat.
-7. Repeat on IMAGE posts; image behavior must remain unchanged.
-8. Confirm nickname/caption still does not fall to the physical bottom edge after comment dismissal.
+A. Clean screen / avatar recovery
+1. Open avatar menu -> 一键清屏.
+2. Confirm normal chrome and LiquidBar disappear as before.
+3. Tap the exact former avatar position once.
+4. Expected: original liquid avatar/base appears immediately.
+5. Tap restored avatar.
+6. Expected: original full menu appears (进入主页 / 退出清屏 / download-copy items).
+7. Choose 退出清屏.
+8. Expected: full normal interface returns.
+9. Repeat after swiping to another video while clean screen remains active.
 
-B. Clean screen
-1. On a normal playable feed, open the avatar menu and choose 一键清屏.
-2. Expected immediately: system status bar, top chrome, captions/labels, right actions/avatar, progress/speed chrome where applicable, native bottom bar visual, and LiquidBar disappear.
-3. Swipe vertically 5-10 items. Paging must remain normal.
-4. Tap the former avatar location once.
-5. Expected: the ORIGINAL liquid avatar/base reappears. It must not look like a rectangular/clipped replacement. No other chrome returns.
-6. Tap the restored avatar. Expected: the normal full avatar menu opens, including 进入主页, download/copy actions when enabled, and 退出清屏.
-7. Choose 退出清屏. Expected: full normal UI and status bar recover.
-8. Enter clean screen again, reveal avatar, swipe once. Expected: the avatar hides for the new item and the new item's real avatar-position hot target works.
+B. Other-profile VIDEO post + fullscreen tweak
+1. Open another user's VIDEO post.
+2. Open comments -> close comments.
+3. Repeat several times.
+4. Expected: old video right stack may complete its native teardown, but the newly-current right stack is reacquired; avatar/like/comment/favorite/share stay available.
+5. Swipe to another video and repeat.
 
-C. Badge regression
-1. Clear all unread Messages. Expected: no red circle at all.
-2. Generate unread Messages. Expected: numeric badge appears.
-3. Clear unread count again. Expected: badge disappears completely.
-4. Friends badge/red-dot behavior remains unchanged.
+C. IMAGE control group / carousel regression
+1. Open an IMAGE post.
+2. Open avatar menu on image 1.
+3. Move to image 2 while the menu has been used/opened.
+4. Expected: nickname/caption/search/bottom chrome do not sink toward the physical bottom edge.
+5. Open/close comments on image posts; existing stable right-button behavior remains unchanged.
 
-D. Build/link regression
-1. GitHub Actions reaches package stage.
-2. No `_OBJC_CLASS_$_AWEPlayInteractionViewController` linker error.
-3. No undeclared home-action helper errors.
+D. Badge/build regression
+1. Messages unread=0 -> no empty red circle.
+2. GitHub Actions reaches package stage with no AWEPlayInteractionViewController static-link error.

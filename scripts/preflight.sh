@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52r'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52r-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52r'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52r'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52r_interaction.log'),
+    ('control', control, 'Version: 1.0.52s'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52s-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52s'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52s'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52s_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,7 +36,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52r', 'LiquidBar 设置 · 1.0.52r',
+    'AwemeLiquidBar 1.0.52s', 'LiquidBar 设置 · 1.0.52s',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -48,17 +48,16 @@ required_objc = [
     'AWEInstallGlassPressFeedback(slot.menuButton, slot.glassButton);',
     'AWECurrentOriginalSecondBadgeValue', 'BOTTOM_BADGES_NATIVE',
     '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
-    'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_PROTECT',
-    'RIGHT_FULLSCREEN_BLOCK_HIDE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA',
-    'RIGHT_FULLSCREEN_BLOCK_REMOVE', 'AWECurrentRouteHasPlayableFeedController',
+    'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_REACQUIRE',
+    'RIGHT_FULLSCREEN_BLOCK_HIDE_IMAGE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA_IMAGE',
+    'RIGHT_FULLSCREEN_BLOCK_REMOVE_IMAGE', 'AWECurrentRouteHasPlayableFeedController',
     '%hook AWENormalModeTabBarBadgeContainerView',
     'AWEPrimeFriendsNativeLayoutFootprint', 'AWEApplyFriendsCaptionBottomReserve',
     '@"一键清屏"', '@"退出清屏"', 'AWEEnterCleanScreenFromStack',
-    'AWERefreshCleanScreenRecoveryButton', 'setRightAreaHidden:',
+    'AWERefreshCleanScreenRecoveryButton',
     'setBottomAreaHidden:', 'setTabBarHiddenForPureMode:',
     'setTimesHiddenForPureMode:', 'AWECleanScreenConfigureRealAvatarMenuButton',
-    'AWEGuardProfileVideoRightStackAfterCommentLayout',
-    'RIGHT_PROFILE_VIDEO_LAYOUT_GUARD',
+    'AWEFindCurrentRightActionStackExcluding',
     'AWEFrameGeometryLooksLikeCurrentRightActionStack',
     'AWEFindCurrentRightActionStackAcrossWindowsAllowSuppressedAncestors',
     'PROFILE_COMMENT_SKIP_BAR_RECOVERY', 'PROFILE_COMMENT_LAYOUT_RESTORE',
@@ -113,14 +112,14 @@ for token in [
         raise SystemExit(f'native downloader API token missing: {token}')
 
 
-# 1.0.52r clean-screen/video-comment regressions
+# 1.0.52s clean-screen/video-comment regressions
 for forbidden in [
     'gAWECleanScreenRecoveryButton', 'gAWECleanScreenRecoveryWindow',
     'gAWECleanScreenAvatarImage', 'gAWECleanScreenAvatarFrameInWindow',
     'NSSelectorFromString(@"setPureMode:animated:")',
 ]:
     if forbidden in objc:
-        raise SystemExit(f'1.0.52r forbidden replacement/full-pure-mode path remains: {forbidden}')
+        raise SystemExit(f'1.0.52s forbidden replacement/full-pure-mode path remains: {forbidden}')
 
 for token in [
     'button.menu = AWEAvatarBaseMenuForStack(stack, slot.profileHost);',
@@ -128,16 +127,19 @@ for token in [
     'if (gAWECleanScreenEnabled) fraction = 0.0;',
     'AWECleanScreenSuppressStatusBarViews',
     'setStatusBarHidden:withAnimation:',
-    'AWEInvokeBooleanSelectorIfAvailable(interaction, @"setRightAreaHidden:", NO);',
-    '(profileVideoRecovery ? 6.60 : 2.40)',
+    'stack.layer.opacity = 1.0f;',
+    'AWECleanScreenSuppressKnownChromeTree(stack, stack.window, 0);',
+    'gAWECleanScreenAvatarRevealed &&',
+    'gAWEProfileFullscreenProtectedRightStack = profileVideoRecovery',
+    'AWEFindCurrentRightActionStackExcluding(captured, NO)',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52r required token missing: {token}')
+        raise SystemExit(f'1.0.52s required token missing: {token}')
 
-# 1.0.52r linker/badge regressions
+# 1.0.52s linker/badge regressions
 assert 'AWEPlayInteractionViewController.class' not in objc, 'static private-class reference would reintroduce linker failure'
 assert 'NSClassFromString(@"AWEPlayInteractionViewController")' in objc, 'runtime private-class lookup missing'
 assert 'if (![scanner scanInteger:&count] || count <= 0) return nil;' in objc, 'zero-count Messages badge guard missing'
 
-print('AwemeLiquidBar 1.0.52r real-avatar/statusbar/profile-video preflight passed')
+print('AwemeLiquidBar 1.0.52s live-stack clean recovery/video reacquire preflight passed')
 PY2

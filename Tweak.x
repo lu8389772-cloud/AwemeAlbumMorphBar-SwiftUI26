@@ -11,18 +11,18 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52r — real-avatar clean screen + profile-video comment guard + auth33
+ AwemeLiquidBar 1.0.52s — live-stack clean recovery + video stack reacquire + auth33
 
- Incremental release on top of 1.0.52q:
- - clean-screen recovery now reuses the exact existing liquid avatar base/menu
-   button instead of drawing a replacement avatar;
- - the normal avatar menu remains intact and swaps 一键清屏 -> 退出清屏 while active;
- - status-bar hiding adds runtime host suppression and the AlbumMorph visibility
-   state machine is forced to zero throughout clean screen;
- - other-profile VIDEO posts get a longer bounded post-comment right-stack guard
-   and runtime setRightAreaHidden:NO recovery when an external tweak exposes it;
- - preserves zero-count Messages badge behavior, profile safe-area recovery,
-   avatar download menu, and auth33.
+ Incremental release on top of 1.0.52r:
+ - fixes the clean-screen recovery hot-zone parent: the live right stack itself
+   stays visible/interactable while only its chrome children are suppressed;
+ - video comment dismissal no longer pins the old AWEElementStackView. Video
+   stacks are allowed to complete their native teardown/rebuild, then the plugin
+   reacquires and refreshes the newly-current stack just like the stable image path;
+ - removes the 1.0.52r long video layout guard and external setRightAreaHidden:NO
+   writes that could interfere with photo-carousel layout;
+ - preserves bottom/status clean-screen suppression, zero-count Messages badge,
+   avatar menu/downloads, profile safe-area recovery, and auth33.
 */
 
 @interface AWENormalModeTabBar : UIView
@@ -437,6 +437,7 @@ static void AWEApplyCleanScreenToInteractionController(UIViewController *control
 static void AWEUpdateCleanScreenAvatarAnchor(UIView *stack, UIView *profileSlot, UIImageView *avatar);
 static void AWERefreshCleanScreenRecoveryButton(void);
 static UIMenu *AWEAvatarBaseMenuForStack(UIView *stack, UIView *profileHost);
+static void AWERefreshProfileAvatarGlass(UIView *stack);
 static void AWECaptureProfileCommentLayoutIfNeeded(UIViewController *controller, NSString *reason);
 static void AWEScheduleProfileCommentLayoutRestore(NSString *reason);
 
@@ -819,7 +820,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52r_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52s_interaction.log"] copy];
     });
     return path;
 }
@@ -888,7 +889,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52r_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52s_probe.log"] copy];
     });
     return path;
 }
@@ -8723,7 +8724,7 @@ static UIView *AWETopLevelDescendantOfStack(UIView *view, UIView *stack) {
 }
 
 
-#pragma mark - 1.0.52r avatar clean-screen mode
+#pragma mark - 1.0.52s avatar clean-screen mode
 
 static NSHashTable<UIView *> *AWECleanScreenSuppressedViews(void) {
     if (!gAWECleanScreenSuppressedViews) {
@@ -9049,6 +9050,8 @@ static void AWECleanScreenSuppressKnownChromeTree(UIView *root,
         AWEFrameGeometryLooksLikeCurrentRightActionStack(root);
     AWEHomeProfileGlassView *profileSlot = rootIsRightStack
         ? objc_getAssociatedObject(root, &kAWEProfileGlassSlotKey) : nil;
+    UIView *profileTop = (rootIsRightStack && profileSlot.profileHost)
+        ? AWETopLevelDescendantOfStack(profileSlot.profileHost, root) : nil;
 
     for (UIView *view in root.subviews) {
         if (!view) continue;
@@ -9062,6 +9065,16 @@ static void AWECleanScreenSuppressKnownChromeTree(UIView *root,
                 view.hidden = NO;
                 view.alpha = 1.0;
                 view.userInteractionEnabled = YES;
+                continue;
+            }
+            /* After the recovery tap, keep the exact restored avatar branches
+               out of the suppression loop. 1.0.52r restored them once, then
+               the very next AWEElementStackView layout suppressed them again. */
+            if (gAWECleanScreenAvatarRevealed &&
+                (view == profileSlot || view == profileTop)) {
+                AWECleanScreenRestoreSuppressedView(view);
+                view.hidden = NO;
+                view.alpha = 1.0;
                 continue;
             }
             AWECleanScreenSuppressView(view, YES);
@@ -9180,6 +9193,16 @@ static void AWEExitCleanScreen(void) {
     if (stack && stack.window) {
         gAWECleanScreenCurrentStack = stack;
         AWERefreshCleanScreenRecoveryButton();
+        AWERefreshProfileAvatarGlass(stack);
+        /* One deferred refresh catches the same stack after UIKit finishes
+           dismissing the menu/context presentation. */
+        __weak UIView *weakStack = stack;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIView *liveStack = weakStack;
+            if (liveStack.window && !gAWECleanScreenEnabled) {
+                AWERefreshProfileAvatarGlass(liveStack);
+            }
+        });
     }
     gAWECleanScreenCurrentStack = nil;
 
@@ -13340,13 +13363,14 @@ static BOOL AWEStackHasPlayableVisualAncestor(UIView *stack) {
 static BOOL AWEStackRepresentsVideoWork(UIView *stack) {
     if (!stack) return NO;
     id aweme = AWECurrentAwemeModelForStack(stack);
-    if (!aweme) {
-        /* Unknown models on a live profile player are treated conservatively as
-           video for the bounded post-comment guard. Image posts already recover
-           reliably and the extra protection only changes visibility writes. */
-        return YES;
-    }
-    return AWEAlbumImagesForAweme(aweme).count == 0;
+    /* 1.0.52s: never classify a transiently-unbound stack as video. Photo
+       carousels can briefly lose their aweme binding while changing images;
+       1.0.52r treated that nil window as video and ran the video recovery path
+       against image posts. */
+    if (!aweme) return NO;
+    if (AWEAlbumImagesForAweme(aweme).count > 0) return NO;
+    id video = AWEFirstSafeValue(aweme, @[@"video", @"videoModel", @"videoInfo"]);
+    return video != nil || AWEAlbumImagesForAweme(aweme).count == 0;
 }
 
 static BOOL AWEShouldProtectRightStackFromFullscreenTweak(UIView *stack) {
@@ -13424,14 +13448,10 @@ static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack) {
        AWEElementStackView itself. Restore only known right-area containers
        that actually own this stack; never touch the feed cell/player root. */
     UIViewController *interaction = AWEInteractionControllerForView(stack);
-    /* Some fullscreen plugins expose a stable right-area setter. If present,
-       use their own state machine to reverse the post-comment hide before
-       repairing individual wrapper views. Runtime messaging avoids any link
-       dependency on the external plugin. */
-    AWEInvokeBooleanSelectorIfAvailable(interaction, @"setRightAreaHidden:", NO);
-    if (interaction.isViewLoaded) {
-        AWEInvokeBooleanSelectorIfAvailable(interaction.view, @"setRightAreaHidden:", NO);
-    }
+    /* 1.0.52s: do not call a third-party/fullscreen setRightAreaHidden: here.
+       Image posts are already stable without it, and forcing that external
+       state machine during a photo/video transition can rewrite layout. Only
+       repair the currently-selected native stack/wrappers below. */
     for (NSString *key in @[@"rightContainer", @"rightActionContainer",
                              @"rightActionsContainer", @"actionContainer"]) {
         id value = AWESafeValueForKey(interaction, key);
@@ -13463,6 +13483,26 @@ static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack) {
     AWERefreshHomeActionStack(stack);
     AWELayoutBoundHomeActionSlots(stack);
     return changed || !stack.hidden;
+}
+
+static UIView *AWEFindCurrentRightActionStackExcluding(UIView *excluded,
+                                                        BOOL allowSuppressedAncestors) {
+    UIView *best = nil;
+    CGFloat bestScore = -CGFLOAT_MAX;
+    for (UIWindow *window in AWEForegroundNormalWindowsForHomeChrome()) {
+        NSMutableArray<UIView *> *stacks = [NSMutableArray array];
+        AWECollectVisibleHomeActionStacks(window, stacks, 0);
+        for (UIView *stack in stacks) {
+            if (stack == excluded) continue;
+            BOOL valid = allowSuppressedAncestors
+                ? AWEFrameGeometryLooksLikeCurrentRightActionStack(stack)
+                : AWEFrameLooksLikeCurrentRightActionStack(stack);
+            if (!valid) continue;
+            CGFloat score = AWECurrentRightStackVisibilityScore(stack, window);
+            if (score > bestScore) { bestScore = score; best = stack; }
+        }
+    }
+    return best;
 }
 
 static NSString *AWECurrentRightActionStackSummary(void) {
@@ -13500,11 +13540,17 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
     NSUInteger generation = ++gAWECommentRightRebindGeneration;
     NSString *before = gAWECommentRightHostBefore ?: @"unknown";
     if (profileFullscreenRecovery) {
+        /* Images keep the mature captured-stack path. Video is different: its
+           interaction/right stack can be rebuilt when the comment sheet closes,
+           so pinning the pre-comment object prevents the new stack from taking
+           over. Give video a short reacquire window, but do not protect/pin the
+           captured object. */
         gAWEProfileFullscreenRightProtectUntil = CACurrentMediaTime() +
-            (profileVideoRecovery ? 6.60 : 2.40);
-        gAWEProfileFullscreenProtectedRightStack = profileCandidate ?: captured;
+            (profileVideoRecovery ? 2.20 : 2.40);
+        gAWEProfileFullscreenProtectedRightStack = profileVideoRecovery
+            ? nil : (profileCandidate ?: captured);
         AWEInteractionDiagnosticWrite(
-            @"RIGHT_FULLSCREEN_COMMENT_PROTECT until=%.2f video=%d captured=%@ protected=%@",
+            @"RIGHT_FULLSCREEN_COMMENT_REACQUIRE until=%.2f video=%d captured=%@ protected=%@",
             gAWEProfileFullscreenRightProtectUntil, profileVideoRecovery,
             AWEInteractionObjectSummary(captured),
             AWEInteractionObjectSummary(gAWEProfileFullscreenProtectedRightStack));
@@ -13522,8 +13568,7 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
        display link/timer, and search every foreground normal-level app window
        because the key window can temporarily be a transition/input host. */
     NSArray<NSNumber *> *delays = profileVideoRecovery
-        ? @[@0.0, @0.08, @0.20, @0.45, @0.80, @1.20, @1.75, @2.25,
-            @3.00, @4.00, @5.20, @6.40]
+        ? @[@0.0, @0.06, @0.16, @0.34, @0.62, @0.96, @1.40, @2.05]
         : (profileFullscreenRecovery
             ? @[@0.0, @0.08, @0.20, @0.45, @0.80, @1.20, @1.75, @2.25]
             : @[@0.0, @0.08, @0.20, @0.45, @0.80, @1.20]);
@@ -13541,17 +13586,36 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
             }
 
             UIView *target = nil;
-            if (captured && AWEFrameLooksLikeCurrentRightActionStack(captured)) {
-                target = captured;
-            }
-            if (!target) target = AWEFindCurrentRightActionStackAcrossWindows();
-            if (!target) {
-                target = AWEFindCurrentRightActionStackAcrossWindowsAllowSuppressedAncestors();
+            if (profileVideoRecovery) {
+                /* Critical video/image split: image posts keep their existing
+                   stack, while video posts can replace it after comment dismiss.
+                   Prefer the newly-created current stack over the pre-comment
+                   captured object. Fall back to captured only if no replacement
+                   exists yet; later bounded passes will switch as soon as the
+                   new stack is attached. */
+                target = AWEFindCurrentRightActionStackExcluding(captured, NO);
+                if (!target) {
+                    target = AWEFindCurrentRightActionStackExcluding(captured, YES);
+                }
+                if (!target && captured &&
+                    AWEFrameGeometryLooksLikeCurrentRightActionStack(captured)) {
+                    target = captured;
+                }
+            } else {
+                if (captured && AWEFrameLooksLikeCurrentRightActionStack(captured)) {
+                    target = captured;
+                }
+                if (!target) target = AWEFindCurrentRightActionStackAcrossWindows();
+                if (!target) {
+                    target = AWEFindCurrentRightActionStackAcrossWindowsAllowSuppressedAncestors();
+                }
             }
 
             if (profileFullscreenRecovery && target &&
                 AWEFrameGeometryLooksLikeCurrentRightActionStack(target)) {
-                gAWEProfileFullscreenProtectedRightStack = target;
+                /* Only image keeps removal/alpha protection. Video is allowed
+                   to finish its native replacement lifecycle. */
+                gAWEProfileFullscreenProtectedRightStack = profileVideoRecovery ? nil : target;
             }
             BOOL restored = AWEForceRestoreRightActionStackAfterComment(target);
             NSUInteger stacks = AWECountHomeActionStacksAcrossForegroundWindows();
@@ -13573,29 +13637,6 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
     }
 }
 
-static void AWEGuardProfileVideoRightStackAfterCommentLayout(UIViewController *controller) {
-    if (gAWECleanScreenEnabled || !controller || !controller.viewIfLoaded.window) return;
-    if (CACurrentMediaTime() >= gAWEProfileFullscreenRightProtectUntil) return;
-    if (!AWEShouldSuppressBarForUserDetailRoute() ||
-        AWEAnyVisibleCommentPanelForRightRecovery() ||
-        AWEAnyBlockingSensitiveDestinationForRightRecovery()) return;
-
-    UIView *stack = gAWEProfileFullscreenProtectedRightStack;
-    if (!stack || !stack.window ||
-        !AWEFrameGeometryLooksLikeCurrentRightActionStack(stack)) {
-        stack = AWEFindCurrentRightActionStackAcrossWindowsAllowSuppressedAncestors();
-    }
-    if (!stack || !AWEStackRepresentsVideoWork(stack)) return;
-
-    gAWEProfileFullscreenProtectedRightStack = stack;
-    BOOL restored = AWEForceRestoreRightActionStackAfterComment(stack);
-    if (restored) {
-        AWEInteractionDiagnosticWrite(
-            @"RIGHT_PROFILE_VIDEO_LAYOUT_GUARD remaining=%.2f stack=%@",
-            MAX(0.0, gAWEProfileFullscreenRightProtectUntil - CACurrentMediaTime()),
-            AWEInteractionObjectSummary(stack));
-    }
-}
 
 @interface AWEHomeChromeRecoveryTicker : NSObject
 - (void)alb_tick:(CADisplayLink *)displayLink;
@@ -14821,7 +14862,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52r";
+    self.title = @"LiquidBar 设置 · 1.0.52s";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16106,7 +16147,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52r image=%@ ==========" ,
+            @"========== START build=1.0.52s image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16173,7 +16214,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52r diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52s diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16188,7 +16229,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52r_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52s_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16443,27 +16484,43 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)removeFromSuperview {
     UIView *stack = (UIView *)self;
-    if (AWEProfileFullscreenRightProtectionActiveForStack(stack)) {
+    BOOL protectedProfileStack = AWEProfileFullscreenRightProtectionActiveForStack(stack);
+    BOOL videoWork = AWEStackRepresentsVideoWork(stack);
+    if (protectedProfileStack && !videoWork) {
+        /* Stable image path: keep its existing stack behavior unchanged. */
         AWEForceRestoreRightActionStackAfterComment(stack);
         AWERefreshExternalBridgeMenu(stack);
         AWEInteractionDiagnosticWrite(
-            @"RIGHT_FULLSCREEN_BLOCK_REMOVE stack=%@",
+            @"RIGHT_FULLSCREEN_BLOCK_REMOVE_IMAGE stack=%@",
             AWEInteractionObjectSummary(stack));
         return;
     }
+    /* Video must be allowed to tear down/recreate its right stack after the
+       comment controller closes. Blocking this native lifecycle was the main
+       difference from the already-stable image path. */
     %orig;
+    if (protectedProfileStack && videoWork) {
+        AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
+    }
 }
 
 - (void)layoutSubviews {
     %orig;
     UIView *stack = (UIView *)self;
-    /* Geometry-only pass. The source buttons and cached glass children move
-       together with the stack, so a full hierarchy scan on every video frame
-       only causes heat and material flashes. */
+    /* Geometry-only pass outside clean screen. In clean screen NEVER suppress
+       the AWEElementStackView root itself: the invisible avatar menuButton is
+       its child, so hiding/disabling this parent makes recovery impossible. */
     AWELayoutBoundHomeActionSlots(stack);
     if (gAWECleanScreenEnabled &&
-        AWEFrameGeometryLooksLikeCurrentRightActionStack(stack)) {
-        AWECleanScreenSuppressView(stack, YES);
+        AWEFrameGeometryLooksLikeCurrentRightActionStack(stack) && stack.window) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        stack.layer.opacity = 1.0f;
+        [CATransaction commit];
+        stack.userInteractionEnabled = YES;
+        AWECleanScreenSuppressKnownChromeTree(stack, stack.window, 0);
+        AWEUpdateCleanScreenAvatarAnchor(stack,
+            objc_getAssociatedObject(stack, &kAWEProfileGlassSlotKey), nil);
     }
 }
 
@@ -16476,15 +16533,21 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     UIView *stack = (UIView *)self;
     if (gAWECleanScreenEnabled &&
         AWEFrameGeometryLooksLikeCurrentRightActionStack(stack)) {
-        %orig(YES);
+        /* Parent must stay alive for the avatar recovery hit target. Children
+           remain visually clean through the suppression tree. */
+        %orig(NO);
+        stack.userInteractionEnabled = YES;
+        if (stack.window) AWECleanScreenSuppressKnownChromeTree(stack, stack.window, 0);
+        AWERefreshCleanScreenRecoveryButton();
         return;
     }
-    if (hidden && AWEProfileFullscreenRightProtectionActiveForStack(stack)) {
+    if (hidden && AWEProfileFullscreenRightProtectionActiveForStack(stack) &&
+        !AWEStackRepresentsVideoWork(stack)) {
         %orig(NO);
         AWEForceRestoreRightActionStackAfterComment(stack);
         AWERefreshExternalBridgeMenu(stack);
         AWEInteractionDiagnosticWrite(
-            @"RIGHT_FULLSCREEN_BLOCK_HIDE stack=%@",
+            @"RIGHT_FULLSCREEN_BLOCK_HIDE_IMAGE stack=%@",
             AWEInteractionObjectSummary(stack));
         return;
     }
@@ -16502,15 +16565,21 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     UIView *stack = (UIView *)self;
     if (gAWECleanScreenEnabled &&
         AWEFrameGeometryLooksLikeCurrentRightActionStack(stack)) {
-        %orig(0.0);
+        /* Same rule as setHidden: keep the root composited/interactable; only
+           its chrome children are opacity-suppressed. */
+        %orig(1.0);
+        stack.userInteractionEnabled = YES;
+        if (stack.window) AWECleanScreenSuppressKnownChromeTree(stack, stack.window, 0);
+        AWERefreshCleanScreenRecoveryButton();
         return;
     }
-    if (alpha <= 0.01 && AWEProfileFullscreenRightProtectionActiveForStack(stack)) {
+    if (alpha <= 0.01 && AWEProfileFullscreenRightProtectionActiveForStack(stack) &&
+        !AWEStackRepresentsVideoWork(stack)) {
         %orig(1.0);
         AWEForceRestoreRightActionStackAfterComment(stack);
         AWERefreshExternalBridgeMenu(stack);
         AWEInteractionDiagnosticWrite(
-            @"RIGHT_FULLSCREEN_BLOCK_ALPHA stack=%@",
+            @"RIGHT_FULLSCREEN_BLOCK_ALPHA_IMAGE stack=%@",
             AWEInteractionObjectSummary(stack));
         return;
     }
@@ -16814,7 +16883,6 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     %orig;
     AWEScheduleHomeActionStacksInView(self.view);
     AWEApplyCleanScreenToInteractionController((UIViewController *)self);
-    AWEGuardProfileVideoRightStackAfterCommentLayout((UIViewController *)self);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -18138,7 +18206,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52r os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52s os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
