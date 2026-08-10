@@ -396,7 +396,7 @@ final class AWEAlbumMorphTabController:
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
     private var messageBadgeValue: String?
-    private var friendsBadgeValue: String?
+    private var secondBadgeValue: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -549,13 +549,13 @@ final class AWEAlbumMorphTabController:
         tabBar.setNeedsLayout()
     }
 
-    private func setBadge(
-        _ value: String?,
-        on tab: UITab?,
-        enabled: Bool = true
-    ) {
-        guard let tab else { return }
-        let normalized = enabled && value?.isEmpty == false ? value : nil
+    private func applyBadge(_ value: String?, identifier: String) {
+        guard let tab = tab(forIdentifier: identifier) else { return }
+        let normalized = value?.isEmpty == false ? value : nil
+
+        // UITab badge API has shifted across SDK revisions. Keep the source
+        // compatible by using KVC first, then mirror onto the concrete
+        // UITabBarItem when UIKit has materialized it.
         if tab.responds(to: NSSelectorFromString("setBadgeValue:")) {
             tab.setValue(normalized, forKey: "badgeValue")
         }
@@ -566,57 +566,40 @@ final class AWEAlbumMorphTabController:
         }
     }
 
-    private func applyBadgeVisualScale() {
-        let scale: CGFloat = 0.84
-
-        func walk(_ view: UIView, ancestorIsBadge: Bool) {
-            let className = String(describing: type(of: view)).lowercased()
-            let isBadge = className.contains("badge")
-            if isBadge && !ancestorIsBadge {
-                if !view.transform.isApproximatelyEqual(
-                    to: CGAffineTransform(scaleX: scale, y: scale)
-                ) {
-                    view.transform = CGAffineTransform(scaleX: scale, y: scale)
-                }
-                return
-            }
-            for child in view.subviews {
-                walk(child, ancestorIsBadge: ancestorIsBadge || isBadge)
-            }
-        }
-
-        walk(tabBar, ancestorIsBadge: false)
-    }
-
-    private func applyMirroredBadges() {
-        setBadge(
-            friendsBadgeValue,
-            on: tab(forIdentifier: Identifier.second),
-            enabled: secondTitle == "朋友"
-        )
-        setBadge(
-            messageBadgeValue,
-            on: tab(forIdentifier: Identifier.messages)
-        )
+    private func applyUnreadBadges() {
+        applyBadge(secondBadgeValue, identifier: Identifier.second)
+        applyBadge(messageBadgeValue, identifier: Identifier.messages)
         tabBar.setNeedsLayout()
-        tabBar.layoutIfNeeded()
-        applyBadgeVisualScale()
-    }
-
-    private func applyMessageBadge() {
-        applyMirroredBadges()
     }
 
     @objc(updateMessageBadgeValue:)
     func updateMessageBadgeValue(_ value: String?) {
         messageBadgeValue = value
-        applyMirroredBadges()
+        applyUnreadBadges()
     }
 
-    @objc(updateFriendsBadgeValue:)
-    func updateFriendsBadgeValue(_ value: String?) {
-        friendsBadgeValue = value
-        applyMirroredBadges()
+    @objc(updateSecondBadgeValue:)
+    func updateSecondBadgeValue(_ value: String?) {
+        secondBadgeValue = value
+        applyUnreadBadges()
+    }
+
+    private func applyCompactUnreadBadgeScale(in root: UIView) {
+        for child in root.subviews {
+            let className = String(describing: type(of: child)).lowercased()
+            let hasDirectBadgeChild = child.subviews.contains {
+                String(describing: type(of: $0)).lowercased().contains("badge")
+            }
+            if className.contains("badge"), !hasDirectBadgeChild,
+               child.bounds.width > 4, child.bounds.width < 72,
+               child.bounds.height > 4, child.bounds.height < 48 {
+                // Scale only the innermost badge visual. Scaling both UIKit's
+                // badge container and its badge child would accidentally make
+                // the result ~19% smaller instead of the requested ~10%.
+                child.transform = CGAffineTransform(scaleX: 0.90, y: 0.90)
+            }
+            applyCompactUnreadBadgeScale(in: child)
+        }
     }
 
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
@@ -674,7 +657,7 @@ final class AWEAlbumMorphTabController:
         suppressCallbacks = false
         applyStableVerticalOffset()
         applyFallbackCompactTransform(animated: false)
-        applyMessageBadge()
+        applyUnreadBadges()
         albumMorphProbe(
             "VISIBLE_ITEMS_APPLIED items=\(visibleItemIdentifiers.joined(separator: ",")) " +
             "selected=\(resolvedIndex) tabFrame=\(tabBar.frame)"
@@ -722,11 +705,11 @@ final class AWEAlbumMorphTabController:
         super.viewDidLayoutSubviews()
         applyStableVerticalOffset()
         setVisibleFraction(morphVisibleFraction, animated: false)
-        applyBadgeVisualScale()
         if compactMode {
             compactMode = false
             tabBar.transform = .identity
         }
+        applyCompactUnreadBadgeScale(in: tabBar)
     }
 
     private func applyStableVerticalOffset() {
@@ -1050,13 +1033,6 @@ final class AWEAlbumMorphTabController:
 
         cachedOriginalIndex = originalIndex
         applyExplicitSelectionImages(selectedIdentifier: selectedTab.identifier)
-        // Native selection can rebuild the concrete UITabBarItem appearance.
-        // Reapply the leftward badge adjustment immediately and once on the
-        // next run loop so selected-state layout cannot push it right again.
-        applyMessageBadge()
-        DispatchQueue.main.async { [weak self] in
-            self?.applyMessageBadge()
-        }
         albumMorphProbe(
             "TAB_SELECT originalIndex=\(originalIndex) previous=\(previousTab?.identifier ?? "nil")"
         )

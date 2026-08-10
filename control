@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52l
+Version: 1.0.52d
 Architecture: iphoneos-arm
-Description: Original unread-badge mirroring rollback, sticky singleton download control hosted outside the scrolling feed, native current-item downloader, profile-fullscreen recovery, Friends persistence, centered top categories, and auth30.
+Description: Stable stack-anchored current-item downloader with display switch, fullscreen-safe Friends layout, Friends/Messages badge mirroring, compact badges, live-tag suppression, cross-version bottom routing, centered top categories, and auth29.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

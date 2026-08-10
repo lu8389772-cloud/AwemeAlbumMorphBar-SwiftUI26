@@ -13,94 +13,130 @@ workflow = Path('.github/workflows/build.yml').read_text()
 build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
-for name, text, token in [
-    ('control', control, 'Version: 1.0.52l'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52l-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52l'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52l'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52l_interaction.log'),
+checks = [
+    ('control', control, 'Version: 1.0.52d'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52d-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52d'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52d'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52d_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
-]:
+]
+for name, text, token in checks:
     if token not in text:
         raise SystemExit(f'missing {name} token: {token}')
 
-# Both Friends and Messages mirror unread state through the same source reader.
 for token in [
-    '@objc(updateMessageBadgeValue:)',
-    '@objc(updateFriendsBadgeValue:)',
-    'friendsBadgeValue',
-    'applyMirroredBadges()',
-    'items[index].badgeValue = normalized',
-    'items[index].badgeColor = .systemRed',
-    'let scale: CGFloat = 0.84',
+    'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
+    '@objc(updateMessageBadgeValue:)', '@objc(updateSecondBadgeValue:)', 'applyUnreadBadges()',
+    'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
+    '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
 ]:
-    if token not in swift:
-        raise SystemExit(f'missing Swift badge token: {token}')
-if 'badgePositionAdjustment' in swift:
-    raise SystemExit('custom badge position adjustment must remain absent')
+    if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AWECurrentOriginalTabBadgeValueAtIndex',
-    'AWECurrentOriginalFriendsBadgeValue',
-    'AWEUpdateAlbumMorphBadges',
-    'updateFriendsBadgeValue:friendsValue',
-    'AWEHasVisibleCompactBadgeDot',
-    'AWENormalModeTabBarBadgeContainerView',
-    '显示消息/朋友未读角标',
+    'AwemeLiquidBar 1.0.52d', 'LiquidBar 设置 · 1.0.52d',
+    '#import <Photos/Photos.h>',
+    'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
+    'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
+    'AWEDownloadCurrentImageForAweme', 'AWECurrentAlbumImageModelForAweme',
+    'AWEDownloadAllImagesForAweme', 'AWEDownloadAudioForAweme',
+    'AWECopyCompleteTextForAweme', '保存当前视频', '保存当前图片',
+    'gAWEDownloadMenuSlot', 'AWEHideGlobalDownloadMenu',
+    'DOWNLOAD_BUTTON_HIT', 'DOWNLOAD_MENU_READY', 'DOWNLOAD_ACTION',
+    'DOWNLOAD_VIDEO_HTTP', 'DOWNLOAD_IMAGE_HTTP',
+    'button.showsMenuAsPrimaryAction = YES;',
+    'AWEPreferHighestPlaybackEnabled', '优先最高画质播放（可能增加流量）',
+    'AwemeLiquidBarDownloadButtonEnabledV1', '显示下载按钮',
+    'AWEDownloadStackIsStronglyCurrent', 'updateSecondBadgeValue',
+    'kAWETopCategoryItemHiddenMarkerKey', 'externalFullscreen=%d',
+    'return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;',
+    'gAWEFriendsTabLatched', 'AWEUpdateFriendsTabLatch',
+    "Preserve the native bar's layout footprint before Friends performs",
+    'AWECurrentRightStackVisibilityScore', 'AWECurrentRouteHasPlayableFeedController',
+    'RIGHT_FULLSCREEN_RECOVERY', 'RIGHT_FULLSCREEN_VISIBILITY_GUARD',
+    'AWEInvokeCompatibleTabTapGesture', 'TAB_COMPAT_GESTURE',
+    'AWEInvokeControllerTabRoute', 'TAB_CONTROLLER_ROUTE',
+    'AwemeLiquidBarSettingsGestureMineOnlyV1',
+    '双指长按仅在‘我’页面触发', 'AWECurrentPageAllowsSettingsGesture',
+    '显示朋友/消息未读角标', 'AWEUpdateAlbumMorphMessageBadge',
+    '%hook AWENormalModeTabBarBadgeContainerView',
+    'AWEInstallGlassPressFeedback', 'AWEGlassPressFeedbackTarget',
+    'RIGHT_REBIND_PASS', 'AWEFrameForTopLiquidGroup',
+    'sideReserve = (menuVisible || searchVisible) ? 82.0 : 14.0',
 ]:
-    if token not in objc:
-        raise SystemExit(f'missing Objective-C badge token: {token}')
-if 'if (AWEHasVisibleCompactBadgeDot(button, 0)) return @" ";' not in objc:
-    raise SystemExit('concrete dot-badge mirroring path missing')
+    if token not in objc: raise SystemExit(f'missing Objective-C token: {token}')
 
-# Downloader is a long-lived independent floating source; no avatar/cell geometry.
-for token in [
-    'AwemeLiquidBar.DownloadButtonCenterXPercentV1',
-    'AwemeLiquidBar.DownloadButtonCenterYPercentV1',
-    'alb_handleDownloadPan:',
-    'UIPanGestureRecognizer',
-    'return overlay;',
-    'Fixed, screen-based default',
-    'AWEEnsureExternalBridgeMenuSlot(stack)',
-    'slot.menuButton.menu = downloadMenu;',
-    'slot.menuButton.showsMenuAsPrimaryAction = YES;',
-    'DOWNLOAD_SLOT state=visible',
+for forbidden in [
+    'AWEExternalBridgePluginImageLoaded', 'AWEExternalBridgeRuntimeHasSelector',
+    'AWEExternalBridgeInvokeSelectorName', 'BRIDGE_PLUGIN_FOUND', 'BRIDGE_ACTION',
+    'saveCurrentVideo', 'tcShowDownloadOptions',
+    '保存当前视频（智能高清）', 'NATIVE_DOWNLOAD_READY',
+    'newbar.home.selected', 'newbar.messages.selected', 'newbar.profile.selected',
+    'bottom.home.selected', 'bottom.messages.selected', 'bottom.profile.selected',
+    '上滑收缩底栏（动态高度）',
 ]:
-    if token not in objc:
-        raise SystemExit(f'missing floating download token: {token}')
+    if forbidden in objc or forbidden in swift:
+        raise SystemExit(f'forbidden regression/bridge remains: {forbidden}')
 
-# Right-column recovery is explicitly decoupled from downloader ownership and
-# restores the 1.0.52e geometry/host selection contract.
-for token in [
-    'AWEFeedInteractionHostForStack',
-    'Restore the proven 1.0.52e selection rule',
-    'if (!AWEFrameLooksLikeCurrentRightActionStack(candidate)) continue;',
-    'AWERefreshExternalBridgeMenu(target);',
-]:
-    if token not in objc:
-        raise SystemExit(f'missing right recovery token: {token}')
-right_start = objc.index('static UIView *AWEFindCurrentRightActionStackAcrossWindows(void) {')
-right_end = objc.index('static BOOL AWEControllerTreeContainsPlayableFeed', right_start)
-right_block = objc[right_start:right_end]
-if 'AWEDownloadMenuProfileAnchorForStack' in right_block:
-    raise SystemExit('right stack finder is still coupled to download/avatar anchor')
-
-if objc.count('[[AWEExternalBridgeMenuSlotView alloc] initWithFrame:CGRectZero]') != 1:
-    raise SystemExit('download menu slot is not singleton')
 if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
 for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','bracket')]:
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[30]' not in objc:
-    raise SystemExit('auth30 digest table declaration missing')
-start = objc.index('kAWEAuthorizationDigests[30]')
+if 'kAWEAuthorizationDigests[29]' not in objc:
+    raise SystemExit('auth29 digest table declaration missing')
+start = objc.index('kAWEAuthorizationDigests[29]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
         if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
-if len(rows) != 30:
-    raise SystemExit(f'auth digest row count is {len(rows)}, expected 30')
+if len(rows) != 29:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 29')
 
-print('AwemeLiquidBar 1.0.52l delivery-stability preflight passed')
+if 'menuWithTitle:@"" options:UIMenuOptionsDisplayInline' in objc:
+    raise SystemExit('invalid UIMenu selector menuWithTitle:options:children: remains')
+
+# Public API hardening for the new native downloader.
+for token in [
+    '[PHPhotoLibrary sharedPhotoLibrary] performChanges:',
+    '[PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:fileURL]',
+    '[PHAssetChangeRequest creationRequestForAssetFromImage:image]',
+    'NSURLSessionDownloadTask *task', 'NSURLSessionDataTask *task',
+]:
+    if token not in objc:
+        raise SystemExit(f'native downloader API token missing: {token}')
+
+
+# Guard against Objective-C++ switch/case lifetime regression in glass press feedback.
+if "case UIGestureRecognizerStateFailed: {" not in objc:
+    raise SystemExit('glass press switch-case scope guard missing')
+
+# The floating downloader must be a true singleton. Per-cell allocations caused
+# duplicate/jumping buttons over comments and profile pages.
+if objc.count('[[AWEExternalBridgeMenuSlotView alloc] initWithFrame:CGRectZero]') != 1:
+    raise SystemExit('download menu slot is not singleton')
+if 'if (AWEShouldSuppressBarForUserDetailRoute() &&' not in objc:
+    raise SystemExit('normal profile route download suppression missing')
+if 'slot.menuButton.menu = downloadMenu;' not in objc or \
+   'slot.menuButton.showsMenuAsPrimaryAction = YES;' not in objc:
+    raise SystemExit('native download UIMenu install path missing')
+
+for token in [
+    'AWEDownloadMenuOverlayHostView',
+    'DOWNLOAD_SLOT state=%@',
+    'AWEDownloadStackIsStronglyCurrent',
+    'RIGHT_FULLSCREEN_COMMENT_PROTECT',
+    'RIGHT_FULLSCREEN_BLOCK_HIDE',
+    'RIGHT_FULLSCREEN_BLOCK_ALPHA',
+    'RIGHT_FULLSCREEN_BLOCK_REMOVE',
+    'AWEPrimeFriendsNativeLayoutFootprint',
+    'FRIENDS_LAYOUT_PRIME',
+    'AWEApplyFriendsCaptionBottomReserve',
+    'FRIENDS_CAPTION_RESERVE',
+    'if (!AWEControllerShouldBeginReturnPrewarm(controller)) return;',
+]:
+    if token not in objc:
+        raise SystemExit(f'1.0.52d recovery token missing: {token}')
+
+print('AwemeLiquidBar 1.0.52d stability preflight passed')
 PY2

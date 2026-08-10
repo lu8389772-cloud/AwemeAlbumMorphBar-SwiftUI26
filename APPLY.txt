@@ -1,2 +1,1 @@
-This is the complete AwemeLiquidBar 1.0.52l project. Use the complete project archive.
-Replace the cloud repository working tree (except .git), commit, and push. GitHub Actions builds the rootless package.
+This is the complete AwemeLiquidBar 1.0.52d project. Use the complete project archive.

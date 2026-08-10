@@ -1,16 +1,24 @@
-# AwemeLiquidBar 1.0.52l
+# AwemeLiquidBar 1.0.52d
 
-Delivery-stability build based on the 1.0.52 series.
+## Download visibility / transition throttle / Friends caption reserve
 
-## This build changes only the unstable areas
+This build is based on **1.0.52b**. The encrypted **auth29** table, top-category centering, and the profile-fullscreen right-stack recovery are retained.
 
-- Restores the proven 1.0.52e profile-fullscreen right-side button recovery path after comment close.
-- Separates right-column recovery from download-button logic.
-- Uses one long-lived floating download button on the independent AlbumMorph overlay window.
-- The download button no longer follows the avatar or any recycled feed cell. Its default position is screen-fixed and it can be dragged; the normalized position is persisted.
-- The download button still presents the existing native `UIMenu` and current-item download/copy actions.
-- Message and Friends unread badges use the same source-reading path.
-- Empty unread containers no longer become a permanent red dot after the number clears.
-- Mirrored badge visuals are reduced to 84% size; no plugin horizontal badge offset is applied.
+### Main changes
 
-Run `scripts/preflight.sh` before cloud compilation.
+- The singleton download control is no longer hosted by the independent AlbumMorph bottom-bar window/controller. It is reparented to the **current visible feed cell's interaction hierarchy**, so it is composited with the same video cell as the avatar/right-action column and naturally follows paging.
+- Download placement still prefers the current avatar glass/native profile anchor, but the current stack itself is now accepted as the source instead of depending on a second global stack lookup that could select a preloaded/offscreen cell.
+- Download route suppression is less brittle: stale sensitive-controller registrations cannot hide the button when a real playable feed is already visible.
+- Adds a deduplicated `DOWNLOAD_SLOT` probe line with the resolved stack, host, frame, and visible/offscreen state.
+- Fixes a large transition churn source: `AWEBeginReturnPrewarm` now actually obeys `AWEControllerShouldBeginReturnPrewarm`. Ordinary nested feed-controller `viewWillDisappear` callbacks no longer drive the resident bar 0→1 hundreds of times.
+- Friends feed `AWEFeedTableViewController` receives a bottom safe-area reserve equal to the custom tab-bar height minus the system home-indicator inset. This is applied before the first Friends layout and restored when leaving the feed.
+- Settings dismissal primes the invisible native tab-bar footprint before the transition snapshot, preventing the Home caption from briefly falling to the physical bottom when Settings closes.
+- Profile-fullscreen comment recovery from 1.0.52b is unchanged because it was confirmed effective on-device.
+
+### Downloader
+
+The menu remains fully implemented inside AwemeLiquidBar; there is no runtime dependency on AwemeX or DYYY. Current actions are Save current video, Save current image / all images, Save audio, and Copy full caption.
+
+### Authorization
+
+Authorization remains the encrypted **29-entry** table. No accounts were added or removed.

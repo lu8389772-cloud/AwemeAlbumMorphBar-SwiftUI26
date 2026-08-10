@@ -1,0 +1,12 @@
+AwemeLiquidBar 1.0.52d
+
+- Download control no longer uses the independently rebuilt avatar as its Y anchor.
+- Download singleton is hosted by the right-action stack's immediate layout parent and anchored to the stack top edge.
+- Temporary native right-stack hidden/alpha changes now hide only the download visual while preserving model binding, eliminating delayed reappearance.
+- Newly displayed strongly-current feed stacks can adopt the singleton immediately, throttled to avoid per-frame model work.
+- Added “显示下载按钮” setting; default remains ON for upgrades and the switch does not alter layout geometry.
+- Friends first-layout priming no longer force-unhides/moves the original tab bar when a third-party fullscreen/pure-mode tweak already owns that state.
+- Friends unread badge is mirrored alongside Messages; Shop slot is explicitly excluded.
+- Both custom-bar unread badges are scaled to ~90%, with only the innermost UIKit badge visual scaled to avoid double scaling.
+- Native top category item containers are suppressed in addition to title labels/underline, hiding the extra pink “直播” tag attached to 关注 while retaining routing.
+- Version/log/export/workflow/preflight strings updated to 1.0.52d.
