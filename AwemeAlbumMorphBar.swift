@@ -575,7 +575,7 @@ final class AWEAlbumMorphTabController:
                 appearance = UITabBarAppearance()
                 appearance.configureWithDefaultBackground()
             }
-            // 1.0.52g: move the unread badge left in BOTH states. UIKit
+            // 1.0.52h: move the unread badge left in BOTH states. UIKit
             // expands/re-centres the selected native glass item, so the selected
             // state needs a little more negative adjustment than normal to avoid
             // drifting toward the capsule's right edge.

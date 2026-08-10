@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52g'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52g-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52g'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52g'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52g_interaction.log'),
+    ('control', control, 'Version: 1.0.52h'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52h-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52h'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52h'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52h_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -35,7 +35,7 @@ for token in [
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52g', 'LiquidBar 设置 · 1.0.52g',
+    'AwemeLiquidBar 1.0.52h', 'LiquidBar 设置 · 1.0.52h',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -149,7 +149,7 @@ for token in [
     'avatarCenter.y - avatarVisualDiameter * 0.5 - avatarEdgeGap - diameter * 0.5',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52g stability token missing: {token}')
+        raise SystemExit(f'1.0.52h stability token missing: {token}')
 
 
 for token in [
@@ -158,7 +158,7 @@ for token in [
     'self?.applyMessageBadge()',
 ]:
     if token not in swift:
-        raise SystemExit(f'1.0.52g badge stability token missing: {token}')
+        raise SystemExit(f'1.0.52h badge stability token missing: {token}')
 
 for token in [
     'score += strictGeometry ? 12000.0 : 8000.0;',
@@ -166,7 +166,7 @@ for token in [
     'if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52g avatar ownership token missing: {token}')
+        raise SystemExit(f'1.0.52h avatar ownership token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52g compile/auth30/download-toggle preflight passed')
+print('AwemeLiquidBar 1.0.52h compile/auth30/download-toggle preflight passed')
 PY2

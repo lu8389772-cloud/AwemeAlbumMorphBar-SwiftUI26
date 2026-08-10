@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52g — avatar-authoritative download ownership + stable badge offset + auth30
+ AwemeLiquidBar 1.0.52h — avatar-authoritative download ownership + stable badge offset + auth30
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -130,6 +130,7 @@ static BOOL AWEFrameLooksLikeCurrentRightActionStack(UIView *stack);
 static BOOL AWEClassNameLooksLikePlayableFeedController(NSString *className);
 static BOOL AWECurrentRouteHasPlayableFeedController(void);
 static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack);
+static void AWERefreshExternalBridgeMenu(UIView *stack);
 
 static char kAWENativeBarKey;
 static char kAWEDelegateKey;
@@ -804,7 +805,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52g_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52h_interaction.log"] copy];
     });
     return path;
 }
@@ -8556,7 +8557,7 @@ static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
 static UIView *AWEDownloadMenuProfileAnchorForStack(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52g: the download control follows the avatar itself.  The profile
+    /* 1.0.52h: the download control follows the avatar itself.  The profile
        glass slot is only a decoration; the native avatar/picture host is the
        source of truth for whether the user can actually see an avatar. */
     AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
@@ -8630,7 +8631,7 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     }
 
     UIView *avatarAnchor = AWEDownloadMenuProfileAnchorForStack(stack);
-    /* 1.0.52g hard visibility contract: avatar visible -> download visible;
+    /* 1.0.52h hard visibility contract: avatar visible -> download visible;
        avatar gone/hidden -> download gone. This deliberately replaces the old
        strict stack-frame gate, which could reject a valid current cell while
        its avatar was plainly still on screen. */
@@ -8758,7 +8759,7 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
         ? AWEDownloadMenuProfileAnchorForStack(bestStack)
         : nil;
 
-    /* 1.0.52g: the visible avatar is now authoritative for BOTH geometry and
+    /* 1.0.52h: the visible avatar is now authoritative for BOTH geometry and
        singleton ownership. The caller is just a refresh hint. A preloaded
        previous/next AWEElementStackView can no longer steal ownership or make
        the button disappear merely because its hidden/alpha state changed. */
@@ -9126,7 +9127,7 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
         AWEHomeActionSlotsForStack(stack);
     if (!stack.window) {
-        // 1.0.52g: a recycled/preloaded stack losing its window must not blank
+        // 1.0.52h: a recycled/preloaded stack losing its window must not blank
         // the singleton. Resolve ownership again from the avatar that is
         // actually visible right now.
         if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
@@ -14212,7 +14213,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52g";
+    self.title = @"LiquidBar 设置 · 1.0.52h";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
