@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52d'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52d-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52d'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52d'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52d_interaction.log'),
+    ('control', control, 'Version: 1.0.52m'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52m-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52m'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52m'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52m_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -28,13 +28,15 @@ for name, text, token in checks:
 for token in [
     'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
     '@objc(updateMessageBadgeValue:)', '@objc(updateSecondBadgeValue:)', 'applyUnreadBadges()',
+    'messageBadgeOverlay', 'secondBadgeOverlay', 'let height: CGFloat = dotOnly ? 8.0 : 16.0',
+    'clearSystemBadge(Identifier.second)', 'clearSystemBadge(Identifier.messages)',
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
 ]:
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52d', 'LiquidBar 设置 · 1.0.52d',
+    'AwemeLiquidBar 1.0.52m', 'LiquidBar 设置 · 1.0.52m',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -47,8 +49,11 @@ for token in [
     'button.showsMenuAsPrimaryAction = YES;',
     'AWEPreferHighestPlaybackEnabled', '优先最高画质播放（可能增加流量）',
     'AwemeLiquidBarDownloadButtonEnabledV1', '显示下载按钮',
-    'AWEDownloadStackIsStronglyCurrent', 'updateSecondBadgeValue',
-    'kAWETopCategoryItemHiddenMarkerKey', 'externalFullscreen=%d',
+    'AWEDownloadStackIsStronglyCurrent', 'AWEDownloadFixedScreenCenter',
+    'return stack.window;', 'DOWNLOAD_SLOT state=fixed',
+    'updateSecondBadgeValue',
+    'kAWETopCategoryItemHiddenMarkerKey', 'AWEHideLeakedTopLiveBadges',
+    'externalFullscreen=%d',
     'return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;',
     'gAWEFriendsTabLatched', 'AWEUpdateFriendsTabLatch',
     "Preserve the native bar's layout footprint before Friends performs",
@@ -123,7 +128,7 @@ if 'slot.menuButton.menu = downloadMenu;' not in objc or \
 
 for token in [
     'AWEDownloadMenuOverlayHostView',
-    'DOWNLOAD_SLOT state=%@',
+    'DOWNLOAD_SLOT state=fixed',
     'AWEDownloadStackIsStronglyCurrent',
     'RIGHT_FULLSCREEN_COMMENT_PROTECT',
     'RIGHT_FULLSCREEN_BLOCK_HIDE',
@@ -131,12 +136,15 @@ for token in [
     'RIGHT_FULLSCREEN_BLOCK_REMOVE',
     'AWEPrimeFriendsNativeLayoutFootprint',
     'FRIENDS_LAYOUT_PRIME',
+    'AWEFriendsExternalFullscreenActive',
+    '%hook AWEFeedTableViewController',
+    'feed.layout.async',
     'AWEApplyFriendsCaptionBottomReserve',
     'FRIENDS_CAPTION_RESERVE',
     'if (!AWEControllerShouldBeginReturnPrewarm(controller)) return;',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52d recovery token missing: {token}')
+        raise SystemExit(f'1.0.52m recovery token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52d stability preflight passed')
+print('AwemeLiquidBar 1.0.52m stability preflight passed')
 PY2

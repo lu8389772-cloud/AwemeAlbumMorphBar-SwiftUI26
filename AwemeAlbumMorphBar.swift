@@ -397,6 +397,8 @@ final class AWEAlbumMorphTabController:
     private var visibleItemIdentifiers = ItemKey.defaultVisible
     private var messageBadgeValue: String?
     private var secondBadgeValue: String?
+    private let messageBadgeOverlay = UILabel(frame: .zero)
+    private let secondBadgeOverlay = UILabel(frame: .zero)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -427,6 +429,11 @@ final class AWEAlbumMorphTabController:
         tabBar.itemPositioning = .fill
         tabBar.itemWidth = 0
         tabBar.itemSpacing = 0
+
+        configureUnreadBadgeOverlay(secondBadgeOverlay)
+        configureUnreadBadgeOverlay(messageBadgeOverlay)
+        tabBar.addSubview(secondBadgeOverlay)
+        tabBar.addSubview(messageBadgeOverlay)
 
         rebuildTabs(preservingOriginalIndex: 0)
     }
@@ -549,26 +556,160 @@ final class AWEAlbumMorphTabController:
         tabBar.setNeedsLayout()
     }
 
-    private func applyBadge(_ value: String?, identifier: String) {
-        guard let tab = tab(forIdentifier: identifier) else { return }
-        let normalized = value?.isEmpty == false ? value : nil
+    private func configureUnreadBadgeOverlay(_ label: UILabel) {
+        label.backgroundColor = .systemRed
+        label.textColor = .white
+        label.textAlignment = .center
+        label.font = .systemFont(ofSize: 9.5, weight: .semibold)
+        label.isUserInteractionEnabled = false
+        label.isHidden = true
+        label.clipsToBounds = true
+        label.layer.cornerCurve = .continuous
+        label.accessibilityElementsHidden = true
+    }
 
-        // UITab badge API has shifted across SDK revisions. Keep the source
-        // compatible by using KVC first, then mirror onto the concrete
-        // UITabBarItem when UIKit has materialized it.
-        if tab.responds(to: NSSelectorFromString("setBadgeValue:")) {
-            tab.setValue(normalized, forKey: "badgeValue")
+    private func tabBarButtonsInDisplayOrder() -> [UIView] {
+        let named = tabBar.subviews.filter { view in
+            let name = String(describing: type(of: view)).lowercased()
+            return name.contains("tabbarbutton") &&
+                   !name.contains("badge") &&
+                   view.bounds.width > 24 &&
+                   view.bounds.height > 24
         }
-        if let index = tabs.firstIndex(where: { $0 === tab }),
-           let items = tabBar.items, index < items.count {
-            items[index].badgeValue = normalized
-            items[index].badgeColor = .systemRed
+        .sorted {
+            let lhs = $0.convert($0.bounds, to: tabBar).midX
+            let rhs = $1.convert($1.bounds, to: tabBar).midX
+            return lhs < rhs
+        }
+        if named.count >= tabs.count {
+            return named
+        }
+
+        // iOS 26 point releases may rename the private item-view class. Fall
+        // back to visible UIControls rather than making the badge disappear.
+        return tabBar.subviews.filter { view in
+            guard view is UIControl else { return false }
+            let name = String(describing: type(of: view)).lowercased()
+            return !name.contains("badge") &&
+                   view.bounds.width > 24 &&
+                   view.bounds.height > 24
+        }
+        .sorted {
+            let lhs = $0.convert($0.bounds, to: tabBar).midX
+            let rhs = $1.convert($1.bounds, to: tabBar).midX
+            return lhs < rhs
         }
     }
 
+    private func bestIconFrame(in button: UIView) -> CGRect? {
+        var candidates: [(UIImageView, CGFloat)] = []
+
+        func walk(_ view: UIView, depth: Int) {
+            guard depth <= 5 else { return }
+            for child in view.subviews {
+                if let imageView = child as? UIImageView,
+                   !imageView.isHidden,
+                   imageView.alpha > 0.01,
+                   imageView.bounds.width >= 12,
+                   imageView.bounds.width <= 42,
+                   imageView.bounds.height >= 12,
+                   imageView.bounds.height <= 42 {
+                    let frame = imageView.convert(imageView.bounds, to: tabBar)
+                    let score = abs(frame.width - frame.height) +
+                                abs(frame.width - 22) * 0.2
+                    candidates.append((imageView, score))
+                }
+                walk(child, depth: depth + 1)
+            }
+        }
+
+        walk(button, depth: 0)
+        guard let best = candidates.min(by: { $0.1 < $1.1 })?.0 else {
+            return nil
+        }
+        return best.convert(best.bounds, to: tabBar)
+    }
+
+    private func layoutUnreadBadge(
+        _ label: UILabel,
+        value: String?,
+        identifier: String
+    ) {
+        guard let normalized = value, !normalized.isEmpty,
+              let tabIndex = tabs.firstIndex(where: { $0.identifier == identifier })
+        else {
+            label.isHidden = true
+            return
+        }
+
+        let buttons = tabBarButtonsInDisplayOrder()
+        guard tabIndex < buttons.count else {
+            label.isHidden = true
+            return
+        }
+
+        let button = buttons[tabIndex]
+        let buttonFrame = button.convert(button.bounds, to: tabBar)
+        let iconFrame = bestIconFrame(in: button)
+            ?? CGRect(
+                x: buttonFrame.midX - 11,
+                y: buttonFrame.minY + 8,
+                width: 22,
+                height: 22
+            )
+
+        let dotOnly = normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let height: CGFloat = dotOnly ? 8.0 : 16.0
+        let width: CGFloat
+        if dotOnly {
+            width = 8.0
+            label.text = nil
+        } else {
+            label.text = normalized
+            let measured = (normalized as NSString).size(
+                withAttributes: [.font: label.font as Any]
+            ).width
+            width = min(max(16.0, ceil(measured) + 7.0), 30.0)
+        }
+
+        label.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        label.layer.cornerRadius = height * 0.5
+
+        // Fixed 16 pt count badge: approximately 10% smaller than the prior
+        // native ~18 pt badge. Position from the live icon, not from private
+        // UIKit badge containers, so iOS 26 layout changes cannot nullify it.
+        let x = iconFrame.maxX + (dotOnly ? 0.5 : 1.5)
+        let y = iconFrame.minY + (dotOnly ? 0.5 : 1.0)
+        label.center = CGPoint(x: x, y: y)
+        label.isHidden = false
+        tabBar.bringSubviewToFront(label)
+    }
+
+    private func clearSystemBadge(_ identifier: String) {
+        guard let tab = tab(forIdentifier: identifier),
+              let index = tabs.firstIndex(where: { $0 === tab }),
+              let items = tabBar.items, index < items.count
+        else { return }
+
+        if tab.responds(to: NSSelectorFromString("setBadgeValue:")) {
+            tab.setValue(nil, forKey: "badgeValue")
+        }
+        items[index].badgeValue = nil
+    }
+
     private func applyUnreadBadges() {
-        applyBadge(secondBadgeValue, identifier: Identifier.second)
-        applyBadge(messageBadgeValue, identifier: Identifier.messages)
+        clearSystemBadge(Identifier.second)
+        clearSystemBadge(Identifier.messages)
+        layoutUnreadBadge(
+            secondBadgeOverlay,
+            value: secondBadgeValue,
+            identifier: Identifier.second
+        )
+        layoutUnreadBadge(
+            messageBadgeOverlay,
+            value: messageBadgeValue,
+            identifier: Identifier.messages
+        )
         tabBar.setNeedsLayout()
     }
 
@@ -582,24 +723,6 @@ final class AWEAlbumMorphTabController:
     func updateSecondBadgeValue(_ value: String?) {
         secondBadgeValue = value
         applyUnreadBadges()
-    }
-
-    private func applyCompactUnreadBadgeScale(in root: UIView) {
-        for child in root.subviews {
-            let className = String(describing: type(of: child)).lowercased()
-            let hasDirectBadgeChild = child.subviews.contains {
-                String(describing: type(of: $0)).lowercased().contains("badge")
-            }
-            if className.contains("badge"), !hasDirectBadgeChild,
-               child.bounds.width > 4, child.bounds.width < 72,
-               child.bounds.height > 4, child.bounds.height < 48 {
-                // Scale only the innermost badge visual. Scaling both UIKit's
-                // badge container and its badge child would accidentally make
-                // the result ~19% smaller instead of the requested ~10%.
-                child.transform = CGAffineTransform(scaleX: 0.90, y: 0.90)
-            }
-            applyCompactUnreadBadgeScale(in: child)
-        }
     }
 
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
@@ -709,7 +832,7 @@ final class AWEAlbumMorphTabController:
             compactMode = false
             tabBar.transform = .identity
         }
-        applyCompactUnreadBadgeScale(in: tabBar)
+        applyUnreadBadges()
     }
 
     private func applyStableVerticalOffset() {

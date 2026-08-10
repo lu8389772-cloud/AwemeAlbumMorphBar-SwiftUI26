@@ -1,45 +1,24 @@
-AwemeLiquidBar 1.0.52d device test
+AwemeLiquidBar 1.0.52m device test
 
-1. Friends + third-party fullscreen first entry
-- Enable the uploaded/other tweak's fullscreen playback option.
-- Kill and relaunch Douyin, then enter Friends directly.
-- On the first visible item, avatar/nickname/title/caption must not be transiently laid out at the physical screen bottom under LiquidBar.
-- Repeat Home -> Friends -> Home -> Friends at least 5 times.
-- Interaction log should show FRIENDS_LAYOUT_PRIME ... externalFullscreen=1 when the original bar is already hidden/moved by the fullscreen tweak.
-
-2. Download button: position stability
+1. Download position stability
 - Keep “显示下载按钮” ON.
-- On Home/Friends normal videos, confirm exactly ONE download button appears above the native right-action stack.
-- Swipe 10-15 videos, including fast partial swipes and cancelled swipes.
-- The download button must not alternate between an avatar-based Y and a stack-based Y; it must remain on one fixed relative anchor.
-- It must never duplicate over comments/profile pages.
+- Enter Home and Friends, then swipe at least 15 posts quickly and slowly.
+- The download button must stay at one fixed screen coordinate. It must not follow avatar/right-stack vertical movement and must not jump between cells.
+- Open/close comments and return to the feed. The button may hide for the blocked route, but when visible it must return to the exact same coordinate.
 
-3. Download button: visibility synchronization
-- Let Douyin hide/show the native right-side action column, then repeat while swiping.
-- The download button must hide in the same transition as the native right column and reappear without requiring an extra swipe/touch.
-- Open/close comments; the button must disappear while comments block feed actions and return on the visible feed.
-- Probe should contain DOWNLOAD_SLOT state=visible only while the bound stack is actually visible.
+2. Download switch
+- Turn the switch OFF and ON repeatedly.
+- Only visibility may change. X/Y must not change and the right-side native controls must not move.
 
-4. Download display switch
-- Turn “显示下载按钮” OFF: the button should disappear immediately, with no right-column layout shift.
-- Swipe several videos and return from comments/profile: it must remain absent.
-- Turn it ON: the current visible video's button should return without changing its X/Y anchor.
+3. Unread badges
+- With unread counts present, verify Friends and Messages both show plugin-owned badges.
+- Numeric badge height is 16 pt; a dot badge is 8 pt.
+- The two tabs must use identical sizing rules.
 
-5. Friends + Messages unread badges
-- Turn “显示朋友/消息未读角标” ON.
-- Trigger/observe a Messages unread badge and confirm it mirrors to the custom bottom bar.
-- On an account where Friends has an unread badge, confirm the same badge is mirrored on the Friends tab.
-- Both mirrored badges should look about 10% smaller than 1.0.52c and use the same scale.
-- If slot 2 is 商城 rather than 朋友, no Shop promotional dot should be mirrored as a Friends unread badge.
+4. Friends + external fullscreen
+- Enable the other tweak's fullscreen playback and cold-enter Friends.
+- The poster avatar/title/caption area must remain above the custom LiquidBar on the first entry, without requiring a swipe.
 
-6. Top category pink Live tag
-- Use an account where 关注 has the pink/red “直播” tag at its upper-right.
-- With the plugin top category group active, native 直播/商城/关注/推荐 text, underline, and that extra pink Live tag must all be invisible.
-- Tapping the plugin category/menu must still route through the original native owners.
-
-7. Regression
-- Publish/share/search route suppression remains intact.
-- Top liquid category group remains centered and selectable.
-- Like/comment/favorite/share glass buttons still track their native actions.
-- Settings gesture remains available.
-- auth29 unchanged.
+5. Follow live pill
+- On an account where Follow has a pink/red “直播” pill, enable the plugin top group.
+- The native pill must not remain visible beneath the custom top group.

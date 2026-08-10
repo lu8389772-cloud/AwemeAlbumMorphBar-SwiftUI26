@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52d
+Version: 1.0.52m
 Architecture: iphoneos-arm
-Description: Stable stack-anchored current-item downloader with display switch, fullscreen-safe Friends layout, Friends/Messages badge mirroring, compact badges, live-tag suppression, cross-version bottom routing, centered top categories, and auth29.
+Description: Fixed-screen current-item download singleton with isolated display switch, fullscreen-safe Friends reserve, plugin-owned compact dual unread badges, live-tag suppression, cross-version bottom routing, centered top categories, and auth29.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

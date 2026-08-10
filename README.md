@@ -1,24 +1,19 @@
-# AwemeLiquidBar 1.0.52d
+# AwemeLiquidBar 1.0.52m
 
-## Download visibility / transition throttle / Friends caption reserve
+Focused stability build based on the supplied 1.0.52d project. Auth29 and unrelated LiquidBar behavior are retained.
 
-This build is based on **1.0.52b**. The encrypted **auth29** table, top-category centering, and the profile-fullscreen right-stack recovery are retained.
+## Changes
 
-### Main changes
+- Download button is now a true screen-space singleton. The current right-action stack is used only to resolve the current aweme model; it no longer controls the button's X/Y position.
+- Download position is fixed from the feed UIWindow bounds. Recycled cells, avatar rebuilds, right-stack hidden/alpha changes and stack transforms cannot move it.
+- Preloaded/previous/next stacks are forbidden from stealing or hiding the download singleton. Brief model gaps keep the existing button/menu instead of blinking it out.
+- The existing “显示下载按钮” switch only gates visibility; it never participates in geometry.
+- Friends fullscreen mode now reserves the complete custom-bar height when the external tweak removes the native tab-bar footprint. `AWEFeedTableViewController` reasserts this after layout and once on the next run-loop turn.
+- Friends and Messages use plugin-owned unread badges instead of scaling UIKit private badge views. Numeric badges are fixed at 16 pt high; dot badges are 8 pt. Both use the same layout code.
+- The top-bar layout performs a bounded cleanup pass for leaked native “直播” pills, including the pink Follow live badge created after the original category suppression pass.
 
-- The singleton download control is no longer hosted by the independent AlbumMorph bottom-bar window/controller. It is reparented to the **current visible feed cell's interaction hierarchy**, so it is composited with the same video cell as the avatar/right-action column and naturally follows paging.
-- Download placement still prefers the current avatar glass/native profile anchor, but the current stack itself is now accepted as the source instead of depending on a second global stack lookup that could select a preloaded/offscreen cell.
-- Download route suppression is less brittle: stale sensitive-controller registrations cannot hide the button when a real playable feed is already visible.
-- Adds a deduplicated `DOWNLOAD_SLOT` probe line with the resolved stack, host, frame, and visible/offscreen state.
-- Fixes a large transition churn source: `AWEBeginReturnPrewarm` now actually obeys `AWEControllerShouldBeginReturnPrewarm`. Ordinary nested feed-controller `viewWillDisappear` callbacks no longer drive the resident bar 0→1 hundreds of times.
-- Friends feed `AWEFeedTableViewController` receives a bottom safe-area reserve equal to the custom tab-bar height minus the system home-indicator inset. This is applied before the first Friends layout and restored when leaving the feed.
-- Settings dismissal primes the invisible native tab-bar footprint before the transition snapshot, preventing the Home caption from briefly falling to the physical bottom when Settings closes.
-- Profile-fullscreen comment recovery from 1.0.52b is unchanged because it was confirmed effective on-device.
+## Unchanged
 
-### Downloader
-
-The menu remains fully implemented inside AwemeLiquidBar; there is no runtime dependency on AwemeX or DYYY. Current actions are Save current video, Save current image / all images, Save audio, and Copy full caption.
-
-### Authorization
-
-Authorization remains the encrypted **29-entry** table. No accounts were added or removed.
+- Native current-item download actions and UIMenu.
+- Profile-fullscreen right-action recovery.
+- Bottom-bar routing, top category group, icon configuration, authorization table, and other existing settings.
