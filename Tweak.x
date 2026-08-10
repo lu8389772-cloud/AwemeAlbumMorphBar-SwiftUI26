@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52s — live-stack clean recovery + video stack reacquire + auth33
+ AwemeLiquidBar 1.0.52t — live-stack clean recovery + video stack reacquire + auth33
 
  Incremental release on top of 1.0.52r:
  - fixes the clean-screen recovery hot-zone parent: the live right stack itself
@@ -820,7 +820,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52s_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52t_interaction.log"] copy];
     });
     return path;
 }
@@ -889,7 +889,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52s_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52t_probe.log"] copy];
     });
     return path;
 }
@@ -8724,7 +8724,7 @@ static UIView *AWETopLevelDescendantOfStack(UIView *view, UIView *stack) {
 }
 
 
-#pragma mark - 1.0.52s avatar clean-screen mode
+#pragma mark - 1.0.52t avatar clean-screen mode
 
 static NSHashTable<UIView *> *AWECleanScreenSuppressedViews(void) {
     if (!gAWECleanScreenSuppressedViews) {
@@ -8929,7 +8929,7 @@ static void AWECleanScreenConfigureRealAvatarMenuButton(UIView *stack,
     button.hidden = NO;
     button.alpha = 1.0;
     button.userInteractionEnabled = YES;
-    [stack bringSubviewToFront:button];
+    [button.superview bringSubviewToFront:button];
 
     if (!gAWECleanScreenRecoveryTarget) {
         gAWECleanScreenRecoveryTarget = [AWECleanScreenRecoveryTarget new];
@@ -8951,15 +8951,26 @@ static void AWECleanScreenConfigureRealAvatarMenuButton(UIView *stack,
         return;
     }
 
-    /* Reveal the original plugin glass base and the native profile branch,
-       while every other right-action child remains in the suppression set. */
+    /* Reveal only the original avatar path, not the whole profile branch.
+       The menu hit target now lives inside the native profile host, so keep
+       its ancestor chain alive without reviving unrelated follow/badge chrome. */
     AWECleanScreenRestoreSuppressedView(slot);
-    UIView *profileTop = AWETopLevelDescendantOfStack(slot.profileHost, stack);
-    if (profileTop) AWECleanScreenRestoreSuppressedView(profileTop);
-    if (slot.profileHost) AWECleanScreenRestoreSuppressedView(slot.profileHost);
+    for (UIView *cursor = slot.profileHost; cursor && cursor != stack;
+         cursor = cursor.superview) {
+        AWECleanScreenRestoreSuppressedView(cursor);
+        cursor.hidden = NO;
+        cursor.alpha = 1.0;
+        cursor.userInteractionEnabled = YES;
+    }
     if (slot.avatarImageView) {
-        AWECleanScreenRestoreSuppressedView(slot.avatarImageView);
-        AWECleanScreenRestoreSuppressedView(slot.avatarImageView.superview);
+        for (UIView *cursor = slot.avatarImageView;
+             cursor && cursor != slot.profileHost.superview;
+             cursor = cursor.superview) {
+            AWECleanScreenRestoreSuppressedView(cursor);
+            cursor.hidden = NO;
+            cursor.alpha = 1.0;
+            if (cursor == slot.profileHost) break;
+        }
     }
     slot.hidden = NO;
     slot.alpha = 1.0;
@@ -9040,6 +9051,36 @@ static BOOL AWECleanScreenClassLooksLikeChrome(UIView *view) {
     return NO;
 }
 
+static BOOL AWECleanScreenBranchContainsTarget(UIView *branch, UIView *target) {
+    if (!branch || !target) return NO;
+    return branch == target || AWEViewIsDescendantOfView(target, branch);
+}
+
+static void AWECleanScreenSuppressProfileBranch(UIView *root,
+                                                 AWEHomeProfileGlassView *slot,
+                                                 BOOL revealed,
+                                                 NSUInteger depth) {
+    if (!root || !slot || depth > 12) return;
+    UIButton *menuButton = slot.menuButton;
+    UIImageView *avatar = slot.avatarImageView;
+    for (UIView *child in root.subviews) {
+        BOOL keepMenuPath = AWECleanScreenBranchContainsTarget(child, menuButton);
+        BOOL keepAvatarPath = revealed &&
+            AWECleanScreenBranchContainsTarget(child, avatar);
+        if (child == menuButton || keepMenuPath || keepAvatarPath) {
+            AWECleanScreenRestoreSuppressedView(child);
+            child.hidden = NO;
+            child.alpha = 1.0;
+            if (child == menuButton) child.userInteractionEnabled = YES;
+            if (child != menuButton) {
+                AWECleanScreenSuppressProfileBranch(child, slot, revealed, depth + 1);
+            }
+            continue;
+        }
+        AWECleanScreenSuppressView(child, YES);
+    }
+}
+
 static void AWECleanScreenSuppressKnownChromeTree(UIView *root,
                                                    UIWindow *window,
                                                    NSUInteger depth) {
@@ -9057,21 +9098,20 @@ static void AWECleanScreenSuppressKnownChromeTree(UIView *root,
         if (!view) continue;
 
         if (rootIsRightStack) {
-            /* Never opacity-hide AWEElementStackView itself. Keeping this
-               parent alive is what lets the existing transparent menuButton
-               continue receiving one small avatar-position tap while every
-               visible child is suppressed. */
-            if (view == profileSlot.menuButton) {
+            /* The avatar menu hit target is no longer a direct child of the
+               private AWEElementStackView. Keep only the native profile
+               container chain alive so its embedded transparent menu target
+               can receive the recovery tap without entering stack layout. */
+            if (view == profileTop) {
+                AWECleanScreenRestoreSuppressedView(view);
                 view.hidden = NO;
                 view.alpha = 1.0;
                 view.userInteractionEnabled = YES;
+                AWECleanScreenSuppressProfileBranch(
+                    view, profileSlot, gAWECleanScreenAvatarRevealed, 0);
                 continue;
             }
-            /* After the recovery tap, keep the exact restored avatar branches
-               out of the suppression loop. 1.0.52r restored them once, then
-               the very next AWEElementStackView layout suppressed them again. */
-            if (gAWECleanScreenAvatarRevealed &&
-                (view == profileSlot || view == profileTop)) {
+            if (gAWECleanScreenAvatarRevealed && view == profileSlot) {
                 AWECleanScreenRestoreSuppressedView(view);
                 view.hidden = NO;
                 view.alpha = 1.0;
@@ -9320,7 +9360,12 @@ static AWEHomeProfileGlassView *AWEEnsureProfileGlassSlot(UIView *stack) {
         menuButton.showsMenuAsPrimaryAction = YES;
         menuButton.accessibilityLabel = @"头像操作";
         menuButton.accessibilityIdentifier = @"AwemeLiquidBar.HomeAction.ProfileMenu";
-        [stack addSubview:menuButton];
+        /* Keep the menu hit target OUT of AWEElementStackView's direct
+           subview list. Photo carousel page changes cause that private stack
+           to reflow direct UIControl children; the old sibling menuButton was
+           therefore able to perturb the native right/left chrome layout.
+           It is reparented into the native profile host when a live avatar is
+           bound below. */
         slot.menuButton = menuButton;
 
         objc_setAssociatedObject(stack, &kAWEProfileGlassSlotKey, slot,
@@ -9330,10 +9375,6 @@ static AWEHomeProfileGlassView *AWEEnsureProfileGlassSlot(UIView *stack) {
         if (slot.superview != stack) {
             [slot removeFromSuperview];
             [stack insertSubview:slot atIndex:0];
-        }
-        if (slot.menuButton.superview != stack) {
-            [slot.menuButton removeFromSuperview];
-            [stack addSubview:slot.menuButton];
         }
     }
     return slot;
@@ -9385,8 +9426,14 @@ static void AWERefreshProfileAvatarGlass(UIView *stack) {
 
     CGFloat avatarHitDiameter = MIN(50.0, MAX(40.0,
         MIN(CGRectGetWidth(avatar.bounds), CGRectGetHeight(avatar.bounds))));
+    if (slot.menuButton.superview != pictureHost) {
+        [slot.menuButton removeFromSuperview];
+        [pictureHost addSubview:slot.menuButton];
+    }
+    CGRect avatarFrameInHost = [avatar convertRect:avatar.bounds toView:pictureHost];
     slot.menuButton.bounds = CGRectMake(0.0, 0.0, avatarHitDiameter, avatarHitDiameter);
-    slot.menuButton.center = center;
+    slot.menuButton.center = CGPointMake(CGRectGetMidX(avatarFrameInHost),
+                                         CGRectGetMidY(avatarFrameInHost));
     slot.menuButton.hidden = NO;
     slot.menuButton.alpha = 1.0;
     slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, pictureHost);
@@ -9396,7 +9443,7 @@ static void AWERefreshProfileAvatarGlass(UIView *stack) {
     if (anchor && anchor != slot) {
         [stack insertSubview:slot belowSubview:anchor];
     }
-    [stack bringSubviewToFront:slot.menuButton];
+    [pictureHost bringSubviewToFront:slot.menuButton];
     AWEStoreAndClearProfileVisual(pictureHost);
     AWEStoreAndClearProfileVisual(avatar.superview);
     AWEStoreAndClearProfileVisual(avatar);
@@ -13363,7 +13410,7 @@ static BOOL AWEStackHasPlayableVisualAncestor(UIView *stack) {
 static BOOL AWEStackRepresentsVideoWork(UIView *stack) {
     if (!stack) return NO;
     id aweme = AWECurrentAwemeModelForStack(stack);
-    /* 1.0.52s: never classify a transiently-unbound stack as video. Photo
+    /* 1.0.52t: never classify a transiently-unbound stack as video. Photo
        carousels can briefly lose their aweme binding while changing images;
        1.0.52r treated that nil window as video and ran the video recovery path
        against image posts. */
@@ -13448,7 +13495,7 @@ static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack) {
        AWEElementStackView itself. Restore only known right-area containers
        that actually own this stack; never touch the feed cell/player root. */
     UIViewController *interaction = AWEInteractionControllerForView(stack);
-    /* 1.0.52s: do not call a third-party/fullscreen setRightAreaHidden: here.
+    /* 1.0.52t: do not call a third-party/fullscreen setRightAreaHidden: here.
        Image posts are already stable without it, and forcing that external
        state machine during a photo/video transition can rewrite layout. Only
        repair the currently-selected native stack/wrappers below. */
@@ -13523,6 +13570,108 @@ static NSString *AWECurrentRightActionStackSummary(void) {
             (unsigned long)buttons.count]];
     }
     return parts.count ? [parts componentsJoinedByString:@" || "] : @"none";
+}
+
+static UIView *AWEProfileCommentNativeActionStackForController(
+    UIViewController *controller, NSUInteger *outNativeButtons) {
+    if (outNativeButtons) *outNativeButtons = 0;
+    UIView *root = controller.viewIfLoaded;
+    if (!root || !root.window) return nil;
+
+    NSMutableArray<UIView *> *stacks = [NSMutableArray array];
+    AWECollectVisibleHomeActionStacks(root, stacks, 0);
+    UIView *best = nil;
+    NSUInteger bestCount = 0;
+    CGFloat bestScore = -CGFLOAT_MAX;
+    for (UIView *stack in stacks) {
+        if (!stack.window) continue;
+        NSArray<UIView *> *buttons = AWESortedVisibleHomeActionButtons(stack);
+        NSUInteger count = buttons.count;
+        BOOL hasProfile =
+            AWEFindViewByExactRuntimeClass(
+                stack, @"AWEPlayInteractionUserProfilePictureView", 0) != nil ||
+            AWEFindViewByExactRuntimeClass(
+                stack, @"AWEPlayInteractionUserProfileContainerView", 0) != nil;
+        /* The controller is already the exact interaction controller that
+           opened comments. Within that owner, real native AWEFeedVideoButton
+           descendants are stronger evidence than window geometry. This makes
+           the image and video paths use the same source of truth and avoids
+           selecting an empty transition AWEElementStackView. */
+        if (count == 0 && !hasProfile) continue;
+        CGFloat score = (CGFloat)count * 2000.0 + (hasProfile ? 500.0 : 0.0);
+        if (AWEFrameGeometryLooksLikeCurrentRightActionStack(stack)) score += 120.0;
+        if (stack == gAWECommentRightStackBefore) score += 20.0;
+        if (score > bestScore) {
+            bestScore = score;
+            best = stack;
+            bestCount = count;
+        }
+    }
+    if (outNativeButtons) *outNativeButtons = bestCount;
+    return best;
+}
+
+static NSUInteger AWEProfileCommentRepairGlassForStack(UIView *stack) {
+    if (!stack || !stack.window || gAWECleanScreenEnabled) return 0;
+    NSArray<UIView *> *nativeButtons = AWESortedVisibleHomeActionButtons(stack);
+    if (nativeButtons.count == 0) return 0;
+
+    /* Rebuild only our overlay material from the native buttons that are
+       already present. Never rewrite the feed/stack frame, safe area, or
+       native button geometry. */
+    AWERefreshHomeActionStack(stack);
+    AWELayoutBoundHomeActionSlots(stack);
+    AWERefreshProfileAvatarGlass(stack);
+
+    NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
+        objc_getAssociatedObject(stack, &kAWEHomeActionStackSlotsKey);
+    NSUInteger repaired = 0;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (AWEHomeActionSlotView *slot in slots.allValues) {
+        if (!slot.originalView || !slot.sourceImageView ||
+            !AWEViewIsDescendantOfView(slot.originalView, stack)) continue;
+        [slot.systemGlassButton.layer removeAllAnimations];
+        slot.systemGlassButton.transform = CGAffineTransformIdentity;
+        slot.bounds = CGRectMake(0.0, 0.0, 46.0, 46.0);
+        slot.systemGlassButton.frame = slot.bounds;
+        slot.hidden = NO;
+        slot.alpha = 1.0;
+        slot.systemGlassButton.hidden = NO;
+        slot.systemGlassButton.alpha = 1.0;
+        repaired++;
+    }
+    [CATransaction commit];
+    return repaired;
+}
+
+static void AWEScheduleProfileCommentNativeGlassRepair(NSString *reason,
+                                                        UIViewController *owner) {
+    if (!owner || !owner.viewIfLoaded.window || gAWECleanScreenEnabled) return;
+    __weak UIViewController *weakOwner = owner;
+    NSArray<NSNumber *> *delays = @[@0.0, @0.016, @0.050, @0.120,
+                                    @0.250, @0.500, @0.900, @1.500];
+    for (NSNumber *delay in delays) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+            (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+            UIViewController *strongOwner = weakOwner;
+            if (!strongOwner || !strongOwner.viewIfLoaded.window ||
+                gAWECleanScreenEnabled || AWEAnyVisibleCommentPanelForRightRecovery()) {
+                return;
+            }
+            NSUInteger nativeCount = 0;
+            UIView *stack = AWEProfileCommentNativeActionStackForController(
+                strongOwner, &nativeCount);
+            NSUInteger repaired = AWEProfileCommentRepairGlassForStack(stack);
+            AWEInteractionDiagnosticWrite(
+                @"PROFILE_NATIVE_GLASS_REPAIR reason=%@ delay=%.3f owner=%@ stack=%@ native=%lu repaired=%lu",
+                reason ?: @"profile.comment.dismiss", delay.doubleValue,
+                AWEInteractionObjectSummary(strongOwner),
+                AWEInteractionObjectSummary(stack),
+                (unsigned long)nativeCount, (unsigned long)repaired);
+        });
+    }
 }
 
 static void AWESchedulePostCommentRightRebind(NSString *reason) {
@@ -14862,7 +15011,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52s";
+    self.title = @"LiquidBar 设置 · 1.0.52t";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16147,7 +16296,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52s image=%@ ==========" ,
+            @"========== START build=1.0.52t image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16214,7 +16363,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52s diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52t diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16229,7 +16378,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52s_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52t_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -18107,7 +18256,17 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
                 gAWECommentRightRebindPending = NO;
                 NSString *restoreReason =
                     [NSString stringWithFormat:@"panelDismiss.%@", className];
-                AWESchedulePostCommentRightRebind(restoreReason);
+                if (profileFullscreenComment) {
+                    /* On profile fullscreen feeds, use the exact interaction
+                       controller that opened comments and rebuild our glass
+                       from its live native AWEFeedVideoButton descendants.
+                       Do not guess image/video or chase window-level empty
+                       transition stacks. */
+                    UIViewController *owner = gAWEProfileCommentLayoutController;
+                    AWEScheduleProfileCommentNativeGlassRepair(restoreReason, owner);
+                } else {
+                    AWESchedulePostCommentRightRebind(restoreReason);
+                }
                 AWEScheduleProfileCommentLayoutRestore(restoreReason);
             }
         }
@@ -18206,7 +18365,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52s os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52t os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
