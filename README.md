@@ -1,19 +1,10 @@
-# AwemeLiquidBar 1.0.52j
+# AwemeLiquidBar 1.0.52k
 
-## 1.0.52j stable floating download + badge direction fix
+Focused rollback/stability build based on 1.0.52j.
 
-- The right-side download control is now a **true process-wide floating singleton hosted by the active normal app UIWindow**, not a child of a recycled feed cell.
-- Its position is still derived from the actually visible profile avatar: X exactly matches the avatar center and Y keeps the established 8 pt edge gap.
-- During the brief previous/current/next cell handoff, a 0.58 s owner-gap grace keeps the last valid button composited instead of writing `hidden/alpha` off then on. Hard routes such as comments/settings/search still hide immediately.
-- Scheduled fullscreen compatibility recovery no longer hard-hides the button simply because one pass lands between two recycled feed cells.
-- The current-aweme menu binding remains independent from visibility, so a temporary model lookup can show the pending menu without making the button disappear.
-- Message unread-badge direction is corrected from device observation: the prior negative `badgePositionAdjustment` moved the badge visually right in the iOS 26 Liquid Glass tab layout. 1.0.52j uses positive offsets (normal +6 pt, selected +10 pt) to move it visually left, with the selected state farther inward from the capsule edge.
-- Keeps auth30 and the opt-in `显示右侧下载按钮` switch.
-
-### Downloader
-
-The menu remains fully implemented inside AwemeLiquidBar; there is no runtime dependency on AwemeX or DYYY. Current actions are Save current video, Save current image / all images, Save audio, and Copy full caption.
-
-### Authorization
-
-Authorization remains the encrypted **29-entry** table. No accounts were added or removed.
+- Messages unread badge: exact rollback to the original mirror implementation from before 1.0.52d. No plugin-defined `badgePositionAdjustment` is applied in any state.
+- Download button host: moved out of Douyin's feed/root content into the independent resident AlbumMorph overlay, so presenting the UIMenu cannot scroll/re-layout the video feed and drop the caption to the physical bottom.
+- Download geometry: uses only the plugin's 54 pt profile-glass plate as the anchor. No UIImageView/native-profile/profile fallback switching, eliminating the second downward step after the avatar settles.
+- Download visibility: while a playable feed remains active, transient owner/avatar gaps keep the last valid button visible indefinitely. Only explicit blocked routes/settings/disabled state hide it.
+- Position changes are applied without UIView/CoreAnimation animation.
+- auth30 and the rest of 1.0.52j behavior are retained.

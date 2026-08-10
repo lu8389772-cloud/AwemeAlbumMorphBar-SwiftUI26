@@ -552,51 +552,19 @@ final class AWEAlbumMorphTabController:
         guard let messageTab = tab(forIdentifier: Identifier.messages) else { return }
         let normalized = messageBadgeValue?.isEmpty == false ? messageBadgeValue : nil
 
-        // UITab badge API has shifted across SDK revisions. Keep the source
-        // compatible by using KVC first, then mirror onto the concrete
-        // UITabBarItem when UIKit has materialized it.
+        // 1.0.52k: exact rollback to the original unread-badge mirroring path
+        // used before 1.0.52d. Do not apply any custom horizontal offset for
+        // normal/selected/focused states. UIKit owns one badge position in all
+        // states, so selection cannot introduce a plugin-defined relative jump.
         if messageTab.responds(to: NSSelectorFromString("setBadgeValue:")) {
             messageTab.setValue(normalized, forKey: "badgeValue")
         }
         if let index = tabs.firstIndex(where: { $0 === messageTab }),
            let items = tabBar.items, index < items.count {
-            let item = items[index]
-            item.badgeValue = normalized
-            item.badgeColor = .systemRed
-            // UITabBarItem itself has no badgePositionAdjustment property.
-            // Apply the offset through the per-state item appearance so the
-            // unread badge stays inside the selected Liquid Glass capsule.
-            let appearance: UITabBarAppearance
-            if let existing = item.standardAppearance?.copy() as? UITabBarAppearance {
-                appearance = existing
-            } else if let existing = tabBar.standardAppearance.copy() as? UITabBarAppearance {
-                appearance = existing
-            } else {
-                appearance = UITabBarAppearance()
-                appearance.configureWithDefaultBackground()
-            }
-            // 1.0.52j: the selected-state badge position on device is already
-            // correct. Do not invent a second unselected position. Apply the
-            // exact same adjustment to every state so selecting Messages cannot
-            // make the unread badge jump horizontally at all.
-            let fixedOffset = UIOffset(horizontal: 10.0, vertical: 0.0)
-            for layout in [appearance.stackedLayoutAppearance,
-                           appearance.inlineLayoutAppearance,
-                           appearance.compactInlineLayoutAppearance] {
-                layout.normal.badgePositionAdjustment = fixedOffset
-                layout.disabled.badgePositionAdjustment = fixedOffset
-                layout.focused.badgePositionAdjustment = fixedOffset
-                layout.selected.badgePositionAdjustment = fixedOffset
-            }
-            item.standardAppearance = appearance
-            if #available(iOS 15.0, *) {
-                item.scrollEdgeAppearance = appearance
-            }
+            items[index].badgeValue = normalized
+            items[index].badgeColor = .systemRed
         }
-        UIView.performWithoutAnimation {
-            tabBar.setNeedsLayout()
-            tabBar.layoutIfNeeded()
-        }
+        tabBar.setNeedsLayout()
     }
 
     @objc(updateMessageBadgeValue:)

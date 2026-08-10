@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.52j
+AwemeLiquidBar 1.0.52k
 
 1. Message unread badge
 - Keep the device-verified selected-state position.

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52j — stable root-view download host + identical badge position + auth30
+ AwemeLiquidBar 1.0.52k — original badge rollback + sticky overlay downloader + auth30
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -805,7 +805,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52j_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52k_interaction.log"] copy];
     });
     return path;
 }
@@ -6414,7 +6414,6 @@ static __weak UIView *gAWEDownloadMenuSourceStack = nil;
    rebuild from toggling the singleton off and back on. */
 static CFTimeInterval gAWEDownloadLastValidAnchorTime = 0.0;
 static NSUInteger gAWEDownloadOwnerGapGeneration = 0;
-static const CFTimeInterval kAWEDownloadOwnerGapGrace = 0.58;
 
 /* Short compatibility window after closing comments inside a third-party
    profile-fullscreen feed. During this window, prevent the currently visible
@@ -8539,59 +8538,50 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52j: keep the downloader outside every recycled feed/player cell,
-       but do NOT attach the glass UIButton directly to UIWindow. 1.0.52i proved
-       that the raw-window host can leave the menu fully configured while its
-       visual never composites on the user's feed. The root controller's view is
-       stable across vertical paging, participates in the normal UIKit view
-       hierarchy/traits, and gives the singleton one persistent visual host. */
-    UIWindow *window = stack.window;
-    UIViewController *rootController = window.rootViewController;
-    UIView *rootView = rootController.viewIfLoaded ?: rootController.view;
-    if (rootView && rootView.window == window &&
+    /* 1.0.52k: the menu source must live outside Douyin's scrolling feed
+       hierarchy. A UIButton that presents UIMenu from the feed/root content can
+       make UIKit scroll/re-layout the source into view, which is exactly the
+       caption-to-bottom regression seen when the download menu opens. Reuse the
+       independent resident AlbumMorph overlay that already owns the bottom bar.
+       It shares screen coordinates but cannot change the feed's safe-area or
+       scroll position. */
+    UIView *controllerView = gAWEAlbumMorphController.viewIfLoaded;
+    if (controllerView && controllerView.window == gAWEAlbumMorphOverlayWindow &&
+        CGRectGetWidth(controllerView.bounds) > 100.0 &&
+        CGRectGetHeight(controllerView.bounds) > 100.0) {
+        return controllerView;
+    }
+
+    AWEAlbumMorphOverlayWindow *overlay =
+        (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+    UIView *rootView = overlay.rootViewController.viewIfLoaded;
+    if (rootView && rootView.window == overlay &&
         CGRectGetWidth(rootView.bounds) > 100.0 &&
         CGRectGetHeight(rootView.bounds) > 100.0) {
         return rootView;
     }
 
-    /* Conservative fallback: use the highest stable ancestor directly below
-       the window, never the AWEElementStackView/feed cell itself. */
-    UIView *cursor = stack;
-    UIView *highest = nil;
-    while (cursor.superview && cursor.superview != window) {
-        cursor = cursor.superview;
-        if (cursor.window == window) highest = cursor;
-    }
-    return highest ?: stack.superview;
+    /* Deliberately do not fall back into the main feed hierarchy. If the
+       independent overlay is between rebuilds, keep the existing button where
+       it is and retry on the next normal home-action refresh. */
+    return nil;
 }
 
 static UIView *AWEDownloadMenuProfileAnchorForStack(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52j: the download control follows the avatar itself.  The profile
-       glass slot is only a decoration; the native avatar/picture host is the
-       source of truth for whether the user can actually see an avatar. */
+    /* 1.0.52k: use ONE geometry source only. The 54 pt profile glass plate is
+       already bound to the actual avatar center by AWERefreshProfileAvatarGlass.
+       Previous builds alternated between UIImageView / native profile container /
+       glass plate while a new cell was settling; those objects have different
+       bounds/centres and made the download button visibly step downward after
+       the avatar had already moved. If the glass plate is not ready yet, return
+       nil and keep the last good download position instead of switching anchors. */
     AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
         stack, &kAWEProfileGlassSlotKey);
-    UIView *avatar = profile.avatarImageView;
-    UIView *nativeProfile = profile.profileHost;
-    if (!nativeProfile || !nativeProfile.window) {
-        nativeProfile = AWEFindViewByExactRuntimeClass(
-            stack, @"AWEPlayInteractionUserProfilePictureView", 0);
-        if (!nativeProfile) {
-            nativeProfile = AWEFindViewByExactRuntimeClass(
-                stack, @"AWEPlayInteractionUserProfileContainerView", 0);
-        }
-    }
-
-    if (avatar && AWEHomeViewEffectivelyVisible(avatar)) return avatar;
-    if (nativeProfile && AWEHomeViewEffectivelyVisible(nativeProfile)) {
-        return nativeProfile;
-    }
-    /* A freshly rebuilt profile subtree can expose the plugin glass plate one
-       pass before the native image reference is rebound. Accept it only when
-       it is genuinely on-screen; this avoids a one-frame download blink. */
-    if (profile && !profile.hidden && AWEHomeViewEffectivelyVisible(profile)) {
+    if (profile && profile.window && !profile.hidden &&
+        profile.alpha > 0.01 && profile.layer.opacity > 0.01f &&
+        AWEHomeViewEffectivelyVisible(profile)) {
         return profile;
     }
     return nil;
@@ -8633,101 +8623,62 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
         AWEHideGlobalDownloadMenu();
         return;
     }
-    /* Previous/current/next feed cells may all layout during one swipe. Only
-       the stack that currently owns the singleton is allowed to move it. */
     if (gAWEDownloadMenuSourceStack != stack) return;
-    if (!stack.window) {
-        AWERefreshExternalBridgeMenu(nil);
-        return;
-    }
 
-    UIView *avatarAnchor = AWEDownloadMenuProfileAnchorForStack(stack);
-    /* 1.0.52j hard visibility contract: avatar visible -> download visible;
-       avatar gone/hidden -> download gone. This deliberately replaces the old
-       strict stack-frame gate, which could reject a valid current cell while
-       its avatar was plainly still on screen. */
-    if (!avatarAnchor) {
-        AWERefreshExternalBridgeMenu(nil);
-        return;
-    }
+    /* A recycled/current stack can lose its window for one pass during paging.
+       That is not a reason to blank a button which is already correctly visible
+       in the independent overlay. */
+    if (!stack.window) return;
+
+    UIView *profileAnchor = AWEDownloadMenuProfileAnchorForStack(stack);
+    if (!profileAnchor) return;
 
     UIView *hostView = AWEDownloadMenuOverlayHostView(stack);
-    if (!hostView || !hostView.window ||
-        CGRectGetWidth(hostView.bounds) < 100.0 ||
-        CGRectGetHeight(hostView.bounds) < 100.0) {
-        AWEHideGlobalDownloadMenu();
-        return;
-    }
+    if (!hostView || !hostView.window) return;
     if (gAWEDownloadMenuSlot.superview != hostView) {
         [gAWEDownloadMenuSlot removeFromSuperview];
         [hostView addSubview:gAWEDownloadMenuSlot];
     }
 
     const CGFloat diameter = 46.0;
-    const CGFloat avatarEdgeGap = 8.0;
-    CGRect avatarFrame = [avatarAnchor convertRect:avatarAnchor.bounds toView:hostView];
-    CGPoint avatarCenter = CGPointMake(CGRectGetMidX(avatarFrame),
-                                       CGRectGetMidY(avatarFrame));
-
-    /* The visible avatar carries a 54 pt Liquid Glass plate in this tweak. Use
-       that diameter when available so the edge-to-edge gap remains constant
-       even if Douyin's inner UIImageView is 40/44/48 pt on different feeds. */
-    CGFloat avatarVisualDiameter = MAX(CGRectGetWidth(avatarFrame),
-                                       CGRectGetHeight(avatarFrame));
-    AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
-        stack, &kAWEProfileGlassSlotKey);
-    if (profile && !profile.hidden && profile.window) {
-        CGFloat glassDiameter = MAX(CGRectGetWidth(profile.bounds),
-                                    CGRectGetHeight(profile.bounds));
-        if (glassDiameter >= 34.0 && glassDiameter <= 72.0) {
-            avatarVisualDiameter = MAX(avatarVisualDiameter, glassDiameter);
-        }
-    }
-    avatarVisualDiameter = MIN(MAX(avatarVisualDiameter, 34.0), 72.0);
-
+    const CGFloat profileDiameter = 54.0;
+    const CGFloat edgeGap = 8.0;
+    CGRect profileFrame = [profileAnchor convertRect:profileAnchor.bounds toView:hostView];
+    CGPoint profileCenter = CGPointMake(CGRectGetMidX(profileFrame),
+                                        CGRectGetMidY(profileFrame));
     CGPoint center = CGPointMake(
-        avatarCenter.x,
-        avatarCenter.y - avatarVisualDiameter * 0.5 - avatarEdgeGap - diameter * 0.5);
-    /* Keep the button composited on unusual compact/fullscreen layouts. X is
-       never clamped: horizontal alignment remains exactly the avatar center. */
-    center.y = MAX(diameter * 0.5 + 4.0, center.y);
+        profileCenter.x,
+        profileCenter.y - profileDiameter * 0.5 - edgeGap - diameter * 0.5);
+    if (!isfinite(center.x) || !isfinite(center.y)) return;
 
-    if (!isfinite(center.x) || !isfinite(center.y)) {
-        AWEHideGlobalDownloadMenu();
-        return;
-    }
-
-    gAWEDownloadMenuSlot.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
-    gAWEDownloadMenuSlot.center = center;
-    gAWEDownloadMenuSlot.menuButton.frame = gAWEDownloadMenuSlot.bounds;
-
-    CGRect frame = gAWEDownloadMenuSlot.frame;
-    BOOL onScreen = AWEHomeViewEffectivelyVisible(avatarAnchor) &&
-                    CGRectGetMaxX(frame) > 0.0 &&
-                    CGRectGetMinX(frame) < CGRectGetWidth(hostView.bounds) &&
-                    CGRectGetMaxY(frame) > 0.0 &&
-                    CGRectGetMinY(frame) < CGRectGetHeight(hostView.bounds);
+    /* Do not animate position changes. The button should either remain at its
+       last valid screen coordinate or snap once to the newly settled avatar;
+       there must never be a second visible slide after the avatar has settled. */
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
     [UIView performWithoutAnimation:^{
-        gAWEDownloadMenuSlot.hidden = !onScreen;
-        gAWEDownloadMenuSlot.alpha = onScreen ? 1.0 : 0.0;
-        if (onScreen) [hostView bringSubviewToFront:gAWEDownloadMenuSlot];
+        gAWEDownloadMenuSlot.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
+        gAWEDownloadMenuSlot.center = center;
+        gAWEDownloadMenuSlot.menuButton.frame = gAWEDownloadMenuSlot.bounds;
+        gAWEDownloadMenuSlot.hidden = NO;
+        gAWEDownloadMenuSlot.alpha = 1.0;
+        [hostView bringSubviewToFront:gAWEDownloadMenuSlot];
     }];
-    if (onScreen) {
-        gAWEDownloadLastValidAnchorTime = CACurrentMediaTime();
-        gAWEDownloadOwnerGapGeneration++;
-    }
+    [CATransaction commit];
 
-    NSString *signature = [NSString stringWithFormat:@"%@|%@|%@|%d|%.0f,%.0f",
+    gAWEDownloadLastValidAnchorTime = CACurrentMediaTime();
+    gAWEDownloadOwnerGapGeneration++;
+
+    NSString *signature = [NSString stringWithFormat:@"%@|%@|%.0f,%.0f",
         AWEInteractionObjectSummary(stack), NSStringFromClass(hostView.class),
-        NSStringFromClass(avatarAnchor.class), onScreen, center.x, center.y];
+        center.x, center.y];
     if (![gAWEDownloadSlotProbeSignature isEqualToString:signature]) {
         gAWEDownloadSlotProbeSignature = [signature copy];
         AWEAlbumMorphProbeWrite(
-            @"DOWNLOAD_SLOT state=%@ stack=%@ host=%@ avatar=%@ center=(%.1f,%.1f) avatarFrame=%@ frame=%@",
-            onScreen ? @"visible" : @"offscreen",
+            @"DOWNLOAD_SLOT state=visible stack=%@ host=%@ profile=%@ center=(%.1f,%.1f) profileFrame=%@",
             AWEInteractionObjectSummary(stack), AWEInteractionObjectSummary(hostView),
-            AWEInteractionObjectSummary(avatarAnchor), center.x, center.y,
-            NSStringFromCGRect(avatarFrame), NSStringFromCGRect(frame));
+            AWEInteractionObjectSummary(profileAnchor), center.x, center.y,
+            NSStringFromCGRect(profileFrame));
     }
 }
 
@@ -8767,81 +8718,57 @@ static BOOL AWEHoldVisibleDownloadDuringOwnerGap(void) {
     AWEExternalBridgeMenuSlotView *slot = gAWEDownloadMenuSlot;
     if (!slot || slot.hidden || slot.alpha <= 0.01 || !slot.window) return NO;
     if (AWEDownloadMenuRouteBlocked()) return NO;
+    if (!AWECurrentRouteHasPlayableFeedController()) return NO;
 
-    CFTimeInterval now = CACurrentMediaTime();
-    CFTimeInterval elapsed = now - gAWEDownloadLastValidAnchorTime;
-    if (gAWEDownloadLastValidAnchorTime <= 0.0 ||
-        elapsed >= kAWEDownloadOwnerGapGrace) {
-        return NO;
-    }
-
-    /* Do not write hidden/alpha during the transient handoff. Leave the last
-       correct screen position composited, then re-evaluate once at the end of
-       the grace interval. Repeated stale-cell callbacks only replace the
-       generation; they can no longer make the button flash. */
+    /* 1.0.52k: no timeout-based hide/show loop. In a playable feed, a missing
+       owner/avatar is treated as a transient cell handoff. Keep the last good
+       position fully composited until another stable profile-glass anchor is
+       available. Explicit route blockers (comments/settings/search/profile
+       detail without a playable feed) still hide immediately. */
     [UIView performWithoutAnimation:^{
         slot.hidden = NO;
         slot.alpha = 1.0;
         if (slot.superview) [slot.superview bringSubviewToFront:slot];
     }];
-
-    NSUInteger generation = ++gAWEDownloadOwnerGapGeneration;
-    CFTimeInterval remaining = MAX(0.02, kAWEDownloadOwnerGapGrace - elapsed + 0.02);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-        (int64_t)(remaining * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (generation != gAWEDownloadOwnerGapGeneration) return;
-        AWERefreshExternalBridgeMenu(nil);
-    });
-    AWEInteractionDiagnosticWrite(
-        @"DOWNLOAD_OWNER_GAP_HOLD elapsed=%.3f remaining=%.3f source=%@",
-        elapsed, remaining, AWEInteractionObjectSummary(gAWEDownloadMenuSourceStack));
     return YES;
 }
 
 static void AWERefreshExternalBridgeMenu(UIView *stack) {
-    if (AWEDownloadMenuRouteBlocked()) { AWEHideGlobalDownloadMenu(); return; }
+    if (AWEDownloadMenuRouteBlocked()) {
+        AWEHideGlobalDownloadMenu();
+        return;
+    }
 
-    /* 1.0.52e: callers arrive from every preloaded AWEElementStackView. Resolve
-       the single best visible right-action stack once per scheduled refresh
-       and bind the singleton only to that owner. This prevents previous/next
-       cells from stealing the download button while paging. */
-    UIView *callerAvatar = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;
-    UIView *bestStack = AWEFindCurrentRightActionStackAcrossWindows();
-    UIView *bestAvatar = bestStack
-        ? AWEDownloadMenuProfileAnchorForStack(bestStack)
-        : nil;
-
-    /* 1.0.52j: the visible avatar is now authoritative for BOTH geometry and
-       singleton ownership. The caller is just a refresh hint. A preloaded
-       previous/next AWEElementStackView can no longer steal ownership or make
-       the button disappear merely because its hidden/alpha state changed. */
-    if (bestStack && bestAvatar) {
-        stack = bestStack;
-    } else if (!(callerAvatar && AWEHomeViewEffectivelyVisible(callerAvatar))) {
-        UIView *currentAvatar = gAWEDownloadMenuSourceStack
-            ? AWEDownloadMenuProfileAnchorForStack(gAWEDownloadMenuSourceStack)
-            : nil;
-        if (currentAvatar && AWEHomeViewEffectivelyVisible(currentAvatar)) {
-            stack = gAWEDownloadMenuSourceStack;
+    /* Keep the current owner until its single stable profile-glass anchor has
+       actually left the screen. Preloaded neighbours are not allowed to steal
+       the singleton merely because their layout callback ran later. */
+    UIView *owner = gAWEDownloadMenuSourceStack;
+    UIView *ownerProfile = owner ? AWEDownloadMenuProfileAnchorForStack(owner) : nil;
+    if (owner && owner.window && ownerProfile) {
+        stack = owner;
+    } else {
+        UIView *best = AWEFindCurrentRightActionStackAcrossWindows();
+        UIView *bestProfile = best ? AWEDownloadMenuProfileAnchorForStack(best) : nil;
+        if (best && bestProfile) {
+            stack = best;
         } else {
             if (AWEHoldVisibleDownloadDuringOwnerGap()) return;
-            AWEHideGlobalDownloadMenu();
+            /* On first entry there may simply be no stable avatar yet. Do not
+               create a flash by forcing hidden/alpha writes; wait for the next
+               stack refresh. */
             return;
         }
     }
 
-    UIView *avatarAnchor = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;
-    if (!stack || !stack.window || !avatarAnchor ||
-        !AWEHomeViewEffectivelyVisible(avatarAnchor)) {
+    UIView *profileAnchor = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;
+    if (!stack || !stack.window || !profileAnchor) {
         if (AWEHoldVisibleDownloadDuringOwnerGap()) return;
-        AWEHideGlobalDownloadMenu();
         return;
     }
-    gAWEDownloadLastValidAnchorTime = CACurrentMediaTime();
-    gAWEDownloadOwnerGapGeneration++;
 
     AWEExternalBridgeMenuSlotView *slot = AWEEnsureExternalBridgeMenuSlot(stack);
     if (!slot) return;
+
     id aweme = AWECurrentAwemeModelForStack(stack);
     if (!aweme) {
         NSString *previousIdentity = objc_getAssociatedObject(
@@ -8870,10 +8797,6 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
     if (needsRebuild) {
         UIMenu *downloadMenu = AWESelfDownloadMenuForAweme(aweme);
         AWEConfigureDownloadMenuButtonAppearance(slot.menuButton);
-        /* Match the already-proven top-left native morph path exactly: install
-           the menu after configuring the UIButton, then assert primary-action
-           menu presentation. Some UIButtonConfiguration refresh paths can
-           transiently rebuild internal state. */
         slot.menuButton.menu = downloadMenu;
         slot.menuButton.showsMenuAsPrimaryAction = YES;
         objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuModelIdentityKey,
@@ -9183,7 +9106,7 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
         AWEHomeActionSlotsForStack(stack);
     if (!stack.window) {
-        // 1.0.52j: a recycled/preloaded stack losing its window must not blank
+        // 1.0.52k: a recycled/preloaded stack losing its window must not blank
         // the singleton. Resolve ownership again from the avatar that is
         // actually visible right now.
         if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
@@ -14269,7 +14192,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52j";
+    self.title = @"LiquidBar 设置 · 1.0.52k";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {

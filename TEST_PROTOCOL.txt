@@ -1,8 +1,8 @@
-AwemeLiquidBar 1.0.52j device test
+AwemeLiquidBar 1.0.52k device test
 
-1. Home feed: continuously swipe through at least 20 posts. As long as the profile avatar/right action column is visibly present, the download button must remain continuously visible with no off/on flash.
-2. During a slow interactive swipe between two posts, the button must stay on the same right-column center line. It may update its menu model after the new post settles, but the glass control itself must not disappear.
-3. Open and close comments, search/settings, and enter/leave profile routes. Hard-blocked routes should hide the download control; returning to a playable feed should restore one singleton only.
-4. Open the download menu on several posts and verify the menu/actions belong to the visible post.
-5. Enable the message unread badge. In both normal and selected Messages states, the badge must be visibly farther LEFT than 1.0.52h. The selected state must be farther inward so it does not touch the right edge of the selected glass capsule.
-6. Toggle `显示右侧下载按钮` off/on and verify off hides immediately and on restores the current-feed singleton.
+1. Badge rollback: enable unread badge and compare selected/unselected Messages. This build contains NO custom badge horizontal adjustment; behavior should match the original pre-1.0.52d implementation.
+2. Download stability: swipe 20+ posts. Once the download button is visible on a playable feed, transient cell/avatar handoffs must not make it blink off/on.
+3. Download geometry: the button uses only the 54 pt profile-glass anchor. It must not make a second animated/downward move after the avatar has already settled.
+4. Download menu: open/close the menu on several posts. The feed nickname/caption area must not drop to the physical screen bottom when the menu appears.
+5. Comments/settings/search/profile: explicit blocked routes should hide the download control; returning to a playable feed should restore exactly one button.
+6. Toggle `显示右侧下载按钮` off/on and verify off hides immediately and on restores the current-feed button.
