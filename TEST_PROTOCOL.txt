@@ -1,10 +1,23 @@
-AwemeLiquidBar 1.0.52o device test
+AwemeLiquidBar 1.0.52p test protocol
 
-1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
-2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
-3. Return to feed; tap avatar again. Download/copy actions should be in the same menu when “头像菜单显示下载功能” is enabled.
-4. Turn that switch off/on. Avatar position and right-side action positions must not move.
-5. Open and close comments repeatedly, including with the external fullscreen tweak enabled. Right-side actions should recover as in 1.0.52c.
-6. Scroll rapidly through at least 15 items. No independent download button should appear anywhere.
-7. With unread state present, Friends and Messages badges should mirror the original Douyin bottom bar. If slot two is Shop, no Shop promotional dot should be copied to Friends.
-8. Compare badge size with the original: plugin badge should use the native badge path with the final visual scaled to about 90%.
+A. Other-profile fullscreen / right actions
+1. Enable the third-party fullscreen playback tweak.
+2. Enter another user's profile and open a video.
+3. Repeat 10 times: open comments -> close comments.
+4. Confirm like/comment/favorite/share and avatar remain present after close.
+5. Swipe 10 videos and repeat comment open/close on several items.
+6. Confirm nickname/caption does not drop to the physical bottom edge after comment dismissal.
+
+B. Clean screen
+1. On a normal playable feed, open the avatar menu and choose 一键清屏.
+2. Expected: status bar, top chrome, captions/labels, right actions/avatar, progress/speed chrome where controlled by the interaction controller, and LiquidBar disappear.
+3. Swipe vertically 5–10 items. Paging must remain normal.
+4. Tap the former avatar location once. Expected: only avatar reappears; no other chrome returns.
+5. Tap the revealed avatar and choose 退出清屏. Expected: normal chrome and status bar recover.
+6. Enter clean screen again, reveal avatar, swipe once. Expected: avatar hides again for the new item and the invisible recovery target follows the new avatar position.
+
+C. Regression
+1. Home -> comments -> close comments: right actions remain stable.
+2. Friends: bottom bar and caption spacing unchanged outside clean screen.
+3. Avatar menu: 进入主页 and download/copy items still work.
+4. Messages/Friends unread badges remain unchanged from 1.0.52o.
