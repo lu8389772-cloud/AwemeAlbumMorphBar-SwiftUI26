@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52q
+Version: 1.0.52r
 Architecture: iphoneos-arm
-Description: Fixes private-class runtime linking and zero-count message badges while preserving 1.0.52p clean-screen/profile recovery and auth33.
+Description: Restores the real liquid avatar/menu in clean screen, hard-hides status/LiquidBar during clean mode, and hardens profile-video right actions after comments; keeps zero-count badge fix and auth33.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

@@ -1,29 +1,32 @@
-AwemeLiquidBar 1.0.52q test protocol
+AwemeLiquidBar 1.0.52r test protocol
 
-A. Other-profile fullscreen / right actions
+A. Other-profile fullscreen / video right actions
 1. Enable the third-party fullscreen playback tweak.
-2. Enter another user's profile and open a video.
+2. Enter another user's profile and open a VIDEO post.
 3. Repeat 10 times: open comments -> close comments.
-4. Confirm like/comment/favorite/share and avatar remain present after close.
-5. Swipe 10 videos and repeat comment open/close on several items.
-6. Confirm nickname/caption does not drop to the physical bottom edge after comment dismissal.
+4. Confirm avatar/like/comment/favorite/share remain present after every close.
+5. Wait at least 7 seconds after one close and confirm the right column stays present.
+6. Swipe to several VIDEO posts and repeat.
+7. Repeat on IMAGE posts; image behavior must remain unchanged.
+8. Confirm nickname/caption still does not fall to the physical bottom edge after comment dismissal.
 
 B. Clean screen
 1. On a normal playable feed, open the avatar menu and choose 一键清屏.
-2. Expected: status bar, top chrome, captions/labels, right actions/avatar, progress/speed chrome where controlled by the interaction controller, and LiquidBar disappear.
-3. Swipe vertically 5–10 items. Paging must remain normal.
-4. Tap the former avatar location once. Expected: only avatar reappears; no other chrome returns.
-5. Tap the revealed avatar and choose 退出清屏. Expected: normal chrome and status bar recover.
-6. Enter clean screen again, reveal avatar, swipe once. Expected: avatar hides again for the new item and the invisible recovery target follows the new avatar position.
+2. Expected immediately: system status bar, top chrome, captions/labels, right actions/avatar, progress/speed chrome where applicable, native bottom bar visual, and LiquidBar disappear.
+3. Swipe vertically 5-10 items. Paging must remain normal.
+4. Tap the former avatar location once.
+5. Expected: the ORIGINAL liquid avatar/base reappears. It must not look like a rectangular/clipped replacement. No other chrome returns.
+6. Tap the restored avatar. Expected: the normal full avatar menu opens, including 进入主页, download/copy actions when enabled, and 退出清屏.
+7. Choose 退出清屏. Expected: full normal UI and status bar recover.
+8. Enter clean screen again, reveal avatar, swipe once. Expected: the avatar hides for the new item and the new item's real avatar-position hot target works.
 
-C. Regression
-1. Home -> comments -> close comments: right actions remain stable.
-2. Friends: bottom bar and caption spacing unchanged outside clean screen.
-3. Avatar menu: 进入主页 and download/copy items still work.
-4. Messages/Friends unread badges remain unchanged from 1.0.52o.
+C. Badge regression
+1. Clear all unread Messages. Expected: no red circle at all.
+2. Generate unread Messages. Expected: numeric badge appears.
+3. Clear unread count again. Expected: badge disappears completely.
+4. Friends badge/red-dot behavior remains unchanged.
 
-1.0.52q targeted regression checks
-- GitHub Actions must reach the package stage without `_OBJC_CLASS_$_AWEPlayInteractionViewController` undefined-symbol errors.
-- Clear all unread Messages. The LiquidBar Messages tab must have no red circle at count 0.
-- Generate one or more unread Messages. The numeric badge must appear, then disappear again after the count returns to 0.
-- Friends red-dot/numeric reminder behavior must remain unchanged.
+D. Build/link regression
+1. GitHub Actions reaches package stage.
+2. No `_OBJC_CLASS_$_AWEPlayInteractionViewController` linker error.
+3. No undeclared home-action helper errors.
