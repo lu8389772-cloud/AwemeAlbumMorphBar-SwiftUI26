@@ -1,41 +1,14 @@
-# AwemeLiquidBar 1.0.52h
-## 1.0.52h avatar-bound download fix
+# AwemeLiquidBar 1.0.52i
 
-- Right-side download visibility now follows the actually visible profile avatar.
-- Download X is exactly the avatar center; vertical spacing is derived from the avatar/glass diameter plus an 8 pt edge gap.
-- Transient right-stack geometry rejection no longer hides a button while the avatar is still visible.
-- Geometry-only layout keeps the singleton download control synchronized even on feeds where no action-slot cache has been created yet.
+## 1.0.52i stable floating download + badge direction fix
 
-
-## 1.0.52h additions
-
-- Fixes the Xcode 27 badge compile error by applying `badgePositionAdjustment` through `UITabBarItemStateAppearance` rather than `UITabBarItem`.
-- Adds a `显示右侧下载按钮` switch. It is opt-in by default; turning it off immediately hides the singleton download control.
-- Authorization table expanded from 29 to 30 encrypted entries; no plaintext account identifier is stored.
-
-## 1.0.52h
-- Stabilizes the singleton download button across preloaded/recycled feed cells: only the selected current right-action stack owns and moves it.
-- Uses the right-action stack top edge as the download-button anchor instead of transient avatar views.
-- Keeps a pending download menu/button visible while the current aweme model is briefly unavailable during paging.
-- Improves current-stack scoring using the enclosing feed/player host to avoid previous/next cell ownership oscillation.
-- Moves the Messages unread badge 6 pt inward so it stays comfortably inside the selected glass capsule.
-- Friends caption behavior is intentionally unchanged in this build.
-
-
-## Download visibility / transition throttle / Friends caption reserve
-
-This build is based on **1.0.52b**. The encrypted **auth30** table, top-category centering, and the profile-fullscreen right-stack recovery are retained.
-
-### Main changes
-
-- The singleton download control is no longer hosted by the independent AlbumMorph bottom-bar window/controller. It is reparented to the **current visible feed cell's interaction hierarchy**, so it is composited with the same video cell as the avatar/right-action column and naturally follows paging.
-- Download placement still prefers the current avatar glass/native profile anchor, but the current stack itself is now accepted as the source instead of depending on a second global stack lookup that could select a preloaded/offscreen cell.
-- Download route suppression is less brittle: stale sensitive-controller registrations cannot hide the button when a real playable feed is already visible.
-- Adds a deduplicated `DOWNLOAD_SLOT` probe line with the resolved stack, host, frame, and visible/offscreen state.
-- Fixes a large transition churn source: `AWEBeginReturnPrewarm` now actually obeys `AWEControllerShouldBeginReturnPrewarm`. Ordinary nested feed-controller `viewWillDisappear` callbacks no longer drive the resident bar 0→1 hundreds of times.
-- Friends feed `AWEFeedTableViewController` receives a bottom safe-area reserve equal to the custom tab-bar height minus the system home-indicator inset. This is applied before the first Friends layout and restored when leaving the feed.
-- Settings dismissal primes the invisible native tab-bar footprint before the transition snapshot, preventing the Home caption from briefly falling to the physical bottom when Settings closes.
-- Profile-fullscreen comment recovery from 1.0.52b is unchanged because it was confirmed effective on-device.
+- The right-side download control is now a **true process-wide floating singleton hosted by the active normal app UIWindow**, not a child of a recycled feed cell.
+- Its position is still derived from the actually visible profile avatar: X exactly matches the avatar center and Y keeps the established 8 pt edge gap.
+- During the brief previous/current/next cell handoff, a 0.58 s owner-gap grace keeps the last valid button composited instead of writing `hidden/alpha` off then on. Hard routes such as comments/settings/search still hide immediately.
+- Scheduled fullscreen compatibility recovery no longer hard-hides the button simply because one pass lands between two recycled feed cells.
+- The current-aweme menu binding remains independent from visibility, so a temporary model lookup can show the pending menu without making the button disappear.
+- Message unread-badge direction is corrected from device observation: the prior negative `badgePositionAdjustment` moved the badge visually right in the iOS 26 Liquid Glass tab layout. 1.0.52i uses positive offsets (normal +6 pt, selected +10 pt) to move it visually left, with the selected state farther inward from the capsule edge.
+- Keeps auth30 and the opt-in `显示右侧下载按钮` switch.
 
 ### Downloader
 

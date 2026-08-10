@@ -575,12 +575,13 @@ final class AWEAlbumMorphTabController:
                 appearance = UITabBarAppearance()
                 appearance.configureWithDefaultBackground()
             }
-            // 1.0.52h: move the unread badge left in BOTH states. UIKit
-            // expands/re-centres the selected native glass item, so the selected
-            // state needs a little more negative adjustment than normal to avoid
-            // drifting toward the capsule's right edge.
-            let normalOffset = UIOffset(horizontal: -8.0, vertical: 0.0)
-            let selectedOffset = UIOffset(horizontal: -12.0, vertical: 0.0)
+            // 1.0.52i: corrected from the device-observed direction. In the
+            // iOS 26 Liquid Glass tab layout used here, negative horizontal
+            // badgePositionAdjustment was visibly pushing the unread badge to
+            // the RIGHT. Use positive adjustments so the rendered badge moves
+            // LEFT; selected gets a little more room inside the glass capsule.
+            let normalOffset = UIOffset(horizontal: 6.0, vertical: 0.0)
+            let selectedOffset = UIOffset(horizontal: 10.0, vertical: 0.0)
             for layout in [appearance.stackedLayoutAppearance,
                            appearance.inlineLayoutAppearance,
                            appearance.compactInlineLayoutAppearance] {
@@ -594,7 +595,10 @@ final class AWEAlbumMorphTabController:
                 item.scrollEdgeAppearance = appearance
             }
         }
-        tabBar.setNeedsLayout()
+        UIView.performWithoutAnimation {
+            tabBar.setNeedsLayout()
+            tabBar.layoutIfNeeded()
+        }
     }
 
     @objc(updateMessageBadgeValue:)

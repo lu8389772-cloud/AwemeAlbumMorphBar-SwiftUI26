@@ -1,8 +1,0 @@
-AwemeLiquidBar 1.0.52h
-
-Compile-only repair on top of 1.0.52g.
-
-- Adds an explicit static prototype for AWERefreshExternalBridgeMenu before its first use.
-- Fixes Clang C99 implicit-function-declaration errors at the early download-layout call sites.
-- Keeps the 1.0.52g avatar-owned download visibility/alignment behavior unchanged.
-- Keeps the 1.0.52g unread badge left offsets unchanged: normal -8 pt, selected -12 pt.

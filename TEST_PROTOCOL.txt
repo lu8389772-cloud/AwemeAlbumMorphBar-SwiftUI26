@@ -1,17 +1,8 @@
-AwemeLiquidBar 1.0.52h device test
+AwemeLiquidBar 1.0.52i device test
 
-1. Open Home feed and swipe through at least 10 video/image posts.
-   - Exactly one download button should remain above the right-side action stack.
-   - It must not disappear for a post after paging settles.
-   - It must not jump/duplicate between previous/current/next cells.
-2. On several posts, open the download menu and verify the menu belongs to the visible post.
-3. Open/close comments and enter/leave a profile video; the download button should rebind to the visible feed post only.
-4. Enable message unread badge and select Messages. The badge should sit about 6 pt farther left and remain inside the selected glass capsule.
-5. Friends first-caption issue is not part of 1.0.52h; do not use it to judge this build.
-
-1.0.52h focused checks:
-- Project must compile past AwemeAlbumMorphBar.swift badge positioning.
-- Settings contains “显示右侧下载按钮”; default is OFF on a fresh/unset preference.
-- Enabling it shows the singleton current-item download control; disabling it hides it immediately.
-- Enable message unread badge and verify it remains ~6 pt farther left while normal/selected.
-- Authorization table count must be 30.
+1. Home feed: continuously swipe through at least 20 posts. As long as the profile avatar/right action column is visibly present, the download button must remain continuously visible with no off/on flash.
+2. During a slow interactive swipe between two posts, the button must stay on the same right-column center line. It may update its menu model after the new post settles, but the glass control itself must not disappear.
+3. Open and close comments, search/settings, and enter/leave profile routes. Hard-blocked routes should hide the download control; returning to a playable feed should restore one singleton only.
+4. Open the download menu on several posts and verify the menu/actions belong to the visible post.
+5. Enable the message unread badge. In both normal and selected Messages states, the badge must be visibly farther LEFT than 1.0.52h. The selected state must be farther inward so it does not touch the right edge of the selected glass capsule.
+6. Toggle `显示右侧下载按钮` off/on and verify off hides immediately and on restores the current-feed singleton.
