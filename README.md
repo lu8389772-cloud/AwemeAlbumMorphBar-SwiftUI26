@@ -1,12 +1,19 @@
-# AwemeLiquidBar 1.0.52e
+# AwemeLiquidBar 1.0.52f
+## 1.0.52f avatar-bound download fix
 
-## 1.0.52e additions
+- Right-side download visibility now follows the actually visible profile avatar.
+- Download X is exactly the avatar center; vertical spacing is derived from the avatar/glass diameter plus an 8 pt edge gap.
+- Transient right-stack geometry rejection no longer hides a button while the avatar is still visible.
+- Geometry-only layout keeps the singleton download control synchronized even on feeds where no action-slot cache has been created yet.
+
+
+## 1.0.52f additions
 
 - Fixes the Xcode 27 badge compile error by applying `badgePositionAdjustment` through `UITabBarItemStateAppearance` rather than `UITabBarItem`.
 - Adds a `显示右侧下载按钮` switch. It is opt-in by default; turning it off immediately hides the singleton download control.
 - Authorization table expanded from 29 to 30 encrypted entries; no plaintext account identifier is stored.
 
-## 1.0.52e
+## 1.0.52f
 - Stabilizes the singleton download button across preloaded/recycled feed cells: only the selected current right-action stack owns and moves it.
 - Uses the right-action stack top edge as the download-button anchor instead of transient avatar views.
 - Keeps a pending download menu/button visible while the current aweme model is briefly unavailable during paging.

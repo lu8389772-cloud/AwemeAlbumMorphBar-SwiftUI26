@@ -1,0 +1,11 @@
+AwemeLiquidBar 1.0.52f
+
+Focused fix: right-side download button stability.
+
+1. Download visibility is now gated by the actually visible profile avatar/picture host.
+2. Horizontal center is copied directly from the avatar center.
+3. Vertical spacing is calculated from avatar/glass diameter + 8 pt edge gap + download-button radius.
+4. A visible-avatar caller can keep download ownership when the strict right-stack geometry check transiently fails.
+5. Geometry-only stack layout also updates the download singleton when no action-slot dictionary exists.
+6. Comment/search/settings/other route blockers are preserved.
+7. Authorization table remains auth30; download switch remains opt-in.

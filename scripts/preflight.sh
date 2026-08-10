@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52e'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52e-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52e'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52e'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52e_interaction.log'),
+    ('control', control, 'Version: 1.0.52f'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52f-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52f'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52f'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52f_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -35,7 +35,7 @@ for token in [
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52e', 'LiquidBar 设置 · 1.0.52e',
+    'AwemeLiquidBar 1.0.52f', 'LiquidBar 设置 · 1.0.52f',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -116,6 +116,10 @@ if "case UIGestureRecognizerStateFailed: {" not in objc:
 # duplicate/jumping buttons over comments and profile pages.
 if objc.count('[[AWEExternalBridgeMenuSlotView alloc] initWithFrame:CGRectZero]') != 1:
     raise SystemExit('download menu slot is not singleton')
+if 'CGRectGetMinY(stackFrame) - 29.0' in objc:
+    raise SystemExit('old stack-top download anchoring regression remains')
+if 'AWEHomeViewEffectivelyVisible(avatarAnchor)' not in objc:
+    raise SystemExit('avatar-bound download visibility contract missing')
 if 'if (AWEShouldSuppressBarForUserDetailRoute() &&' not in objc:
     raise SystemExit('normal profile route download suppression missing')
 if 'slot.menuButton.menu = downloadMenu;' not in objc or \
@@ -139,10 +143,13 @@ for token in [
     'AWEConfigureDownloadMenuButtonAppearance',
     'if (gAWEDownloadMenuSourceStack != stack) return;',
     'UIView *bestStack = AWEFindCurrentRightActionStackAcrossWindows();',
-    'CGRectGetMinY(stackFrame) - 29.0',
+    'UIView *callerAvatar = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;',
+    'if (bestStack && (bestAvatar || !callerAvatar)) stack = bestStack;',
+    'const CGFloat avatarEdgeGap = 8.0;',
+    'avatarCenter.y - avatarVisualDiameter * 0.5 - avatarEdgeGap - diameter * 0.5',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52e stability token missing: {token}')
+        raise SystemExit(f'1.0.52f stability token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52e compile/auth30/download-toggle preflight passed')
+print('AwemeLiquidBar 1.0.52f compile/auth30/download-toggle preflight passed')
 PY2
