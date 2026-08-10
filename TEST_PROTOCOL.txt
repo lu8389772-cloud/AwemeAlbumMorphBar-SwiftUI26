@@ -1,27 +1,34 @@
-AwemeLiquidBar 1.0.51c device test
+AwemeLiquidBar 1.0.52a device test
 
-1. Heat / performance
-- Launch Douyin, stay on Home 15 s, swipe 8-10 videos, open settings.
-- Settings should remain responsive and the device should not immediately heat up as in 1.0.51a.
-- With diagnostics enabled, NATIVE_DOWNLOAD_READY and PLAYBACK_HIGHEST should appear roughly once per model instead of hundreds of times.
+1. Download menu stability
+- Kill and relaunch Douyin.
+- On a normal video, confirm there is exactly ONE download button above the profile/avatar area.
+- Swipe 8-10 videos: the button must remain in the same relative position and must not duplicate.
+- Open comments and a normal user's profile page: the download button must disappear with the right-side feed controls.
+- Return to the playable feed: it should reappear once.
 
-2. Download
-- Open the download Liquid Glass menu on a normal video.
-- Tap Save current video.
-- Expect DOWNLOAD_ACTION then DOWNLOAD_VIDEO and DOWNLOAD_VIDEO_HTTP in diagnostics.
-- Verify the video reaches Photos. If not, export the log; HTTP status/error is now included.
+2. Download actions
+- Video: open the download menu -> Save current video. Expect DOWNLOAD_BUTTON_HIT -> DOWNLOAD_ACTION -> DOWNLOAD_VIDEO -> DOWNLOAD_VIDEO_HTTP.
+- Image post: menu should show Save current image; multi-image posts should also show Save all images.
+- Verify saved media appears in Photos. Quality optimization is NOT the target of this build.
+- If saving fails, export diagnostics immediately; HTTP status/error is logged.
 
 3. Friends
-- Enter Friends.
-- Verify the custom bar does not cover the caption/bottom recommendation region when the native bar tries to auto-hide.
-- Continue until the recent-friends batch is exhausted and RecommendToFriend content appears.
-- LiquidBar should remain visible; RecommendToFriend must not be classified as commerce/sensitive.
+- Enter Friends from another tab and watch the first layout: caption/recommendation text must not initially fall under the custom bar.
+- Continue until the recent-friends batch is exhausted. LiquidBar should remain present and stable.
 
-4. Glass press feedback
-- Press/drag/release Search, profile, Like, Comment, Favorite, Share.
-- The glass should enlarge on press, stretch slightly with finger movement, and spring back on release.
+4. Profile-video fullscreen compatibility
+- With the other tweak's “enter another user's profile video in fullscreen” option enabled, enter another user's profile video.
+- Right-side Liquid Glass controls should survive/recover after the fullscreen transition.
+- Diagnostics should show RIGHT_FULLSCREEN_RECOVERY or RIGHT_FULLSCREEN_VISIBILITY_GUARD if recovery was needed.
 
-5. Regression
-- Top category group stays centered with left/right top buttons independently hidden.
-- Settings gesture still opens.
-- Publish/share sensitive routes still hard-suppress the bottom overlay.
+5. Performance
+- Swipe 10-15 videos, open settings, and scroll settings.
+- Fresh installs should not run highest-playback probing unless the switch was explicitly enabled.
+- There should be no repeated per-cell download button creation.
+
+6. Regression
+- Top category group remains centered with either/both top-side buttons hidden.
+- Publish/share/comment sensitive routes keep correct overlay suppression.
+- Settings gesture remains available.
+- auth29 remains unchanged.

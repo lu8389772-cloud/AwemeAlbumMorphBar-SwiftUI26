@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.51c
+Version: 1.0.52a
 Architecture: iphoneos-arm
-Description: Native current-item smart downloader, highest-quality playback preference, independent download menu overlay, cross-version bottom routing, Friends-feed bar persistence, message badge mirroring, centered top categories, and auth29.
+Description: Stable native current-item downloader, singleton Liquid Glass download menu, profile-fullscreen right-action recovery, Friends first-layout persistence, cross-version bottom routing, message badge mirroring, centered top categories, and auth29.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks
