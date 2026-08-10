@@ -562,6 +562,10 @@ final class AWEAlbumMorphTabController:
            let items = tabBar.items, index < items.count {
             items[index].badgeValue = normalized
             items[index].badgeColor = .systemRed
+            // Keep the unread badge comfortably inside the selected glass
+            // capsule. The system default sits too far toward the trailing
+            // edge with our large icon/title geometry.
+            items[index].badgePositionAdjustment = UIOffset(horizontal: -6.0, vertical: 0.0)
         }
         tabBar.setNeedsLayout()
     }

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52c — download visibility + return-prewarm throttle + Friends caption reserve + auth29
+ AwemeLiquidBar 1.0.52d — download visibility + return-prewarm throttle + Friends caption reserve + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -466,7 +466,7 @@ static BOOL AWEMessageBadgeEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.52c: do not opt fresh installs into continuous player quality
+    /* 1.0.52d: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -794,7 +794,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52c_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52d_interaction.log"] copy];
     });
     return path;
 }
@@ -863,7 +863,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52c_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52d_probe.log"] copy];
     });
     return path;
 }
@@ -5873,7 +5873,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.52c: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.52d: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6877,7 +6877,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.52c is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.52d is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8512,7 +8512,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52c: keep the singleton download control inside the *current feed
+    /* 1.0.52d: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8591,10 +8591,20 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
         AWEHideGlobalDownloadMenu();
         return;
     }
-    if (!stack.window || !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
-        if (gAWEDownloadMenuSourceStack == stack) AWEHideGlobalDownloadMenu();
+    /* 1.0.52d: AWEElementStackView instances for the previous/current/next
+       feed cell can all layout during one paging transaction. Only the stack
+       that currently owns the singleton download control is allowed to move
+       it. A recycled neighbour must never hide or relocate the active button. */
+    if (gAWEDownloadMenuSourceStack != stack) return;
+    if (!stack.window) {
+        AWEHideGlobalDownloadMenu();
         return;
     }
+    /* During interactive paging Douyin can briefly report a partially visible
+       right stack that fails our strict current-stack geometry test. Keep the
+       button attached to the same cell for that transient frame; the next
+       scheduled refresh will select the new best stack once paging settles. */
+    if (!AWEFrameLooksLikeCurrentRightActionStack(stack)) return;
 
     UIView *hostView = AWEDownloadMenuOverlayHostView(stack);
     if (!hostView || !hostView.window ||
@@ -8609,15 +8619,18 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     }
 
     const CGFloat diameter = 46.0;
-    CGPoint center = CGPointZero;
-    UIView *anchor = AWEDownloadMenuProfileAnchorForStack(stack);
-    if (anchor && anchor.superview) {
-        CGPoint anchorCenter = [anchor.superview convertPoint:anchor.center toView:hostView];
-        center = CGPointMake(anchorCenter.x, anchorCenter.y - 59.0);
-    } else {
-        CGRect stackFrame = [stack convertRect:stack.bounds toView:hostView];
-        center = CGPointMake(CGRectGetMidX(stackFrame), CGRectGetMinY(stackFrame) + 23.0);
-    }
+    /* 1.0.52d: anchor to the right-action stack itself, not to the avatar
+       glass/native avatar view. Those avatar objects are recreated and hidden
+       independently while a new feed cell is being prepared, which made the
+       download button jump between two y positions or disappear. The stack's
+       top edge is the stable coordinate shared by every video style. */
+    CGRect stackFrame = [stack convertRect:stack.bounds toView:hostView];
+    CGPoint center = CGPointMake(CGRectGetMidX(stackFrame),
+                                 CGRectGetMinY(stackFrame) - 29.0);
+    /* On compact/fullscreen variants the stack can start very close to the
+       safe-area top. Keep the control fully inside its host without changing
+       its relation to the right column horizontally. */
+    center.y = MAX(diameter * 0.5 + 4.0, center.y);
 
     if (!isfinite(center.x) || !isfinite(center.y)) {
         AWEHideGlobalDownloadMenu();
@@ -8650,18 +8663,72 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     }
 }
 
+static void AWEConfigureDownloadMenuButtonAppearance(UIButton *button) {
+    if (!button) return;
+    BOOL originalPNG = NO;
+    UIImage *image = AWEConfiguredRoleImage(
+        @"right.external.download",
+        @[@"square.and.arrow.down", @"arrow.down.circle"],
+        19.5, UIImageSymbolWeightSemibold, &originalPNG);
+    UIColor *foreground = nil;
+    if (!originalPNG) {
+        AWEConfiguredIconColorMode mode =
+            AWEStoredSymbolColorMode(@"right.external.download");
+        if (mode != AWEConfiguredIconColorModeAutomatic) {
+            foreground = AWEApplyConfiguredIconColorMode(
+                @"right.external.download", nil);
+        }
+    }
+    button.userInteractionEnabled = YES;
+    AWEConfigureAdaptiveSystemGlassIconButton(
+        button, image, @"right.external.download", 19.5,
+        foreground, originalPNG, AWEHomeTintedGlassEnabled(), YES);
+}
+
+static UIMenu *AWEDownloadPendingMenu(void) {
+    UIAction *pending = [UIAction actionWithTitle:@"正在识别当前作品…"
+                                            image:[UIImage systemImageNamed:@"hourglass"]
+                                       identifier:nil
+                                          handler:^(__kindof UIAction *action) {
+        (void)action;
+    }];
+    return [UIMenu menuWithTitle:@"下载与复制" children:@[pending]];
+}
+
 static void AWERefreshExternalBridgeMenu(UIView *stack) {
-    if (!stack) return;
     if (AWEDownloadMenuRouteBlocked()) { AWEHideGlobalDownloadMenu(); return; }
-    if (!stack.window || !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
-        if (gAWEDownloadMenuSourceStack == stack) AWEHideGlobalDownloadMenu();
+
+    /* 1.0.52d: callers arrive from every preloaded AWEElementStackView. Resolve
+       the single best visible right-action stack once per scheduled refresh
+       and bind the singleton only to that owner. This prevents previous/next
+       cells from stealing the download button while paging. */
+    UIView *bestStack = AWEFindCurrentRightActionStackAcrossWindows();
+    if (bestStack) stack = bestStack;
+    if (!stack || !stack.window || !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
+        if (!gAWEDownloadMenuSourceStack || !gAWEDownloadMenuSourceStack.window) {
+            AWEHideGlobalDownloadMenu();
+        }
         return;
     }
 
-    id aweme = AWECurrentAwemeModelForStack(stack);
-    if (!aweme) { AWEHideGlobalDownloadMenu(); return; }
     AWEExternalBridgeMenuSlotView *slot = AWEEnsureExternalBridgeMenuSlot(stack);
     if (!slot) return;
+    id aweme = AWECurrentAwemeModelForStack(stack);
+    if (!aweme) {
+        NSString *previousIdentity = objc_getAssociatedObject(
+            slot, &kAWEExternalBridgeMenuModelIdentityKey);
+        if (![previousIdentity isEqualToString:@"__pending__"]) {
+            AWEConfigureDownloadMenuButtonAppearance(slot.menuButton);
+            slot.menuButton.menu = AWEDownloadPendingMenu();
+            slot.menuButton.showsMenuAsPrimaryAction = YES;
+            objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuModelIdentityKey,
+                                     @"__pending__", OBJC_ASSOCIATION_COPY_NONATOMIC);
+            AWEInteractionDiagnosticWrite(@"DOWNLOAD_MENU_PENDING stack=%@",
+                                          AWEInteractionObjectSummary(stack));
+        }
+        AWELayoutExternalBridgeMenuForStack(stack);
+        return;
+    }
 
     NSString *identity = AWEAwemeIdentity(aweme);
     NSString *previousIdentity = objc_getAssociatedObject(
@@ -8672,23 +8739,8 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
         previousGeneration.unsignedIntegerValue != gAWEConfiguredIconGeneration;
 
     if (needsRebuild) {
-        BOOL originalPNG = NO;
-        UIImage *image = AWEConfiguredRoleImage(
-            @"right.external.download",
-            @[@"square.and.arrow.down", @"arrow.down.circle"],
-            19.5, UIImageSymbolWeightSemibold, &originalPNG);
-        UIColor *foreground = nil;
-        if (!originalPNG) {
-            AWEConfiguredIconColorMode mode = AWEStoredSymbolColorMode(@"right.external.download");
-            if (mode != AWEConfiguredIconColorModeAutomatic) {
-                foreground = AWEApplyConfiguredIconColorMode(@"right.external.download", nil);
-            }
-        }
         UIMenu *downloadMenu = AWESelfDownloadMenuForAweme(aweme);
-        slot.menuButton.userInteractionEnabled = YES;
-        AWEConfigureAdaptiveSystemGlassIconButton(
-            slot.menuButton, image, @"right.external.download", 19.5,
-            foreground, originalPNG, AWEHomeTintedGlassEnabled(), YES);
+        AWEConfigureDownloadMenuButtonAppearance(slot.menuButton);
         /* Match the already-proven top-left native morph path exactly: install
            the menu after configuring the UIButton, then assert primary-action
            menu presentation. Some UIButtonConfiguration refresh paths can
@@ -12599,6 +12651,23 @@ static CGFloat AWECurrentRightStackVisibilityScore(UIView *stack, UIWindow *wind
     CGFloat visibleRatio = CGRectGetHeight(visible) / MAX(CGRectGetHeight(frame), 1.0);
     CGFloat centerPenalty = fabs(CGRectGetMidY(frame) - CGRectGetMidY(window.bounds));
     CGFloat score = visibleRatio * 4000.0 - centerPenalty * 0.8;
+
+    /* 1.0.52d: score the enclosing feed/player host as the primary paging
+       signal. Adjacent preloaded right stacks can both be >80% visible during
+       a swipe even though only one feed cell is actually centered. */
+    UIView *host = AWEDownloadMenuOverlayHostView(stack);
+    if (host && host.window == window && host != stack) {
+        CGRect hostFrame = [host convertRect:host.bounds toView:window];
+        CGRect hostVisible = CGRectIntersection(hostFrame, window.bounds);
+        if (!CGRectIsNull(hostVisible) && !CGRectIsEmpty(hostVisible) &&
+            CGRectGetHeight(hostFrame) > 200.0) {
+            CGFloat hostRatio = CGRectGetHeight(hostVisible) /
+                MAX(CGRectGetHeight(hostFrame), 1.0);
+            CGFloat hostCenterPenalty = fabs(CGRectGetMidY(hostFrame) -
+                                              CGRectGetMidY(window.bounds));
+            score += hostRatio * 6000.0 - hostCenterPenalty * 2.5;
+        }
+    }
     if (AWEFindViewByExactRuntimeClass(
             stack, @"AWEPlayInteractionUserProfilePictureView", 0) ||
         AWEFindViewByExactRuntimeClass(
@@ -14049,7 +14118,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52c";
+    self.title = @"LiquidBar 设置 · 1.0.52d";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15309,7 +15378,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52c image=%@ ==========" ,
+            @"========== START build=1.0.52d image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15376,7 +15445,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52c diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52d diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15391,7 +15460,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52c_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52d_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -17273,7 +17342,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52c os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52d os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

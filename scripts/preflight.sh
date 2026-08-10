@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52c'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52c-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52c'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52c'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52c_interaction.log'),
+    ('control', control, 'Version: 1.0.52d'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52d-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52d'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52d'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52d_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -28,13 +28,14 @@ for name, text, token in checks:
 for token in [
     'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
     '@objc(updateMessageBadgeValue:)', 'applyMessageBadge()',
+    'badgePositionAdjustment = UIOffset(horizontal: -6.0, vertical: 0.0)',
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
 ]:
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52c', 'LiquidBar 设置 · 1.0.52c',
+    'AwemeLiquidBar 1.0.52d', 'LiquidBar 设置 · 1.0.52d',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -131,9 +132,14 @@ for token in [
     'AWEApplyFriendsCaptionBottomReserve',
     'FRIENDS_CAPTION_RESERVE',
     'if (!AWEControllerShouldBeginReturnPrewarm(controller)) return;',
+    'AWEDownloadPendingMenu',
+    'AWEConfigureDownloadMenuButtonAppearance',
+    'if (gAWEDownloadMenuSourceStack != stack) return;',
+    'UIView *bestStack = AWEFindCurrentRightActionStackAcrossWindows();',
+    'CGRectGetMinY(stackFrame) - 29.0',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52c recovery token missing: {token}')
+        raise SystemExit(f'1.0.52d stability token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52c download-visibility/prewarm-throttle/Friends-caption preflight passed')
+print('AwemeLiquidBar 1.0.52d stable-download-owner/message-badge preflight passed')
 PY2

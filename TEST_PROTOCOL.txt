@@ -1,34 +1,10 @@
-AwemeLiquidBar 1.0.52c device test
+AwemeLiquidBar 1.0.52d device test
 
-1. Download visibility
-- Kill and relaunch Douyin.
-- On Home/Friends normal video, confirm exactly ONE download button appears immediately above the avatar/right-action column.
-- Swipe 5-10 videos; it must follow the current cell and never duplicate.
-- Open comments / user profile; the button must disappear with the feed and return with the feed.
-- Probe log should contain DOWNLOAD_SLOT state=visible while the button is on-screen.
-- Tap it and verify the UIMenu actions appear.
-
-2. Friends caption reserve
-- Relaunch, enter Friends.
-- The first video's nickname/caption/recommendation area must remain above LiquidBar.
-- Continue through the recent-works transition; LiquidBar should remain visible.
-- Probe should contain FRIENDS_CAPTION_RESERVE state=apply for AWEFeedTableViewController.
-
-3. Settings return
-- From Home open plugin Settings, then close it.
-- The Home nickname/caption area must not briefly fall to the physical bottom.
-
-4. Profile fullscreen + comments
-- Enable the other tweak's profile-video default-fullscreen option.
-- Enter another user's profile video, open comments, close comments.
-- The right-side action column should remain/recover as in 1.0.52b.
-
-5. Performance
-- Swipe 10-15 videos, open/close Settings several times.
-- Probe log should no longer show hundreds of return.prewarm.resident / install.original-state oscillations caused by ordinary feed controller disappear callbacks.
-
-6. Regression
-- Top category group remains centered.
-- Publish/share/search route suppression remains intact.
-- Settings gesture remains available.
-- auth29 unchanged.
+1. Open Home feed and swipe through at least 10 video/image posts.
+   - Exactly one download button should remain above the right-side action stack.
+   - It must not disappear for a post after paging settles.
+   - It must not jump/duplicate between previous/current/next cells.
+2. On several posts, open the download menu and verify the menu belongs to the visible post.
+3. Open/close comments and enter/leave a profile video; the download button should rebind to the visible feed post only.
+4. Enable message unread badge and select Messages. The badge should sit about 6 pt farther left and remain inside the selected glass capsule.
+5. Friends first-caption issue is not part of 1.0.52d; do not use it to judge this build.

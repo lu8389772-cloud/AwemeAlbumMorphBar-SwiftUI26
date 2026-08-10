@@ -1,4 +1,13 @@
-# AwemeLiquidBar 1.0.52c
+# AwemeLiquidBar 1.0.52d
+
+## 1.0.52d
+- Stabilizes the singleton download button across preloaded/recycled feed cells: only the selected current right-action stack owns and moves it.
+- Uses the right-action stack top edge as the download-button anchor instead of transient avatar views.
+- Keeps a pending download menu/button visible while the current aweme model is briefly unavailable during paging.
+- Improves current-stack scoring using the enclosing feed/player host to avoid previous/next cell ownership oscillation.
+- Moves the Messages unread badge 6 pt inward so it stays comfortably inside the selected glass capsule.
+- Friends caption behavior is intentionally unchanged in this build.
+
 
 ## Download visibility / transition throttle / Friends caption reserve
 
