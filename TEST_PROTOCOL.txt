@@ -1,34 +1,30 @@
-AwemeLiquidBar 1.0.52a device test
+AwemeLiquidBar 1.0.52b device test
 
-1. Download menu stability
+1. Download button
 - Kill and relaunch Douyin.
-- On a normal video, confirm there is exactly ONE download button above the profile/avatar area.
-- Swipe 8-10 videos: the button must remain in the same relative position and must not duplicate.
-- Open comments and a normal user's profile page: the download button must disappear with the right-side feed controls.
-- Return to the playable feed: it should reappear once.
+- On a normal video, confirm exactly ONE download button appears above the avatar/right-action column.
+- Swipe 5-10 videos. It should neither vanish on a normal feed nor duplicate/stack.
+- Tap it: the native Liquid Glass menu should open.
+- Test Save current video. On an image post test Save current image / Save all images.
+- If any action fails, export diagnostics immediately and look for DOWNLOAD_BUTTON_HIT / DOWNLOAD_MENU_READY / DOWNLOAD_ACTION / DOWNLOAD_*_HTTP.
 
-2. Download actions
-- Video: open the download menu -> Save current video. Expect DOWNLOAD_BUTTON_HIT -> DOWNLOAD_ACTION -> DOWNLOAD_VIDEO -> DOWNLOAD_VIDEO_HTTP.
-- Image post: menu should show Save current image; multi-image posts should also show Save all images.
-- Verify saved media appears in Photos. Quality optimization is NOT the target of this build.
-- If saving fails, export diagnostics immediately; HTTP status/error is logged.
+2. Profile fullscreen + comments
+- Enable the other tweak's “open another user's profile video fullscreen” option.
+- Enter another user's profile video, open comments, then close comments.
+- Right-side glass controls should remain/recover after the late fullscreen-tweak transition.
+- Diagnostic signals may include RIGHT_FULLSCREEN_COMMENT_PROTECT / RIGHT_FULLSCREEN_BLOCK_HIDE / RIGHT_FULLSCREEN_BLOCK_ALPHA / RIGHT_FULLSCREEN_BLOCK_REMOVE / RIGHT_REBIND_PASS.
 
-3. Friends
-- Enter Friends from another tab and watch the first layout: caption/recommendation text must not initially fall under the custom bar.
-- Continue until the recent-friends batch is exhausted. LiquidBar should remain present and stable.
+3. Friends first video
+- Relaunch Douyin, enter Friends from Home.
+- On the very first Friends video, nickname/caption/recommendation text must keep the normal bottom-bar clearance and must not fall under LiquidBar.
+- Continue scrolling through the “recent works viewed” transition; LiquidBar should remain visible.
 
-4. Profile-video fullscreen compatibility
-- With the other tweak's “enter another user's profile video in fullscreen” option enabled, enter another user's profile video.
-- Right-side Liquid Glass controls should survive/recover after the fullscreen transition.
-- Diagnostics should show RIGHT_FULLSCREEN_RECOVERY or RIGHT_FULLSCREEN_VISIBILITY_GUARD if recovery was needed.
+4. Performance
+- Swipe 10-15 videos and open Settings.
+- Interaction logs should no longer contain hundreds of identical ALBUM_MORPH_OVERLAY lines for the same unchanged state.
 
-5. Performance
-- Swipe 10-15 videos, open settings, and scroll settings.
-- Fresh installs should not run highest-playback probing unless the switch was explicitly enabled.
-- There should be no repeated per-cell download button creation.
-
-6. Regression
+5. Regression
 - Top category group remains centered with either/both top-side buttons hidden.
-- Publish/share/comment sensitive routes keep correct overlay suppression.
+- Publish/share/search sensitive-route suppression remains intact.
 - Settings gesture remains available.
 - auth29 remains unchanged.

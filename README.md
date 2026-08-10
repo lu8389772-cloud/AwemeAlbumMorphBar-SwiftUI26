@@ -1,25 +1,22 @@
-# AwemeLiquidBar 1.0.52a
+# AwemeLiquidBar 1.0.52b
 
-## Stable downloader / Friends / fullscreen compatibility
+## Download anchor / profile-fullscreen comment recovery / Friends first layout
 
-This build is based on **1.0.51c**. The encrypted **auth29** table and the proven top-category centering fix are unchanged.
+This build is based on **1.0.52a**. The encrypted **auth29** table and the proven top-category centering fix are unchanged.
 
 ### Main changes
 
-- Replaced the per-feed-cell download buttons with **one process-wide Liquid Glass download button**. It is anchored to the currently visible right-action stack, so recycled/offscreen cells cannot leave duplicates floating over comments or profile pages.
-- The download button is hidden while comments, settings, search, share/publish, commerce sheets, or a normal user-profile page owns the screen. A real playable profile-video fullscreen remains eligible.
-- Native menu installation now follows the same proven order as the top-left native menu: configure the `UIButton`, then assign `UIMenu`, then set `showsMenuAsPrimaryAction = YES`.
-- Downloading is intentionally **reliability-first** in this build. Video saving first tries `video.h264URL.originURLList`, then simple play/download URL fallbacks. Image saving uses `albumImages`, `currentImageIndex`, and `urlList`, preferring a URL whose path does not end in `.image`.
-- Image posts expose **Save current image / Save all images**; video posts expose **Save current video**. Audio save and full-caption copy remain available when applicable.
-- Fresh installs no longer default to “prefer highest playback quality”, avoiding private player-quality probing unless the user explicitly enables it.
-- Friends initial entry now preserves the native tab-bar layout footprint before the first Friends content layout, while the original bar remains visually suppressed. This targets the one remaining first-entry caption-under-bar case.
-- Current-right-stack selection now scores actual screen visibility instead of blindly preferring the pre-comment cached stack.
-- Added compatibility recovery for another tweak's “profile video opens fullscreen” mode: if that transition hides the active right stack, two bounded recovery passes restore/rebind our right-side glass instead of using a timer/display link.
-- Added diagnostics: `DOWNLOAD_BUTTON_HIT`, `DOWNLOAD_MENU_READY`, `DOWNLOAD_ACTION`, `DOWNLOAD_VIDEO_HTTP`, `DOWNLOAD_IMAGE_HTTP`, `RIGHT_FULLSCREEN_RECOVERY`, and `RIGHT_FULLSCREEN_VISIBILITY_GUARD`.
+- Fixes the 1.0.52a download-button disappearance. The singleton download button no longer attaches directly to the overlay `UIWindow` (whose direct frame can be transient/zero in the current resident-overlay architecture). It now attaches to the Album Morph controller/root view, which owns the stable 440×screen-height coordinate space used by the visible LiquidBar.
+- Download placement now prefers the current avatar glass/native profile anchor; if that avatar is temporarily rebuilding, it falls back to the current visible right-action stack instead of hiding the button.
+- The menu remains our own `UIButton + UIMenu + UIAction` implementation. Video uses Douyin `h264URL.originURLList` first; image posts use `albumImages/currentImageIndex/urlList`; audio and caption-copy remain native to this plugin.
+- For the known conflict with another tweak's “open another user's profile video fullscreen” feature, comment dismissal now opens a **2.4-second bounded protection window**. During that window, a second late `hidden=YES`, `alpha=0`, or `removeFromSuperview` request against the captured current right stack is rejected after the visible comment panel is gone. Outside that short window, normal paging/reuse behavior is untouched.
+- Profile-fullscreen comment recovery gets a few additional bounded passes through 2.25 seconds. There is still no continuous timer/display-link for this recovery.
+- Friends first-entry layout is primed at the actual `AFDContainer/AWEFamiliar` controller `viewWillAppear` boundary, before its first content layout, rather than waiting for a later tab-bar callback.
+- Interaction logging for `ALBUM_MORPH_OVERLAY` is state-deduplicated, reducing diagnostic-file churn while testing.
 
 ### DYYY reference
 
-The reliable media-field fallbacks were independently implemented after reviewing the public MIT-licensed DYYY project: its long-press downloader uses Douyin's `h264URL.originURLList` for video and `albumImages/currentImageIndex/urlList` for image posts. AwemeLiquidBar has **no runtime dependency on DYYY or AwemeX**.
+The media-field fallback matches the public DYYY implementation pattern: video from `h264URL.originURLList`, image posts from `albumImages/currentImageIndex/urlList`, and music from `music.playURL.originURLList`. AwemeLiquidBar has **no runtime dependency** on DYYY or AwemeX.
 
 ### Authorization
 

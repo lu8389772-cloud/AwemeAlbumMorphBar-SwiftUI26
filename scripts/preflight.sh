@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52a'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52a-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52a'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52a'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52a_interaction.log'),
+    ('control', control, 'Version: 1.0.52b'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52b-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52b'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52b'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52b_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -34,7 +34,7 @@ for token in [
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52a', 'LiquidBar 设置 · 1.0.52a',
+    'AwemeLiquidBar 1.0.52b', 'LiquidBar 设置 · 1.0.52b',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -118,5 +118,19 @@ if 'slot.menuButton.menu = downloadMenu;' not in objc or \
    'slot.menuButton.showsMenuAsPrimaryAction = YES;' not in objc:
     raise SystemExit('native download UIMenu install path missing')
 
-print('AwemeLiquidBar 1.0.52a stable-download/Friends/fullscreen preflight passed')
+for token in [
+    'AWEDownloadMenuOverlayHostView',
+    'gAWEAlbumMorphController.viewIfLoaded',
+    'AWEDownloadMenuProfileAnchorForStack',
+    'RIGHT_FULLSCREEN_COMMENT_PROTECT',
+    'RIGHT_FULLSCREEN_BLOCK_HIDE',
+    'RIGHT_FULLSCREEN_BLOCK_ALPHA',
+    'RIGHT_FULLSCREEN_BLOCK_REMOVE',
+    'AWEPrimeFriendsNativeLayoutFootprint',
+    'FRIENDS_LAYOUT_PRIME',
+]:
+    if token not in objc:
+        raise SystemExit(f'1.0.52b recovery token missing: {token}')
+
+print('AwemeLiquidBar 1.0.52b download-anchor/fullscreen-comment/Friends-first-layout preflight passed')
 PY2
