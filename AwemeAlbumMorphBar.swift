@@ -396,6 +396,7 @@ final class AWEAlbumMorphTabController:
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
     private var messageBadgeValue: String?
+    private var friendsBadgeValue: String?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -548,29 +549,74 @@ final class AWEAlbumMorphTabController:
         tabBar.setNeedsLayout()
     }
 
-    private func applyMessageBadge() {
-        guard let messageTab = tab(forIdentifier: Identifier.messages) else { return }
-        let normalized = messageBadgeValue?.isEmpty == false ? messageBadgeValue : nil
-
-        // 1.0.52k: exact rollback to the original unread-badge mirroring path
-        // used before 1.0.52d. Do not apply any custom horizontal offset for
-        // normal/selected/focused states. UIKit owns one badge position in all
-        // states, so selection cannot introduce a plugin-defined relative jump.
-        if messageTab.responds(to: NSSelectorFromString("setBadgeValue:")) {
-            messageTab.setValue(normalized, forKey: "badgeValue")
+    private func setBadge(
+        _ value: String?,
+        on tab: UITab?,
+        enabled: Bool = true
+    ) {
+        guard let tab else { return }
+        let normalized = enabled && value?.isEmpty == false ? value : nil
+        if tab.responds(to: NSSelectorFromString("setBadgeValue:")) {
+            tab.setValue(normalized, forKey: "badgeValue")
         }
-        if let index = tabs.firstIndex(where: { $0 === messageTab }),
+        if let index = tabs.firstIndex(where: { $0 === tab }),
            let items = tabBar.items, index < items.count {
             items[index].badgeValue = normalized
             items[index].badgeColor = .systemRed
         }
+    }
+
+    private func applyBadgeVisualScale() {
+        let scale: CGFloat = 0.84
+
+        func walk(_ view: UIView, ancestorIsBadge: Bool) {
+            let className = String(describing: type(of: view)).lowercased()
+            let isBadge = className.contains("badge")
+            if isBadge && !ancestorIsBadge {
+                if !view.transform.isApproximatelyEqual(
+                    to: CGAffineTransform(scaleX: scale, y: scale)
+                ) {
+                    view.transform = CGAffineTransform(scaleX: scale, y: scale)
+                }
+                return
+            }
+            for child in view.subviews {
+                walk(child, ancestorIsBadge: ancestorIsBadge || isBadge)
+            }
+        }
+
+        walk(tabBar, ancestorIsBadge: false)
+    }
+
+    private func applyMirroredBadges() {
+        setBadge(
+            friendsBadgeValue,
+            on: tab(forIdentifier: Identifier.second),
+            enabled: secondTitle == "朋友"
+        )
+        setBadge(
+            messageBadgeValue,
+            on: tab(forIdentifier: Identifier.messages)
+        )
         tabBar.setNeedsLayout()
+        tabBar.layoutIfNeeded()
+        applyBadgeVisualScale()
+    }
+
+    private func applyMessageBadge() {
+        applyMirroredBadges()
     }
 
     @objc(updateMessageBadgeValue:)
     func updateMessageBadgeValue(_ value: String?) {
         messageBadgeValue = value
-        applyMessageBadge()
+        applyMirroredBadges()
+    }
+
+    @objc(updateFriendsBadgeValue:)
+    func updateFriendsBadgeValue(_ value: String?) {
+        friendsBadgeValue = value
+        applyMirroredBadges()
     }
 
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
@@ -676,6 +722,7 @@ final class AWEAlbumMorphTabController:
         super.viewDidLayoutSubviews()
         applyStableVerticalOffset()
         setVisibleFraction(morphVisibleFraction, animated: false)
+        applyBadgeVisualScale()
         if compactMode {
             compactMode = false
             tabBar.transform = .identity

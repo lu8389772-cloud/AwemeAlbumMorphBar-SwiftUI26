@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52k — original badge rollback + sticky overlay downloader + auth30
+ AwemeLiquidBar 1.0.52l — delivery-stable floating downloader + dual unread badges + auth30
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -90,6 +90,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 - (void)configureSecondTabAsShop:(BOOL)shop;
 - (void)configureVisibleItemIdentifiers:(NSArray<NSString *> *)identifiers;
 - (void)updateMessageBadgeValue:(nullable NSString *)value;
+- (void)updateFriendsBadgeValue:(nullable NSString *)value;
 - (void)reloadConfiguredImages;
 - (void)updateAccentColor:(UIColor *)color;
 - (void)setForcedDark:(BOOL)forced;
@@ -131,6 +132,7 @@ static BOOL AWEClassNameLooksLikePlayableFeedController(NSString *className);
 static BOOL AWECurrentRouteHasPlayableFeedController(void);
 static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack);
 static void AWERefreshExternalBridgeMenu(UIView *stack);
+static BOOL AWEEnsureAlbumMorphOverlayWindow(UIWindow *sourceWindow);
 
 static char kAWENativeBarKey;
 static char kAWEDelegateKey;
@@ -805,7 +807,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52k_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52l_interaction.log"] copy];
     });
     return path;
 }
@@ -4276,36 +4278,139 @@ static NSString *AWEFirstVisibleLabelText(UIView *root, NSUInteger depth) {
     return nil;
 }
 
-static NSString *AWECurrentOriginalMessagesBadgeValue(void) {
-    if (!AWEMessageBadgeEnabled()) return nil;
-    NSArray *buttons = AWEControllerButtons(gAWELastController);
-    if (buttons.count <= 3) return nil;
-    UIView *messageButton = [buttons[3] isKindOfClass:UIView.class] ? buttons[3] : nil;
-    if (!messageButton) return nil;
-    UIView *badge = AWEFindFirstDescendantWhoseClassContains(messageButton, @"Badge", 0);
-    if (!badge || badge.hidden || badge.alpha <= 0.01 || badge.layer.opacity <= 0.01f) {
+static NSString *AWEFirstVisibleBadgeLabelText(UIView *root,
+                                                NSUInteger depth,
+                                                BOOL insideBadge) {
+    if (!root || depth > 10 || root.hidden || root.alpha <= 0.01 ||
+        root.layer.opacity <= 0.01f) {
         return nil;
     }
-    NSString *text = AWEFirstVisibleLabelText(badge, 0);
-    if (text.length) return text;
-    /* UITabBarItem uses a single blank as a compact dot badge. */
-    return @" ";
+    NSString *className = NSStringFromClass(root.class);
+    BOOL isBadge =
+        [className rangeOfString:@"Badge"
+                         options:NSCaseInsensitiveSearch].location != NSNotFound;
+    BOOL nowInsideBadge = insideBadge || isBadge;
+    if (nowInsideBadge && [root isKindOfClass:UILabel.class]) {
+        NSString *text = [((UILabel *)root).text stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (text.length) return text;
+    }
+    for (UIView *child in root.subviews) {
+        NSString *text =
+            AWEFirstVisibleBadgeLabelText(child, depth + 1, nowInsideBadge);
+        if (text.length) return text;
+    }
+    return nil;
+}
+
+static BOOL AWEHasVisibleCompactBadgeDot(UIView *root, NSUInteger depth) {
+    if (!root || depth > 10 || root.hidden || root.alpha <= 0.01 ||
+        root.layer.opacity <= 0.01f) {
+        return NO;
+    }
+    NSString *className = NSStringFromClass(root.class);
+    BOOL isConcreteBadge =
+        [className rangeOfString:@"DUXBadge"
+                         options:NSCaseInsensitiveSearch].location != NSNotFound ||
+        ([className rangeOfString:@"Badge"
+                          options:NSCaseInsensitiveSearch].location != NSNotFound &&
+         [className rangeOfString:@"Container"
+                          options:NSCaseInsensitiveSearch].location == NSNotFound);
+    if (isConcreteBadge) {
+        CGFloat width = CGRectGetWidth(root.bounds);
+        CGFloat height = CGRectGetHeight(root.bounds);
+        if (width >= 2.0 && width <= 28.0 &&
+            height >= 2.0 && height <= 28.0) {
+            return YES;
+        }
+    }
+    for (UIView *child in root.subviews) {
+        if (AWEHasVisibleCompactBadgeDot(child, depth + 1)) return YES;
+    }
+    return NO;
+}
+
+static NSString *AWECurrentOriginalTabBadgeValueAtIndex(NSInteger index) {
+    if (!AWEMessageBadgeEnabled() || index < 0) return nil;
+    NSArray *buttons = AWEControllerButtons(gAWELastController);
+    if (index >= (NSInteger)buttons.count) return nil;
+    UIView *button = [buttons[index] isKindOfClass:UIView.class] ? buttons[index] : nil;
+    if (!button) return nil;
+
+    /* The outer AWENormalModeTabBarBadgeContainerView can remain alive even
+       after Douyin has cleared the unread state. 1.0.52k treated an empty but
+       still-attached container as a dot badge (" "), which left a permanent
+       red mark after the unread number reached zero. Only mirror actual visible
+       badge content. */
+    NSString *text =
+        AWEFirstVisibleBadgeLabelText(button, 0, NO);
+    text = [text stringByTrimmingCharactersInSet:
+        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (text.length) {
+        NSInteger numeric = text.integerValue;
+        BOOL purelyNumeric =
+            [[text stringByTrimmingCharactersInSet:
+                NSCharacterSet.decimalDigitCharacterSet] length] == 0;
+        if (purelyNumeric && numeric <= 0) return nil;
+        return text;
+    }
+
+    /* Mirror a genuine compact DUXBadge/red-dot descendant, but never infer a
+       dot from the always-present outer AWENormalModeTabBarBadgeContainerView.
+       This preserves Friends-style dot badges without recreating the stale
+       Messages red mark after the numerical badge is cleared. */
+    if (AWEHasVisibleCompactBadgeDot(button, 0)) return @" ";
+    return nil;
+}
+
+static NSString *AWECurrentOriginalMessagesBadgeValue(void) {
+    return AWECurrentOriginalTabBadgeValueAtIndex(3);
+}
+
+static NSString *AWECurrentOriginalFriendsBadgeValue(void) {
+    if (AWESecondTabIsShop()) return nil;
+    return AWECurrentOriginalTabBadgeValueAtIndex(1);
+}
+
+static void AWEUpdateAlbumMorphBadges(void) {
+    if (!gAWEAlbumMorphController) return;
+    static NSString *lastMessageValue = nil;
+    static NSString *lastFriendsValue = nil;
+    static BOOL initialized = NO;
+
+    NSString *messageValue = AWECurrentOriginalMessagesBadgeValue();
+    NSString *friendsValue = AWECurrentOriginalFriendsBadgeValue();
+
+    BOOL sameMessage = initialized &&
+        ((lastMessageValue == messageValue) ||
+         [lastMessageValue isEqualToString:messageValue]);
+    BOOL sameFriends = initialized &&
+        ((lastFriendsValue == friendsValue) ||
+         [lastFriendsValue isEqualToString:friendsValue]);
+    if (sameMessage && sameFriends) return;
+
+    initialized = YES;
+    if (!sameMessage) {
+        lastMessageValue = [messageValue copy];
+        [gAWEAlbumMorphController updateMessageBadgeValue:messageValue];
+    }
+    if (!sameFriends) {
+        lastFriendsValue = [friendsValue copy];
+        [gAWEAlbumMorphController updateFriendsBadgeValue:friendsValue];
+    }
+
+    if (AWEInteractionDiagnosticsEnabled()) {
+        AWEInteractionDiagnosticWrite(
+            @"TAB_BADGES enabled=%d friends=%@ messages=%@",
+            AWEMessageBadgeEnabled(),
+            friendsValue ?: @"<none>", messageValue ?: @"<none>");
+    }
 }
 
 static void AWEUpdateAlbumMorphMessageBadge(void) {
-    if (!gAWEAlbumMorphController) return;
-    static NSString *lastValue = nil;
-    static BOOL initialized = NO;
-    NSString *value = AWECurrentOriginalMessagesBadgeValue();
-    BOOL same = initialized && ((lastValue == value) || [lastValue isEqualToString:value]);
-    if (same) return;
-    initialized = YES;
-    lastValue = [value copy];
-    [gAWEAlbumMorphController updateMessageBadgeValue:value];
-    if (AWEInteractionDiagnosticsEnabled()) {
-        AWEInteractionDiagnosticWrite(@"MESSAGE_BADGE enabled=%d value=%@",
-                                      AWEMessageBadgeEnabled(), value ?: @"<none>");
-    }
+    /* Compatibility alias for older call sites; both mirrored tabs must refresh
+       together because Douyin can update their badge containers in one pass. */
+    AWEUpdateAlbumMorphBadges();
 }
 
 static void AWEAttachNativeBarWithForce(UIView *tabBar, BOOL forceVisible) {
@@ -6399,8 +6504,53 @@ typedef NS_ENUM(NSInteger, AWEHomeActionKind) {
 @interface AWEExternalBridgeMenuSlotView : UIView
 @property(nonatomic, strong) UIButton *menuButton;
 @property(nonatomic, weak) UIView *sourceStack;
+@property(nonatomic, assign) BOOL dragging;
 @end
+
 @implementation AWEExternalBridgeMenuSlotView
+
+- (void)alb_handleDownloadPan:(UIPanGestureRecognizer *)gesture {
+    UIView *host = self.superview;
+    if (!host || host.bounds.size.width < 100.0 || host.bounds.size.height < 100.0) {
+        return;
+    }
+
+    CGPoint translation = [gesture translationInView:host];
+    CGPoint center = CGPointMake(self.center.x + translation.x,
+                                 self.center.y + translation.y);
+    UIEdgeInsets safe = host.safeAreaInsets;
+    CGFloat half = MAX(CGRectGetWidth(self.bounds), 46.0) * 0.5;
+    CGFloat minX = safe.left + half + 4.0;
+    CGFloat maxX = CGRectGetWidth(host.bounds) - safe.right - half - 4.0;
+    CGFloat minY = safe.top + half + 8.0;
+    CGFloat maxY = CGRectGetHeight(host.bounds) - safe.bottom - half - 72.0;
+    if (maxX < minX) maxX = minX;
+    if (maxY < minY) maxY = minY;
+    center.x = MIN(MAX(center.x, minX), maxX);
+    center.y = MIN(MAX(center.y, minY), maxY);
+
+    self.dragging = gesture.state == UIGestureRecognizerStateBegan ||
+                    gesture.state == UIGestureRecognizerStateChanged;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    self.center = center;
+    [CATransaction commit];
+    [gesture setTranslation:CGPointZero inView:host];
+
+    if (gesture.state == UIGestureRecognizerStateEnded ||
+        gesture.state == UIGestureRecognizerStateCancelled ||
+        gesture.state == UIGestureRecognizerStateFailed) {
+        self.dragging = NO;
+        CGFloat width = MAX(CGRectGetWidth(host.bounds), 1.0);
+        CGFloat height = MAX(CGRectGetHeight(host.bounds), 1.0);
+        NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+        [defaults setDouble:self.center.x / width
+                     forKey:@"AwemeLiquidBar.DownloadButtonCenterXPercentV1"];
+        [defaults setDouble:self.center.y / height
+                     forKey:@"AwemeLiquidBar.DownloadButtonCenterYPercentV1"];
+    }
+}
+
 @end
 
 /* One process-wide download source. 1.0.51 attached one button per recycled
@@ -8535,68 +8685,92 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
     return NO;
 }
 
-static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
+/* Feed/player host finder kept separate from the downloader. Right-column
+   recovery uses this geometry to select the current AWEElementStackView, while
+   the floating download control itself lives in the independent overlay. */
+static UIView *AWEFeedInteractionHostForStack(UIView *stack) {
     if (!stack || !stack.window) return nil;
+    UIView *fallback = nil;
+    for (UIView *cursor = stack.superview;
+         cursor && cursor != (UIView *)stack.window;
+         cursor = cursor.superview) {
+        if (cursor.window != stack.window) break;
+        CGFloat width = CGRectGetWidth(cursor.bounds);
+        CGFloat height = CGRectGetHeight(cursor.bounds);
+        if (!fallback && width > 220.0 && height > 320.0) fallback = cursor;
 
-    /* 1.0.52k: the menu source must live outside Douyin's scrolling feed
-       hierarchy. A UIButton that presents UIMenu from the feed/root content can
-       make UIKit scroll/re-layout the source into view, which is exactly the
-       caption-to-bottom regression seen when the download menu opens. Reuse the
-       independent resident AlbumMorph overlay that already owns the bottom bar.
-       It shares screen coordinates but cannot change the feed's safe-area or
-       scroll position. */
-    UIView *controllerView = gAWEAlbumMorphController.viewIfLoaded;
-    if (controllerView && controllerView.window == gAWEAlbumMorphOverlayWindow &&
-        CGRectGetWidth(controllerView.bounds) > 100.0 &&
-        CGRectGetHeight(controllerView.bounds) > 100.0) {
-        return controllerView;
+        NSString *lower = NSStringFromClass(cursor.class).lowercaseString;
+        BOOL interactionHost =
+            [lower containsString:@"playinteraction"] ||
+            [lower containsString:@"feedcell"] ||
+            [lower containsString:@"playercontainer"] ||
+            [lower containsString:@"richcontent"];
+        if (interactionHost && width > 220.0 && height > 320.0) {
+            return cursor;
+        }
     }
+    return fallback ?: stack.superview;
+}
 
+static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
+    (void)stack;
+    UIWindow *sourceWindow = AWEActiveMainWindow();
+
+    /* 1.0.52l: make the download button a process-long floating control on the
+       resident AlbumMorph overlay WINDOW itself. It is no longer owned by any
+       feed cell, avatar, profile glass, or root content view, so feed recycling
+       cannot hide it and presenting UIMenu cannot scroll/re-layout the caption. */
     AWEAlbumMorphOverlayWindow *overlay =
         (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
-    UIView *rootView = overlay.rootViewController.viewIfLoaded;
-    if (rootView && rootView.window == overlay &&
-        CGRectGetWidth(rootView.bounds) > 100.0 &&
-        CGRectGetHeight(rootView.bounds) > 100.0) {
-        return rootView;
+    if ((!overlay || overlay.hidden || !overlay.windowScene) && sourceWindow) {
+        AWEEnsureAlbumMorphOverlayWindow(sourceWindow);
+        overlay = (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
     }
-
-    /* Deliberately do not fall back into the main feed hierarchy. If the
-       independent overlay is between rebuilds, keep the existing button where
-       it is and retry on the next normal home-action refresh. */
+    if (overlay && !overlay.hidden && overlay.alpha > 0.01 &&
+        CGRectGetWidth(overlay.bounds) > 100.0 &&
+        CGRectGetHeight(overlay.bounds) > 100.0) {
+        return overlay;
+    }
     return nil;
 }
 
+/* Keep the native fallback used by the proven 1.0.52e right-column recovery.
+   This function is no longer a downloader position source. */
 static UIView *AWEDownloadMenuProfileAnchorForStack(UIView *stack) {
-    if (!stack || !stack.window) return nil;
-
-    /* 1.0.52k: use ONE geometry source only. The 54 pt profile glass plate is
-       already bound to the actual avatar center by AWERefreshProfileAvatarGlass.
-       Previous builds alternated between UIImageView / native profile container /
-       glass plate while a new cell was settling; those objects have different
-       bounds/centres and made the download button visibly step downward after
-       the avatar had already moved. If the glass plate is not ready yet, return
-       nil and keep the last good download position instead of switching anchors. */
+    if (!stack) return nil;
     AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
         stack, &kAWEProfileGlassSlotKey);
-    if (profile && profile.window && !profile.hidden &&
-        profile.alpha > 0.01 && profile.layer.opacity > 0.01f &&
-        AWEHomeViewEffectivelyVisible(profile)) {
-        return profile;
+    if (profile && !profile.hidden && profile.window) return profile;
+
+    UIView *nativeProfile = AWEFindViewByExactRuntimeClass(
+        stack, @"AWEPlayInteractionUserProfilePictureView", 0);
+    if (!nativeProfile) {
+        nativeProfile = AWEFindViewByExactRuntimeClass(
+            stack, @"AWEPlayInteractionUserProfileContainerView", 0);
     }
-    return nil;
+    return nativeProfile.window ? nativeProfile : nil;
 }
 
 static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *stack) {
-    if (!AWEDownloadButtonEnabled()) { AWEHideGlobalDownloadMenu(); return nil; }
-    if (!stack) return nil;
+    if (!AWEDownloadButtonEnabled()) {
+        AWEHideGlobalDownloadMenu();
+        return nil;
+    }
+
+    UIView *hostView = AWEDownloadMenuOverlayHostView(stack);
+    if (!hostView) return nil;
+
     if (!gAWEDownloadMenuSlot) {
-        gAWEDownloadMenuSlot = [[AWEExternalBridgeMenuSlotView alloc] initWithFrame:CGRectZero];
+        gAWEDownloadMenuSlot =
+            [[AWEExternalBridgeMenuSlotView alloc] initWithFrame:CGRectZero];
         gAWEDownloadMenuSlot.backgroundColor = UIColor.clearColor;
         gAWEDownloadMenuSlot.opaque = NO;
         gAWEDownloadMenuSlot.clipsToBounds = NO;
         gAWEDownloadMenuSlot.userInteractionEnabled = YES;
-        gAWEDownloadMenuSlot.accessibilityIdentifier = @"AwemeLiquidBar.NativeDownloadMenuSlot";
+        gAWEDownloadMenuSlot.accessibilityIdentifier =
+            @"AwemeLiquidBar.NativeDownloadMenuSlot";
+        gAWEDownloadMenuSlot.layer.zPosition = CGFLOAT_MAX - 2048.0;
+
         UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
         button.backgroundColor = UIColor.clearColor;
         button.opaque = NO;
@@ -8605,80 +8779,104 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
         button.showsMenuAsPrimaryAction = YES;
         [gAWEDownloadMenuSlot addSubview:button];
         gAWEDownloadMenuSlot.menuButton = button;
-    }
-    gAWEDownloadMenuSlot.sourceStack = stack;
-    gAWEDownloadMenuSourceStack = stack;
 
-    UIView *hostView = AWEDownloadMenuOverlayHostView(stack);
-    if (hostView && gAWEDownloadMenuSlot.superview != hostView) {
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
+            initWithTarget:gAWEDownloadMenuSlot
+                    action:@selector(alb_handleDownloadPan:)];
+        pan.maximumNumberOfTouches = 1;
+        pan.cancelsTouchesInView = YES;
+        [gAWEDownloadMenuSlot addGestureRecognizer:pan];
+    }
+
+    if (stack) {
+        gAWEDownloadMenuSlot.sourceStack = stack;
+        gAWEDownloadMenuSourceStack = stack;
+    }
+    if (gAWEDownloadMenuSlot.superview != hostView) {
         [gAWEDownloadMenuSlot removeFromSuperview];
         [hostView addSubview:gAWEDownloadMenuSlot];
     }
     return gAWEDownloadMenuSlot;
 }
 
+static CGPoint AWEDownloadMenuStoredOrDefaultCenter(UIView *hostView,
+                                                     CGFloat diameter) {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    id xObject = [defaults objectForKey:
+        @"AwemeLiquidBar.DownloadButtonCenterXPercentV1"];
+    id yObject = [defaults objectForKey:
+        @"AwemeLiquidBar.DownloadButtonCenterYPercentV1"];
+    CGFloat width = MAX(CGRectGetWidth(hostView.bounds), 1.0);
+    CGFloat height = MAX(CGRectGetHeight(hostView.bounds), 1.0);
+    UIEdgeInsets safe = hostView.safeAreaInsets;
+
+    CGFloat xPercent = [xObject isKindOfClass:NSNumber.class]
+        ? [(NSNumber *)xObject doubleValue] : 0.0;
+    CGFloat yPercent = [yObject isKindOfClass:NSNumber.class]
+        ? [(NSNumber *)yObject doubleValue] : 0.0;
+    CGPoint center;
+    if (xPercent > 0.02 && xPercent < 0.98 &&
+        yPercent > 0.02 && yPercent < 0.98) {
+        center = CGPointMake(width * xPercent, height * yPercent);
+    } else {
+        /* Fixed, screen-based default: right edge, above the normal avatar
+           region. It never follows avatar/cell geometry; users can drag it once
+           and the normalized position persists across launches/screen sizes. */
+        center = CGPointMake(width - safe.right - diameter * 0.5 - 6.0,
+                             safe.top + (height - safe.top - safe.bottom) * 0.34);
+    }
+
+    CGFloat half = diameter * 0.5;
+    CGFloat minX = safe.left + half + 4.0;
+    CGFloat maxX = width - safe.right - half - 4.0;
+    CGFloat minY = safe.top + half + 8.0;
+    CGFloat maxY = height - safe.bottom - half - 72.0;
+    if (maxX < minX) maxX = minX;
+    if (maxY < minY) maxY = minY;
+    center.x = MIN(MAX(center.x, minX), maxX);
+    center.y = MIN(MAX(center.y, minY), maxY);
+    return center;
+}
+
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
-    if (!stack || !gAWEDownloadMenuSlot) return;
     if (AWEDownloadMenuRouteBlocked()) {
         AWEHideGlobalDownloadMenu();
         return;
     }
-    if (gAWEDownloadMenuSourceStack != stack) return;
 
-    /* A recycled/current stack can lose its window for one pass during paging.
-       That is not a reason to blank a button which is already correctly visible
-       in the independent overlay. */
-    if (!stack.window) return;
+    AWEExternalBridgeMenuSlotView *slot =
+        AWEEnsureExternalBridgeMenuSlot(stack);
+    if (!slot) return;
 
-    UIView *profileAnchor = AWEDownloadMenuProfileAnchorForStack(stack);
-    if (!profileAnchor) return;
-
-    UIView *hostView = AWEDownloadMenuOverlayHostView(stack);
+    UIView *hostView = slot.superview;
     if (!hostView || !hostView.window) return;
-    if (gAWEDownloadMenuSlot.superview != hostView) {
-        [gAWEDownloadMenuSlot removeFromSuperview];
-        [hostView addSubview:gAWEDownloadMenuSlot];
-    }
 
     const CGFloat diameter = 46.0;
-    const CGFloat profileDiameter = 54.0;
-    const CGFloat edgeGap = 8.0;
-    CGRect profileFrame = [profileAnchor convertRect:profileAnchor.bounds toView:hostView];
-    CGPoint profileCenter = CGPointMake(CGRectGetMidX(profileFrame),
-                                        CGRectGetMidY(profileFrame));
-    CGPoint center = CGPointMake(
-        profileCenter.x,
-        profileCenter.y - profileDiameter * 0.5 - edgeGap - diameter * 0.5);
-    if (!isfinite(center.x) || !isfinite(center.y)) return;
-
-    /* Do not animate position changes. The button should either remain at its
-       last valid screen coordinate or snap once to the newly settled avatar;
-       there must never be a second visible slide after the avatar has settled. */
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     [UIView performWithoutAnimation:^{
-        gAWEDownloadMenuSlot.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
-        gAWEDownloadMenuSlot.center = center;
-        gAWEDownloadMenuSlot.menuButton.frame = gAWEDownloadMenuSlot.bounds;
-        gAWEDownloadMenuSlot.hidden = NO;
-        gAWEDownloadMenuSlot.alpha = 1.0;
-        [hostView bringSubviewToFront:gAWEDownloadMenuSlot];
+        slot.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
+        slot.menuButton.frame = slot.bounds;
+        if (!slot.dragging) {
+            slot.center = AWEDownloadMenuStoredOrDefaultCenter(
+                hostView, diameter);
+        }
+        slot.hidden = NO;
+        slot.alpha = 1.0;
+        [hostView bringSubviewToFront:slot];
     }];
     [CATransaction commit];
 
-    gAWEDownloadLastValidAnchorTime = CACurrentMediaTime();
-    gAWEDownloadOwnerGapGeneration++;
-
     NSString *signature = [NSString stringWithFormat:@"%@|%@|%.0f,%.0f",
-        AWEInteractionObjectSummary(stack), NSStringFromClass(hostView.class),
-        center.x, center.y];
+        AWEInteractionObjectSummary(stack),
+        NSStringFromClass(hostView.class), slot.center.x, slot.center.y];
     if (![gAWEDownloadSlotProbeSignature isEqualToString:signature]) {
         gAWEDownloadSlotProbeSignature = [signature copy];
         AWEAlbumMorphProbeWrite(
-            @"DOWNLOAD_SLOT state=visible stack=%@ host=%@ profile=%@ center=(%.1f,%.1f) profileFrame=%@",
-            AWEInteractionObjectSummary(stack), AWEInteractionObjectSummary(hostView),
-            AWEInteractionObjectSummary(profileAnchor), center.x, center.y,
-            NSStringFromCGRect(profileFrame));
+            @"DOWNLOAD_SLOT state=visible stack=%@ host=%@ center=(%.1f,%.1f) dragging=%d",
+            AWEInteractionObjectSummary(stack),
+            AWEInteractionObjectSummary(hostView),
+            slot.center.x, slot.center.y, slot.dragging);
     }
 }
 
@@ -8716,21 +8914,11 @@ static UIMenu *AWEDownloadPendingMenu(void) {
 
 static BOOL AWEHoldVisibleDownloadDuringOwnerGap(void) {
     AWEExternalBridgeMenuSlotView *slot = gAWEDownloadMenuSlot;
-    if (!slot || slot.hidden || slot.alpha <= 0.01 || !slot.window) return NO;
-    if (AWEDownloadMenuRouteBlocked()) return NO;
+    if (!slot || AWEDownloadMenuRouteBlocked()) return NO;
     if (!AWECurrentRouteHasPlayableFeedController()) return NO;
 
-    /* 1.0.52k: no timeout-based hide/show loop. In a playable feed, a missing
-       owner/avatar is treated as a transient cell handoff. Keep the last good
-       position fully composited until another stable profile-glass anchor is
-       available. Explicit route blockers (comments/settings/search/profile
-       detail without a playable feed) still hide immediately. */
-    [UIView performWithoutAnimation:^{
-        slot.hidden = NO;
-        slot.alpha = 1.0;
-        if (slot.superview) [slot.superview bringSubviewToFront:slot];
-    }];
-    return YES;
+    AWELayoutExternalBridgeMenuForStack(gAWEDownloadMenuSourceStack);
+    return slot.window != nil && !slot.hidden && slot.alpha > 0.01;
 }
 
 static void AWERefreshExternalBridgeMenu(UIView *stack) {
@@ -8739,35 +8927,45 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
         return;
     }
 
-    /* Keep the current owner until its single stable profile-glass anchor has
-       actually left the screen. Preloaded neighbours are not allowed to steal
-       the singleton merely because their layout callback ran later. */
-    UIView *owner = gAWEDownloadMenuSourceStack;
-    UIView *ownerProfile = owner ? AWEDownloadMenuProfileAnchorForStack(owner) : nil;
-    if (owner && owner.window && ownerProfile) {
-        stack = owner;
-    } else {
+    /* Resolve data ownership separately from visual ownership. The floating
+       button stays in one stable overlay coordinate forever; a current feed
+       stack is needed only to refresh the UIMenu's Aweme model. */
+    if (!stack || !stack.window ||
+        !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
         UIView *best = AWEFindCurrentRightActionStackAcrossWindows();
-        UIView *bestProfile = best ? AWEDownloadMenuProfileAnchorForStack(best) : nil;
-        if (best && bestProfile) {
-            stack = best;
-        } else {
-            if (AWEHoldVisibleDownloadDuringOwnerGap()) return;
-            /* On first entry there may simply be no stable avatar yet. Do not
-               create a flash by forcing hidden/alpha writes; wait for the next
-               stack refresh. */
-            return;
-        }
+        if (best) stack = best;
     }
 
-    UIView *profileAnchor = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;
-    if (!stack || !stack.window || !profileAnchor) {
-        if (AWEHoldVisibleDownloadDuringOwnerGap()) return;
+    if ((!stack || !stack.window) &&
+        !AWECurrentRouteHasPlayableFeedController()) {
+        AWEHideGlobalDownloadMenu();
         return;
     }
 
-    AWEExternalBridgeMenuSlotView *slot = AWEEnsureExternalBridgeMenuSlot(stack);
+    AWEExternalBridgeMenuSlotView *slot =
+        AWEEnsureExternalBridgeMenuSlot(stack);
     if (!slot) return;
+
+    /* First entry may happen before the current feed stack settles. Show the
+       button immediately with a pending menu rather than making visibility
+       depend on an avatar/profile view. */
+    if (!stack || !stack.window) {
+        NSString *previousIdentity = objc_getAssociatedObject(
+            slot, &kAWEExternalBridgeMenuModelIdentityKey);
+        if (![previousIdentity isEqualToString:@"__pending__"]) {
+            AWEConfigureDownloadMenuButtonAppearance(slot.menuButton);
+            slot.menuButton.menu = AWEDownloadPendingMenu();
+            slot.menuButton.showsMenuAsPrimaryAction = YES;
+            objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuModelIdentityKey,
+                                     @"__pending__",
+                                     OBJC_ASSOCIATION_COPY_NONATOMIC);
+        }
+        AWELayoutExternalBridgeMenuForStack(nil);
+        return;
+    }
+
+    slot.sourceStack = stack;
+    gAWEDownloadMenuSourceStack = stack;
 
     id aweme = AWECurrentAwemeModelForStack(stack);
     if (!aweme) {
@@ -8778,9 +8976,11 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
             slot.menuButton.menu = AWEDownloadPendingMenu();
             slot.menuButton.showsMenuAsPrimaryAction = YES;
             objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuModelIdentityKey,
-                                     @"__pending__", OBJC_ASSOCIATION_COPY_NONATOMIC);
-            AWEInteractionDiagnosticWrite(@"DOWNLOAD_MENU_PENDING stack=%@",
-                                          AWEInteractionObjectSummary(stack));
+                                     @"__pending__",
+                                     OBJC_ASSOCIATION_COPY_NONATOMIC);
+            AWEInteractionDiagnosticWrite(
+                @"DOWNLOAD_MENU_PENDING stack=%@",
+                AWEInteractionObjectSummary(stack));
         }
         AWELayoutExternalBridgeMenuForStack(stack);
         return;
@@ -8804,7 +9004,8 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
         objc_setAssociatedObject(slot, &kAWEExternalBridgeMenuConfigGenerationKey,
                                  @(gAWEConfiguredIconGeneration),
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        AWEInteractionDiagnosticWrite(@"DOWNLOAD_MENU_READY model=%@ images=%lu audio=%d",
+        AWEInteractionDiagnosticWrite(
+            @"DOWNLOAD_MENU_READY model=%@ images=%lu audio=%d",
             identity, (unsigned long)AWEAlbumImagesForAweme(aweme).count,
             AWEAudioURLForAweme(aweme).length > 0);
     }
@@ -9106,9 +9307,9 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
         AWEHomeActionSlotsForStack(stack);
     if (!stack.window) {
-        // 1.0.52k: a recycled/preloaded stack losing its window must not blank
-        // the singleton. Resolve ownership again from the avatar that is
-        // actually visible right now.
+        // 1.0.52l: a recycled/preloaded stack losing its window must not blank
+        // the singleton. Resolve only the current Aweme data owner; the button
+        // itself remains at its independent overlay coordinate.
         if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
         AWEHomeProfileGlassView *profileSlot = objc_getAssociatedObject(
             stack, &kAWEProfileGlassSlotKey);
@@ -9126,7 +9327,7 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     }
     if (stack.hidden || stack.alpha < 0.01) {
         // Do not let an old/next preloaded feed stack toggle the global button
-        // off. The visible avatar is the authority for download ownership.
+        // off. Feed stacks provide model data only, never visual ownership.
         if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
         /* Keep visual slots and source bindings intact. They are children of
            the stack and naturally follow its temporary hidden/offscreen state. */
@@ -12715,7 +12916,7 @@ static CGFloat AWECurrentRightStackVisibilityScore(UIView *stack, UIWindow *wind
     /* 1.0.52e: score the enclosing feed/player host as the primary paging
        signal. Adjacent preloaded right stacks can both be >80% visible during
        a swipe even though only one feed cell is actually centered. */
-    UIView *host = AWEDownloadMenuOverlayHostView(stack);
+    UIView *host = AWEFeedInteractionHostForStack(stack);
     if (host && host.window == window && host != stack) {
         CGRect hostFrame = [host convertRect:host.bounds toView:window];
         CGRect hostVisible = CGRectIntersection(hostFrame, window.bounds);
@@ -12741,30 +12942,20 @@ static CGFloat AWECurrentRightStackVisibilityScore(UIView *stack, UIWindow *wind
 }
 
 static UIView *AWEFindCurrentRightActionStackAcrossWindows(void) {
+    /* Restore the proven 1.0.52e selection rule. Downloader visibility must not
+       participate in choosing/recovering Douyin's own right-action stack. */
     UIView *best = nil;
     CGFloat bestScore = -CGFLOAT_MAX;
     for (UIWindow *window in AWEForegroundNormalWindowsForHomeChrome()) {
         NSMutableArray<UIView *> *stacks = [NSMutableArray array];
         AWECollectVisibleHomeActionStacks(window, stacks, 0);
-        for (UIView *stack in stacks) {
-            UIView *avatar = AWEDownloadMenuProfileAnchorForStack(stack);
-            if (!avatar || !AWEHomeViewEffectivelyVisible(avatar)) continue;
-
-            /* Avatar visibility is stronger than the old stack-frame heuristic.
-               During paging Douyin can temporarily resize/fade the stack while
-               the user-facing avatar remains perfectly stable. */
-            BOOL strictGeometry = AWEFrameLooksLikeCurrentRightActionStack(stack);
-            CGFloat score = AWECurrentRightStackVisibilityScore(stack, window);
-            score += strictGeometry ? 12000.0 : 8000.0;
-
-            CGRect avatarFrame = [avatar convertRect:avatar.bounds toView:window];
-            CGFloat avatarCenterPenalty = fabs(CGRectGetMidY(avatarFrame) -
-                                                CGRectGetMidY(window.bounds));
-            score -= avatarCenterPenalty * 0.15;
-
+        for (UIView *candidate in stacks) {
+            if (!AWEFrameLooksLikeCurrentRightActionStack(candidate)) continue;
+            CGFloat score =
+                AWECurrentRightStackVisibilityScore(candidate, window);
             if (score > bestScore) {
                 bestScore = score;
-                best = stack;
+                best = candidate;
             }
         }
     }
@@ -12949,6 +13140,7 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
             if (!target) target = AWEFindCurrentRightActionStackAcrossWindows();
 
             BOOL restored = AWEForceRestoreRightActionStackAfterComment(target);
+            AWERefreshExternalBridgeMenu(target);
             NSUInteger stacks = AWECountHomeActionStacksAcrossForegroundWindows();
             NSString *after = target
                 ? [NSString stringWithFormat:@"%@ alpha=%.2f hidden=%d",
@@ -14192,7 +14384,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52k";
+    self.title = @"LiquidBar 设置 · 1.0.52l";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14633,7 +14825,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     hideTitlesRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *messageBadgeLabel = [UILabel new];
-    messageBadgeLabel.text = @"显示消息未读角标";
+    messageBadgeLabel.text = @"显示消息/朋友未读角标";
     messageBadgeLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
     UISwitch *messageBadgeSwitch = [UISwitch new];
     messageBadgeSwitch.on = AWEMessageBadgeEnabled();
@@ -15251,7 +15443,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWEMessageBadgeEnabledDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
-    AWEUpdateAlbumMorphMessageBadge();
+    AWEUpdateAlbumMorphBadges();
 }
 
 - (void)downloadButtonSwitchChanged:(UISwitch *)sender {
@@ -15263,7 +15455,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         return;
     }
     UIView *stack = AWEFindCurrentRightActionStackAcrossWindows();
-    if (stack) AWERefreshExternalBridgeMenu(stack);
+    AWERefreshExternalBridgeMenu(stack);
     UIWindow *window = AWEActiveMainWindow();
     if (window) AWEScheduleHomeActionStacksInView(window);
 }
@@ -17242,6 +17434,9 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
     }
     if (AWEDownloadMenuRouteBlocked()) {
         AWEHideGlobalDownloadMenu();
+    } else if (AWEDownloadButtonEnabled()) {
+        AWERefreshExternalBridgeMenu(
+            AWEFindCurrentRightActionStackAcrossWindows());
     }
     if (self == gAWEAlbumMorphPublishSourceController &&
         CACurrentMediaTime() < gAWEAlbumMorphPublishLaunchSuppressionUntil) {

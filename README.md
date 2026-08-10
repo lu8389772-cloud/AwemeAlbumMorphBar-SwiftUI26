@@ -1,10 +1,16 @@
-# AwemeLiquidBar 1.0.52k
+# AwemeLiquidBar 1.0.52l
 
-Focused rollback/stability build based on 1.0.52j.
+Delivery-stability build based on the 1.0.52 series.
 
-- Messages unread badge: exact rollback to the original mirror implementation from before 1.0.52d. No plugin-defined `badgePositionAdjustment` is applied in any state.
-- Download button host: moved out of Douyin's feed/root content into the independent resident AlbumMorph overlay, so presenting the UIMenu cannot scroll/re-layout the video feed and drop the caption to the physical bottom.
-- Download geometry: uses only the plugin's 54 pt profile-glass plate as the anchor. No UIImageView/native-profile/profile fallback switching, eliminating the second downward step after the avatar settles.
-- Download visibility: while a playable feed remains active, transient owner/avatar gaps keep the last valid button visible indefinitely. Only explicit blocked routes/settings/disabled state hide it.
-- Position changes are applied without UIView/CoreAnimation animation.
-- auth30 and the rest of 1.0.52j behavior are retained.
+## This build changes only the unstable areas
+
+- Restores the proven 1.0.52e profile-fullscreen right-side button recovery path after comment close.
+- Separates right-column recovery from download-button logic.
+- Uses one long-lived floating download button on the independent AlbumMorph overlay window.
+- The download button no longer follows the avatar or any recycled feed cell. Its default position is screen-fixed and it can be dragged; the normalized position is persisted.
+- The download button still presents the existing native `UIMenu` and current-item download/copy actions.
+- Message and Friends unread badges use the same source-reading path.
+- Empty unread containers no longer become a permanent red dot after the number clears.
+- Mirrored badge visuals are reduced to 84% size; no plugin horizontal badge offset is applied.
+
+Run `scripts/preflight.sh` before cloud compilation.

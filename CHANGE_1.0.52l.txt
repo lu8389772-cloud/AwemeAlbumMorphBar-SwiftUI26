@@ -1,0 +1,11 @@
+AwemeLiquidBar 1.0.52l
+
+Delivery stability pass:
+- Restores the 1.0.52e profile-fullscreen right-action stack selection/recovery path and decouples it from download-button ownership.
+- Rebuilds the download control as one process-wide floating native UIMenu button on the resident AlbumMorph overlay window.
+- Download control uses a fixed screen coordinate by default, no avatar/cell geometry, supports drag-to-position, and stores normalized position.
+- Opening the native download menu no longer places its source view in Douyin's feed hierarchy, avoiding caption/safe-area relayout.
+- Message unread badge no longer mirrors an empty badge container as a permanent red dot after count clears.
+- Friends tab uses the same unread-badge reader as Messages when the second tab is Friends.
+- Mirrored system badges are visually scaled to 84% without custom horizontal position offsets.
+- Keeps auth30 and all existing 1.0.52 series features.

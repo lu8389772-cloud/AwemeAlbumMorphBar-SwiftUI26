@@ -1,8 +1,22 @@
-AwemeLiquidBar 1.0.52k device test
+AwemeLiquidBar 1.0.52l device test
 
-1. Badge rollback: enable unread badge and compare selected/unselected Messages. This build contains NO custom badge horizontal adjustment; behavior should match the original pre-1.0.52d implementation.
-2. Download stability: swipe 20+ posts. Once the download button is visible on a playable feed, transient cell/avatar handoffs must not make it blink off/on.
-3. Download geometry: the button uses only the 54 pt profile-glass anchor. It must not make a second animated/downward move after the avatar has already settled.
-4. Download menu: open/close the menu on several posts. The feed nickname/caption area must not drop to the physical screen bottom when the menu appears.
-5. Comments/settings/search/profile: explicit blocked routes should hide the download control; returning to a playable feed should restore exactly one button.
-6. Toggle `显示右侧下载按钮` off/on and verify off hides immediately and on restores the current-feed button.
+1. Profile fullscreen compatibility
+- Enter another user's profile with the third-party default-fullscreen option enabled.
+- Open one of that user's videos.
+- Open comments, then close comments.
+- Confirm the entire native right action column stays/restores visible.
+
+2. Download floating button
+- Confirm it appears on a playable video when its setting is enabled.
+- Swipe 20+ videos: the button should not blink, follow the avatar, or jump vertically.
+- Drag the button to a new position, restart Douyin, confirm the position persists.
+- Tap it and open/close the native download menu; the video caption/title must not drop to the screen bottom.
+
+3. Message badge
+- Confirm unread count mirrors the original Messages tab.
+- Read all messages. The number and red badge must both disappear.
+- Select/unselect Messages: badge position should remain system-default; only visual size is 84%.
+
+4. Friends badge
+- With an account that has a Friends unread badge, confirm the custom Friends tab mirrors it through the same reader.
+- If the second tab is configured as Shop, no Friends badge should be mirrored.
