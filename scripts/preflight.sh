@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52t'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52t-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52t'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52t'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52t_interaction.log'),
+    ('control', control, 'Version: 1.0.52v'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52v-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52v'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52v'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52v_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,56 +36,63 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52t', 'LiquidBar 设置 · 1.0.52t',
+    'AwemeLiquidBar 1.0.52v', 'LiquidBar 设置 · 1.0.52v',
     '#import <Photos/Photos.h>',
-    'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
-    'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
-    'AWEDownloadAudioForAweme', 'AWECopyCompleteTextForAweme',
-    'AWEAvatarBaseMenuForStack', '@"进入主页"',
-    '@"头像菜单显示下载功能"', 'AWEAvatarMenuDownloadEnabled',
+    'AWEAvatarBaseMenuForStack', '@"进入主页"', '@"一键清屏"', '@"退出清屏"',
+    'AWEEnterCleanScreenFromStack', 'AWEExitCleanScreen',
+    'AWERefreshCleanScreenRecoveryButton',
+    'AwemeLiquidBar.CleanScreen.AvatarRecovery',
+    '[stack addSubview:menuButton];',
     'slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, pictureHost);',
     'slot.menuButton.showsMenuAsPrimaryAction = YES;',
     'AWEInstallGlassPressFeedback(slot.menuButton, slot.glassButton);',
+    'if (gAWECleanScreenEnabled) fraction = 0.0;',
+    'AWECleanScreenSuppressStatusBarViews',
+    'if (![scanner scanInteger:&count] || count <= 0) return nil;',
     'AWECurrentOriginalSecondBadgeValue', 'BOTTOM_BADGES_NATIVE',
-    '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
-    'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_REACQUIRE',
-    'RIGHT_FULLSCREEN_BLOCK_HIDE_IMAGE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA_IMAGE',
-    'RIGHT_FULLSCREEN_BLOCK_REMOVE_IMAGE', 'AWECurrentRouteHasPlayableFeedController',
-    '%hook AWENormalModeTabBarBadgeContainerView',
-    'AWEPrimeFriendsNativeLayoutFootprint', 'AWEApplyFriendsCaptionBottomReserve',
-    '@"一键清屏"', '@"退出清屏"', 'AWEEnterCleanScreenFromStack',
-    'AWERefreshCleanScreenRecoveryButton',
-    'setBottomAreaHidden:', 'setTabBarHiddenForPureMode:',
-    'setTimesHiddenForPureMode:', 'AWECleanScreenConfigureRealAvatarMenuButton',
-    'AWEFindCurrentRightActionStackExcluding',
-    'AWEFrameGeometryLooksLikeCurrentRightActionStack',
-    'AWEFindCurrentRightActionStackAcrossWindowsAllowSuppressedAncestors',
-    'PROFILE_COMMENT_SKIP_BAR_RECOVERY', 'PROFILE_COMMENT_LAYOUT_RESTORE',
+    'kAWEAuthorizationDigests[33]',
 ]
 for token in required_objc:
     if token not in objc:
         raise SystemExit(f'missing Objective-C token: {token}')
 
-# The independent floating download control is retired. Its legacy helper may
-# remain for source compatibility, but it must have no callers other than its
-# own definition, and both refresh/layout entry points must hard-hide it.
-if objc.count('AWEEnsureExternalBridgeMenuSlot(') != 1:
-    raise SystemExit('independent download slot still has a live caller')
-for snippet in [
-    'static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {\n    (void)stack;',
-    'static void AWERefreshExternalBridgeMenu(UIView *stack) {\n    (void)stack;\n    AWEHideGlobalDownloadMenu();',
-]:
-    if snippet not in objc:
-        raise SystemExit('floating download disable guard missing')
-
 for forbidden in [
-    'AWEExternalBridgePluginImageLoaded', 'AWEExternalBridgeRuntimeHasSelector',
-    'AWEExternalBridgeInvokeSelectorName', 'BRIDGE_PLUGIN_FOUND', 'BRIDGE_ACTION',
-    'saveCurrentVideo', 'tcShowDownloadOptions', 'NATIVE_DOWNLOAD_READY',
-    '上滑收缩底栏（动态高度）',
+    'UIContextMenuInteraction', 'AWEAvatarContextMenuDelegate',
+    'AWEInstallAvatarContextMenu',
+    'AWEPlayInteractionViewController.class',
+    'Long-press avatar menu',
 ]:
-    if forbidden in objc or forbidden in swift:
-        raise SystemExit(f'forbidden regression/bridge remains: {forbidden}')
+    if forbidden in objc:
+        raise SystemExit(f'forbidden avatar/context/private-link regression: {forbidden}')
+
+# The normal avatar menu must remain the verified 1.0.52o primary-action structure.
+ensure_start = objc.index('static AWEHomeProfileGlassView *AWEEnsureProfileGlassSlot')
+ensure_end = objc.index('static NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *', ensure_start)
+avatar_block = objc[ensure_start:ensure_end]
+for token in [
+    '[stack addSubview:menuButton];',
+    'if (slot.menuButton.superview != stack)',
+    '[stack addSubview:slot.menuButton];',
+    'slot.menuButton.center = center;',
+    'slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, pictureHost);',
+]:
+    if token not in avatar_block:
+        raise SystemExit(f'stable 1.0.52o avatar-menu token missing: {token}')
+
+# Clean-screen recovery may own only its dedicated transparent UIWindow button.
+# It must never reparent the real menu button.
+recovery_start = objc.index('@interface AWECleanScreenRecoveryTarget')
+recovery_end = objc.index('static void AWEApplyCleanScreenToInteractionController', recovery_start)
+recovery = objc[recovery_start:recovery_end]
+if '[window addSubview:gAWECleanScreenRecoveryButton]' not in recovery:
+    raise SystemExit('window-level recovery target missing')
+for forbidden in [
+    '[window addSubview:slot.menuButton]',
+    '[slot.profileHost addSubview:slot.menuButton]',
+    '[slot.menuButton removeFromSuperview]',
+]:
+    if forbidden in recovery:
+        raise SystemExit(f'real avatar menu is being reparented during clean screen: {forbidden}')
 
 if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
@@ -93,8 +100,6 @@ for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','br
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[33]' not in objc:
-    raise SystemExit('auth33 digest table declaration missing')
 start = objc.index('kAWEAuthorizationDigests[33]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
@@ -102,48 +107,5 @@ rows = [line for line in objc[start:end].splitlines()
 if len(rows) != 33:
     raise SystemExit(f'auth digest row count is {len(rows)}, expected 33')
 
-for token in [
-    '[PHPhotoLibrary sharedPhotoLibrary] performChanges:',
-    '[PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:fileURL]',
-    '[PHAssetChangeRequest creationRequestForAssetFromImage:image]',
-    'NSURLSessionDownloadTask *task', 'NSURLSessionDataTask *task',
-]:
-    if token not in objc:
-        raise SystemExit(f'native downloader API token missing: {token}')
-
-
-# 1.0.52t clean-screen/video-comment regressions
-for forbidden in [
-    'gAWECleanScreenRecoveryButton', 'gAWECleanScreenRecoveryWindow',
-    'gAWECleanScreenAvatarImage', 'gAWECleanScreenAvatarFrameInWindow',
-    'NSSelectorFromString(@"setPureMode:animated:")',
-]:
-    if forbidden in objc:
-        raise SystemExit(f'1.0.52t forbidden replacement/full-pure-mode path remains: {forbidden}')
-
-for token in [
-    'button.menu = AWEAvatarBaseMenuForStack(stack, slot.profileHost);',
-    'cleanEnabled ? @"退出清屏" : @"一键清屏"',
-    'if (gAWECleanScreenEnabled) fraction = 0.0;',
-    'AWECleanScreenSuppressStatusBarViews',
-    'setStatusBarHidden:withAnimation:',
-    'stack.layer.opacity = 1.0f;',
-    'AWECleanScreenSuppressKnownChromeTree(stack, stack.window, 0);',
-    'gAWECleanScreenAvatarRevealed &&',
-    '[pictureHost addSubview:slot.menuButton];',
-    'AWECleanScreenSuppressProfileBranch',
-    'AWEProfileCommentNativeActionStackForController',
-    'PROFILE_NATIVE_GLASS_REPAIR',
-    '@[@0.0, @0.016, @0.050, @0.120,',
-]:
-    if token not in objc:
-        raise SystemExit(f'1.0.52t required token missing: {token}')
-
-# 1.0.52t linker/badge regressions
-assert 'AWEPlayInteractionViewController.class' not in objc, 'static private-class reference would reintroduce linker failure'
-assert 'NSClassFromString(@"AWEPlayInteractionViewController")' in objc, 'runtime private-class lookup missing'
-assert 'if (![scanner scanInteger:&count] || count <= 0) return nil;' in objc, 'zero-count Messages badge guard missing'
-
-assert '[stack addSubview:menuButton];' not in objc, 'avatar menu button must not be a direct AWEElementStackView child'
-print('AwemeLiquidBar 1.0.52t native-button profile repair/photo-menu isolation preflight passed')
+print('AwemeLiquidBar 1.0.52v stable-click-menu isolated-clean-screen preflight passed')
 PY2

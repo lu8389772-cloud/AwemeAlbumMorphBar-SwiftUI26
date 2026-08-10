@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52t
+Version: 1.0.52v
 Architecture: iphoneos-arm
-Description: Keeps the live right stack interactive for clean-screen avatar recovery and reacquires rebuilt video right stacks after comments; preserves stable image behavior, zero-count badge fix and auth33.
+Description: Rebuilds from the stable 1.0.52o single-tap avatar menu, adds isolated clean-screen recovery without reparenting avatar UI, keeps auth33, and suppresses zero-count Messages badges.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

@@ -1,26 +1,18 @@
-AwemeLiquidBar 1.0.52t focused verification
+AwemeLiquidBar 1.0.52v focused verification
 
-Do not spend time retesting unrelated settings first.
+A. Normal avatar/menu regression
+1. Do NOT enter clean screen.
+2. On a normal video, single-tap the liquid avatar base: the full menu must appear immediately. Long-press must not be required.
+3. On an image carousel, open the avatar menu on image 1, dismiss/leave it as normal, then switch to image 2.
+4. Nickname/caption/search/bottom chrome must remain at the same vertical layout as before. No clean-screen code should run while clean screen is off.
 
-A. Profile video comment close
-1. Enter another user's profile.
-2. Open a VIDEO work in the fullscreen feed.
-3. Confirm the liquid right-side bases are present before comments.
-4. Open comments, then close comments.
-5. Repeat 5 times, including one fast open/close.
-Expected: if native AWEFeedVideoButton controls exist, the plugin glass bases are rebuilt in-place within ~0-1.5 s. No stretched residual transform should remain.
-6. If it still fails, export interaction log. Look for PROFILE_NATIVE_GLASS_REPAIR lines; they report exact owner, stack, native button count, and repaired slot count.
+B. Clean screen
+1. Single-tap avatar -> 一键清屏.
+2. Status bar, top/left/right chrome and bottom bar should disappear while vertical feed swiping continues.
+3. Tap the vanished avatar position. Only the original liquid avatar should return.
+4. Single-tap that restored avatar. The SAME full menu must open and show 退出清屏, plus the usual profile/download/copy actions.
+5. Choose 退出清屏. Full UI should return.
 
-B. Image carousel regression
-1. Open an image/carousel work.
-2. On image 1, open the avatar menu.
-3. Dismiss the menu and swipe to image 2 (also try swiping while the menu is being dismissed).
-Expected: nickname/caption/right chrome do not sink to the bottom; LiquidBar position does not change.
-4. Repeat between image 2/3 if available.
-
-C. Clean screen smoke test
-1. Avatar menu -> 一键清屏.
-2. Confirm status bar/LiquidBar/chrome hide.
-3. Tap original avatar position to reveal avatar.
-4. Open the full original avatar menu and choose 退出清屏.
-Expected: same behavior as 1.0.52s; this feature is not otherwise redesigned in 1.0.52t.
+C. Badge
+1. Messages unread >0 -> numeric badge appears.
+2. Messages unread =0 -> badge must be nil; no empty red circle.

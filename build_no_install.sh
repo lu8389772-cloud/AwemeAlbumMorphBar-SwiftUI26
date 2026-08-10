@@ -2,24 +2,19 @@
 set -e
 
 EXPECTED_PACKAGE='com.xyy.awemeliquidbar'
-EXPECTED_VERSION='1.0.52t'
+EXPECTED_VERSION='1.0.52v'
 
 rm -rf .theos packages
 grep -q "^Package: ${EXPECTED_PACKAGE}$" control
 grep -q "^Version: ${EXPECTED_VERSION}$" control
-grep -q 'LiquidBar 设置 · 1.0.52t' Tweak.x
-grep -q 'AwemeLiquidBar_1.0.52t_interaction.log' Tweak.x
+grep -q 'LiquidBar 设置 · 1.0.52v' Tweak.x
+grep -q 'AwemeLiquidBar_1.0.52v_interaction.log' Tweak.x
 grep -q 'AWEAlbumMorphTabController' AwemeAlbumMorphBar.swift
 grep -q 'static BOOL AWEAlbumMorphCollapseEnabled(void)' Tweak.x
 grep -q 'return NO;' Tweak.x
 grep -q 'AWEAvatarBaseMenuForStack' Tweak.x
 grep -q 'slot.menuButton.showsMenuAsPrimaryAction = YES;' Tweak.x
 grep -q '头像菜单显示下载功能' Tweak.x
-grep -q '@"一键清屏"' Tweak.x
-grep -q '@"退出清屏"' Tweak.x
-grep -q 'AWEEnterCleanScreenFromStack' Tweak.x
-grep -q 'AWEFrameGeometryLooksLikeCurrentRightActionStack' Tweak.x
-grep -q 'PROFILE_COMMENT_SKIP_BAR_RECOVERY' Tweak.x
 grep -q 'updateSecondBadgeValue' AwemeAlbumMorphBar.swift
 grep -q 'CGRectMake(0.0, MAX(0.0, rootHeight - 4.0), 4.0, 4.0)' Tweak.x
 grep -q 'AWEApplyChatPillNearGrowingTextView' Tweak.x
@@ -44,7 +39,7 @@ ACTUAL_VERSION="$(dpkg-deb -f "$DEB" Version)"
 [ "$ACTUAL_PACKAGE" = "$EXPECTED_PACKAGE" ]
 [ "$ACTUAL_VERSION" = "$EXPECTED_VERSION" ]
 
-echo 'AwemeLiquidBar 1.0.52t BUILD COMPLETE'
+echo 'AwemeLiquidBar 1.0.52v BUILD COMPLETE'
 echo "Package: $ACTUAL_PACKAGE"
 echo "Version: $ACTUAL_VERSION"
 echo "DEB: $DEB"
