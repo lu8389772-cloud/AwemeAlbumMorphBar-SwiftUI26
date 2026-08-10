@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52v — stable single-tap avatar menu + isolated clean screen + auth33
+ AwemeLiquidBar 1.0.52w — stable single-tap avatar menu + isolated clean screen + auth33
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -490,7 +490,7 @@ static BOOL AWEAvatarMenuDownloadEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.52v: do not opt fresh installs into continuous player quality
+    /* 1.0.52w: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -818,7 +818,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52v_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52w_interaction.log"] copy];
     });
     return path;
 }
@@ -887,7 +887,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52v_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52w_probe.log"] copy];
     });
     return path;
 }
@@ -4558,6 +4558,196 @@ static BOOL AWECurrentRouteSuppressesBar(void) {
            CACurrentMediaTime() < gAWEAlbumMorphPublishLaunchSuppressionUntil;
 }
 
+/*
+ 1.0.52w: Album Morph is drawn in an independent UIWindow, so Douyin can no
+ longer infer the bottom content footprint from the visible replacement bar.
+ The *invisible* AWENormalModeTabBar therefore has one critical job left: it is
+ the native layout spacer that keeps feed / profile interaction controllers
+ ending above the 83-pt bottom area.
+
+ Older builds protected this spacer only on Friends.  That is too narrow: photo
+ paging, context-menu presentation and profile-video comment dismissal can all
+ transiently hide / move the original bar while our replacement is still meant
+ to be visible.  The next private layout pass then expands content to the
+ physical screen bottom, which is the common cause of the repeated "touching
+ bottom" regressions.
+
+ While Album Morph owns a normal main-tab route, keep the native spacer alive,
+ on-screen and at stable bottom geometry.  Real suppressing routes (comments,
+ search, user detail, commerce, publish, clean screen, settings) are untouched.
+*/
+static BOOL AWEAlbumMorphShouldPreserveNativeFootprint(UIView *originalBar) {
+    if (!originalBar || !AWEPluginFeaturesEnabled() ||
+        !AWEAlbumMorphStyleEnabled() || AWEOperatingSystemMajorVersion() < 26) {
+        return NO;
+    }
+    if (gAWECleanScreenEnabled || gAWESettingsVisible ||
+        AWECurrentRouteSuppressesBar()) {
+        return NO;
+    }
+
+    NSInteger index = AWECurrentOriginalMainTabIndex();
+    BOOL mainTab = index == 0 || index == 1 || index == 3 || index == 4;
+    if (!mainTab && !gAWEFriendsTabLatched) return NO;
+
+    /* If the replacement has never been installed there is nothing to reserve
+       on its behalf.  Once installed, visibility is route-driven and the
+       original bar must remain a transparent native spacer. */
+    return gAWEAlbumMorphController != nil &&
+           gAWEAlbumMorphOverlayWindow != nil;
+}
+
+static CGRect AWEAlbumMorphStableNativeFootprintFrame(UIView *originalBar) {
+    if (!originalBar || !originalBar.superview) return CGRectNull;
+    UIView *host = originalBar.superview;
+
+    UIView *wrapper = AWEStableTabBarWrapperInHost(host);
+    if (wrapper && AWEFrameLooksLikeBottomBarInHost(wrapper.frame, host)) {
+        return wrapper.frame;
+    }
+
+    NSValue *lastVisibleValue = objc_getAssociatedObject(
+        originalBar, &kAWELastVisibleFrameKey);
+    if (lastVisibleValue) {
+        CGRect frame = lastVisibleValue.CGRectValue;
+        if (AWEFrameLooksLikeBottomBarInHost(frame, host)) return frame;
+    }
+
+    if (AWEFrameLooksLikeBottomBarInHost(originalBar.frame, host)) {
+        return originalBar.frame;
+    }
+
+    CGFloat width = CGRectGetWidth(host.bounds);
+    if (width < 100.0 && originalBar.window) {
+        width = CGRectGetWidth(originalBar.window.bounds);
+    }
+    CGFloat height = 83.0;
+    return CGRectMake(0.0, MAX(0.0, CGRectGetHeight(host.bounds) - height),
+                      MAX(width, 100.0), height);
+}
+
+static void AWEEnforceAlbumMorphNativeFootprint(UIView *originalBar,
+                                                  NSString *reason) {
+    static BOOL enforcing = NO;
+    if (enforcing || !AWEAlbumMorphShouldPreserveNativeFootprint(originalBar) ||
+        !originalBar.superview) return;
+
+    enforcing = YES;
+    UIView *host = originalBar.superview;
+    UIView *wrapper = AWEStableTabBarWrapperInHost(host);
+    CGRect stableFrame = AWEAlbumMorphStableNativeFootprintFrame(originalBar);
+    BOOL frameValid = !CGRectIsNull(stableFrame) &&
+                      !CGRectIsEmpty(stableFrame) &&
+                      AWEFrameLooksLikeBottomBarInHost(stableFrame, host);
+
+    BOOL changed = originalBar.hidden ||
+        !CGAffineTransformIsIdentity(originalBar.transform) ||
+        (frameValid && !AWEFrameEqualEnough(originalBar.frame, stableFrame)) ||
+        (wrapper && wrapper.hidden);
+
+    AWESetApplying(originalBar, YES);
+    [UIView performWithoutAnimation:^{
+        if (wrapper && wrapper.hidden) wrapper.hidden = NO;
+        originalBar.hidden = NO;
+        originalBar.transform = CGAffineTransformIdentity;
+        if (frameValid) originalBar.frame = stableFrame;
+        originalBar.userInteractionEnabled = NO;
+        originalBar.layer.opacity = 0.0f;
+    }];
+    AWESetApplying(originalBar, NO);
+
+    AWEHideOriginalTabBarContents(originalBar);
+
+    /* Ask the native host to recompute its child content using the restored
+       spacer.  Reassert once afterwards because some private hosts rewrite the
+       tab-bar frame inside their own layout pass. */
+    [host setNeedsLayout];
+    [host layoutIfNeeded];
+    if (frameValid && !AWEFrameEqualEnough(originalBar.frame, stableFrame)) {
+        AWESetApplying(originalBar, YES);
+        [UIView performWithoutAnimation:^{
+            originalBar.hidden = NO;
+            originalBar.transform = CGAffineTransformIdentity;
+            originalBar.frame = stableFrame;
+        }];
+        AWESetApplying(originalBar, NO);
+    }
+
+    if (changed || AWEInteractionDiagnosticsEnabled()) {
+        AWEAlbumMorphProbeWrite(
+            @"BOTTOM_FOOTPRINT_GUARD reason=%@ index=%ld bar=%@ wrapper=%@ frame=%@ host=%@",
+            reason ?: @"unknown", (long)AWECurrentOriginalMainTabIndex(),
+            AWEInteractionObjectSummary(originalBar),
+            AWEInteractionObjectSummary(wrapper),
+            NSStringFromCGRect(stableFrame),
+            AWEInteractionObjectSummary(host));
+    }
+    enforcing = NO;
+}
+
+static char kAWEFootprintLastControllerRepairTimeKey;
+
+static void AWEVerifyAlbumMorphContentFootprint(UIViewController *controller,
+                                                  NSString *reason) {
+    if (!controller || !controller.viewIfLoaded.window || !gAWELastTabBar ||
+        !gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
+    UIView *originalBar = (UIView *)gAWELastTabBar;
+    if (!AWEAlbumMorphShouldPreserveNativeFootprint(originalBar)) return;
+
+    UIWindow *sourceWindow = controller.view.window;
+    UIWindow *overlayWindow = gAWEAlbumMorphOverlayWindow;
+    UITabBar *replacementBar = gAWEAlbumMorphController.tabBar;
+    if (!sourceWindow || !overlayWindow || !replacementBar) return;
+
+    CGRect contentFrame = CGRectNull;
+    CGRect barFrame = CGRectNull;
+    @try {
+        contentFrame = [controller.view convertRect:controller.view.bounds
+                                              toView:sourceWindow];
+        barFrame = [replacementBar convertRect:replacementBar.bounds
+                                        toView:overlayWindow];
+    } @catch (__unused NSException *exception) {
+        return;
+    }
+    if (CGRectIsNull(contentFrame) || CGRectIsEmpty(contentFrame) ||
+        CGRectIsNull(barFrame) || CGRectIsEmpty(barFrame)) return;
+
+    CGFloat barTop = CGRectGetMinY(barFrame);
+    CGFloat contentBottom = CGRectGetMaxY(contentFrame);
+    CGFloat overlap = contentBottom - barTop;
+    if (overlap <= 4.0) return;
+
+    CFTimeInterval now = CACurrentMediaTime();
+    NSNumber *lastValue = objc_getAssociatedObject(
+        controller, &kAWEFootprintLastControllerRepairTimeKey);
+    if (lastValue && now - lastValue.doubleValue < 0.08) return;
+    objc_setAssociatedObject(controller,
+        &kAWEFootprintLastControllerRepairTimeKey, @(now),
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    AWEAlbumMorphProbeWrite(
+        @"BOTTOM_FOOTPRINT_ANOMALY reason=%@ class=%@ content=%@ bar=%@ overlap=%.1f",
+        reason ?: @"unknown", NSStringFromClass(controller.class),
+        NSStringFromCGRect(contentFrame), NSStringFromCGRect(barFrame), overlap);
+
+    AWEEnforceAlbumMorphNativeFootprint(originalBar,
+        [NSString stringWithFormat:@"controller.%@", reason ?: @"layout"]);
+
+    UIView *parent = controller.view.superview;
+    [parent setNeedsLayout];
+    [parent layoutIfNeeded];
+
+    CGRect after = CGRectNull;
+    @try {
+        after = [controller.view convertRect:controller.view.bounds
+                                      toView:sourceWindow];
+    } @catch (__unused NSException *exception) {}
+    AWEAlbumMorphProbeWrite(
+        @"BOTTOM_FOOTPRINT_AFTER reason=%@ class=%@ content=%@ barTop=%.1f",
+        reason ?: @"unknown", NSStringFromClass(controller.class),
+        NSStringFromCGRect(after), barTop);
+}
+
 #pragma mark - 0.0.20a original-state visibility and interactive mask
 
 /*
@@ -5941,7 +6131,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.52v: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.52w: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6946,7 +7136,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.52v is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.52w is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8581,7 +8771,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52v: keep the singleton download control inside the *current feed
+    /* 1.0.52w: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8656,7 +8846,7 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     (void)stack;
-    /* 1.0.52v: independent download button retired. Download now lives only
+    /* 1.0.52w: independent download button retired. Download now lives only
        in the stable avatar-base menu, so no feed/right-stack geometry can
        create, move, hide, or resurrect a floating download control. */
     AWEHideGlobalDownloadMenu();
@@ -8716,7 +8906,7 @@ static UIView *AWETopLevelDescendantOfStack(UIView *view, UIView *stack) {
 }
 
 
-#pragma mark - 1.0.52v isolated clean-screen state
+#pragma mark - 1.0.52w isolated clean-screen state
 
 static NSHashTable<UIView *> *AWECleanScreenSuppressedViews(void) {
     if (!gAWECleanScreenSuppressedViews) {
@@ -14548,7 +14738,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52v";
+    self.title = @"LiquidBar 设置 · 1.0.52w";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15833,7 +16023,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52v image=%@ ==========" ,
+            @"========== START build=1.0.52w image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15900,7 +16090,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52v diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52w diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15915,7 +16105,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52v_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52w_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16524,6 +16714,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)viewDidLayoutSubviews {
     %orig;
+    AWEVerifyAlbumMorphContentFootprint((UIViewController *)self, @"play.layout");
     AWEScheduleHomeActionStacksInView(self.view);
     AWEApplyCleanScreenToInteractionController((UIViewController *)self);
 }
@@ -17163,6 +17354,9 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)layoutSubviews {
     %orig;
+    if (AWEAlbumMorphShouldPreserveNativeFootprint((UIView *)self)) {
+        AWEEnforceAlbumMorphNativeFootprint((UIView *)self, @"original.layout");
+    }
     AWEAttachNativeBar((UIView *)self);
     AWEInstallDelegateIfNeeded((UIView *)self);
 }
@@ -17186,64 +17380,131 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 }
 
 - (void)setFrame:(CGRect)frame {
+    CGRect requested = frame;
     CGRect before = self.frame;
+    BOOL guard = !AWEIsApplying((UIView *)self) &&
+        AWEAlbumMorphShouldPreserveNativeFootprint((UIView *)self);
+    if (guard && self.superview &&
+        !AWEFrameLooksLikeBottomBarInHost(frame, self.superview)) {
+        CGRect stable = AWEAlbumMorphStableNativeFootprintFrame((UIView *)self);
+        if (!CGRectIsNull(stable) && !CGRectIsEmpty(stable)) frame = stable;
+    }
     %orig(frame);
     if (!AWEIsApplying((UIView *)self)) {
+        if (guard) {
+            AWEEnforceAlbumMorphNativeFootprint((UIView *)self, @"original.setFrame");
+        }
         AWEAttachNativeBar((UIView *)self);
     }
     if (!AWEFrameEqualEnough(before, frame)) {
         AWELogBarSnapshot(@"original.setFrame", nil, YES);
     }
+    if (guard && !AWEFrameEqualEnough(requested, frame)) {
+        AWEAlbumMorphProbeWrite(@"BOTTOM_FOOTPRINT_FRAME_BLOCK requested=%@ applied=%@",
+            NSStringFromCGRect(requested), NSStringFromCGRect(frame));
+    }
 }
 
 - (void)setBounds:(CGRect)bounds {
+    CGRect requested = bounds;
     CGRect before = self.bounds;
+    BOOL guard = !AWEIsApplying((UIView *)self) &&
+        AWEAlbumMorphShouldPreserveNativeFootprint((UIView *)self);
+    if (guard && (CGRectGetWidth(bounds) < 100.0 || CGRectGetHeight(bounds) < 20.0)) {
+        CGRect stable = AWEAlbumMorphStableNativeFootprintFrame((UIView *)self);
+        if (!CGRectIsNull(stable) && !CGRectIsEmpty(stable)) {
+            bounds.size = stable.size;
+        }
+    }
     %orig(bounds);
     if (!AWEIsApplying((UIView *)self)) {
+        if (guard) {
+            AWEEnforceAlbumMorphNativeFootprint((UIView *)self, @"original.setBounds");
+        }
         AWEAttachNativeBar((UIView *)self);
     }
     if (!AWEFrameEqualEnough(before, bounds)) {
         AWELogBarSnapshot(@"original.setBounds", nil, YES);
     }
+    if (guard && !AWEFrameEqualEnough(requested, bounds)) {
+        AWEAlbumMorphProbeWrite(@"BOTTOM_FOOTPRINT_BOUNDS_BLOCK requested=%@ applied=%@",
+            NSStringFromCGRect(requested), NSStringFromCGRect(bounds));
+    }
 }
 
 - (void)setCenter:(CGPoint)center {
+    CGPoint requested = center;
     CGPoint before = self.center;
+    BOOL guard = !AWEIsApplying((UIView *)self) &&
+        AWEAlbumMorphShouldPreserveNativeFootprint((UIView *)self);
+    if (guard && self.superview) {
+        CGRect candidate = self.frame;
+        candidate.origin.x = center.x - CGRectGetWidth(candidate) * 0.5;
+        candidate.origin.y = center.y - CGRectGetHeight(candidate) * 0.5;
+        if (!AWEFrameLooksLikeBottomBarInHost(candidate, self.superview)) {
+            CGRect stable = AWEAlbumMorphStableNativeFootprintFrame((UIView *)self);
+            if (!CGRectIsNull(stable) && !CGRectIsEmpty(stable)) {
+                center = CGPointMake(CGRectGetMidX(stable), CGRectGetMidY(stable));
+            }
+        }
+    }
     %orig(center);
     if (!AWEIsApplying((UIView *)self)) {
+        if (guard) {
+            AWEEnforceAlbumMorphNativeFootprint((UIView *)self, @"original.setCenter");
+        }
         AWEAttachNativeBar((UIView *)self);
     }
     if (fabs(before.x - center.x) > 0.25 ||
         fabs(before.y - center.y) > 0.25) {
         AWELogBarSnapshot(@"original.setCenter", nil, YES);
     }
+    if (guard && (fabs(requested.x - center.x) > 0.25 ||
+                  fabs(requested.y - center.y) > 0.25)) {
+        AWEAlbumMorphProbeWrite(@"BOTTOM_FOOTPRINT_CENTER_BLOCK requested={%.1f,%.1f} applied={%.1f,%.1f}",
+            requested.x, requested.y, center.x, center.y);
+    }
 }
 
 - (void)setTransform:(CGAffineTransform)transform {
+    CGAffineTransform requested = transform;
     CGAffineTransform before = self.transform;
+    BOOL guard = !AWEIsApplying((UIView *)self) &&
+        AWEAlbumMorphShouldPreserveNativeFootprint((UIView *)self);
+    if (guard && !CGAffineTransformIsIdentity(transform)) {
+        transform = CGAffineTransformIdentity;
+    }
     %orig(transform);
     if (!AWEIsApplying((UIView *)self)) {
+        if (guard) {
+            AWEEnforceAlbumMorphNativeFootprint((UIView *)self, @"original.setTransform");
+        }
         AWEAttachNativeBar((UIView *)self);
     }
     if (!CGAffineTransformEqualToTransform(before, transform)) {
         AWELogBarSnapshot(@"original.setTransform", nil, YES);
     }
+    if (guard && !CGAffineTransformEqualToTransform(requested, transform)) {
+        AWEAlbumMorphProbeWrite(@"BOTTOM_FOOTPRINT_TRANSFORM_BLOCK");
+    }
 }
 
 - (void)setHidden:(BOOL)hidden {
-    BOOL preserveFriendsLayout = hidden && !AWESecondTabIsShop() &&
-        (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched) &&
-        !AWECurrentRouteSuppressesBar() && !gAWESettingsVisible;
-    BOOL effectiveHidden = preserveFriendsLayout ? NO : hidden;
+    BOOL preserveLayout = hidden && !AWEIsApplying((UIView *)self) &&
+        AWEAlbumMorphShouldPreserveNativeFootprint((UIView *)self);
+    BOOL effectiveHidden = preserveLayout ? NO : hidden;
     BOOL changed = self.hidden != effectiveHidden;
     %orig(effectiveHidden);
-    if (preserveFriendsLayout) {
-        /* Keep Douyin's native tab-bar layout footprint alive while our bar
-           remains the only visible bar. This preserves the Friends caption/
-           recommendation safe area instead of letting content fall underneath
-           the custom LiquidBar after the native bar auto-hides. */
+    if (preserveLayout) {
+        /* Generalize the old Friends-only fix.  The native bar is now a
+           transparent layout spacer for every main-tab route while Album Morph
+           is visible; visual ownership still belongs exclusively to our bar. */
         AWEApplyAlbumMorphOriginalSuppression((UIView *)self, YES);
-        AWEAlbumMorphProbeWrite(@"FRIENDS_NATIVE_HIDE_BLOCKED requested=1");
+        AWEHideOriginalTabBarContents((UIView *)self);
+        AWEEnforceAlbumMorphNativeFootprint((UIView *)self, @"original.hide.blocked");
+        AWEAlbumMorphProbeWrite(
+            @"BOTTOM_FOOTPRINT_HIDE_BLOCKED requested=1 index=%ld",
+            (long)AWECurrentOriginalMainTabIndex());
     }
     if (!AWEIsApplying((UIView *)self)) {
         AWEStartBarVisibilityDriver();
@@ -17251,8 +17512,8 @@ static BOOL AWEGetDoubleTapLocation(id sender,
         AWEScheduleTransitionRecovery();
     }
     if (changed) {
-        AWELogBarSnapshot(hidden ? @"original.hidden.YES" :
-                                   @"original.hidden.NO", nil, YES);
+        AWELogBarSnapshot(effectiveHidden ? @"original.hidden.YES" :
+                                            @"original.hidden.NO", nil, YES);
     }
 }
 
@@ -17813,7 +18074,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52v os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52w os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

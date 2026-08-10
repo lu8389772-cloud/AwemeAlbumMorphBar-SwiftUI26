@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52v'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52v-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52v'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52v'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52v_interaction.log'),
+    ('control', control, 'Version: 1.0.52w'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52w-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52w'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52w'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52w_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,7 +36,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52v', 'LiquidBar 设置 · 1.0.52v',
+    'AwemeLiquidBar 1.0.52w', 'LiquidBar 设置 · 1.0.52w',
     '#import <Photos/Photos.h>',
     'AWEAvatarBaseMenuForStack', '@"进入主页"', '@"一键清屏"', '@"退出清屏"',
     'AWEEnterCleanScreenFromStack', 'AWEExitCleanScreen',
@@ -107,5 +107,5 @@ rows = [line for line in objc[start:end].splitlines()
 if len(rows) != 33:
     raise SystemExit(f'auth digest row count is {len(rows)}, expected 33')
 
-print('AwemeLiquidBar 1.0.52v stable-click-menu isolated-clean-screen preflight passed')
+print('AwemeLiquidBar 1.0.52w stable-click-menu isolated-clean-screen preflight passed')
 PY2
