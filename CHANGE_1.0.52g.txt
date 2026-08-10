@@ -1,0 +1,11 @@
+AwemeLiquidBar 1.0.52g
+
+Focused fixes: download-button ownership stability + unread badge direction.
+
+1. Download singleton ownership now follows the actually visible profile avatar, not whichever preloaded AWEElementStackView most recently refreshed.
+2. A previous/next recycled feed stack becoming hidden, alpha=0, or leaving the window now re-resolves the visible avatar instead of directly hiding the global download control.
+3. Current-stack resolution accepts a genuinely visible avatar even while Douyin temporarily changes the enclosing right-stack geometry during paging.
+4. Download X remains exactly aligned to the avatar center; vertical edge gap remains 8 pt.
+5. Message unread badge now moves left in both states: normal -8 pt, selected -12 pt.
+6. Badge position is reapplied after native tab selection so UIKit cannot rebuild the selected item and push the badge back toward the right edge.
+7. Authorization remains auth30; download-button setting remains opt-in.

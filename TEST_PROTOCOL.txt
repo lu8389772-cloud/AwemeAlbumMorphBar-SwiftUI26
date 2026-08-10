@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.52f device test
+AwemeLiquidBar 1.0.52g device test
 
 1. Open Home feed and swipe through at least 10 video/image posts.
    - Exactly one download button should remain above the right-side action stack.
@@ -7,9 +7,9 @@ AwemeLiquidBar 1.0.52f device test
 2. On several posts, open the download menu and verify the menu belongs to the visible post.
 3. Open/close comments and enter/leave a profile video; the download button should rebind to the visible feed post only.
 4. Enable message unread badge and select Messages. The badge should sit about 6 pt farther left and remain inside the selected glass capsule.
-5. Friends first-caption issue is not part of 1.0.52f; do not use it to judge this build.
+5. Friends first-caption issue is not part of 1.0.52g; do not use it to judge this build.
 
-1.0.52f focused checks:
+1.0.52g focused checks:
 - Project must compile past AwemeAlbumMorphBar.swift badge positioning.
 - Settings contains “显示右侧下载按钮”; default is OFF on a fresh/unset preference.
 - Enabling it shows the singleton current-item download control; disabling it hides it immediately.

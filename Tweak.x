@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52f — avatar-bound download placement + visibility stability + auth30
+ AwemeLiquidBar 1.0.52g — avatar-authoritative download ownership + stable badge offset + auth30
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -804,7 +804,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52f_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52g_interaction.log"] copy];
     });
     return path;
 }
@@ -8556,7 +8556,7 @@ static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
 static UIView *AWEDownloadMenuProfileAnchorForStack(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52f: the download control follows the avatar itself.  The profile
+    /* 1.0.52g: the download control follows the avatar itself.  The profile
        glass slot is only a decoration; the native avatar/picture host is the
        source of truth for whether the user can actually see an avatar. */
     AWEHomeProfileGlassView *profile = objc_getAssociatedObject(
@@ -8625,17 +8625,17 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
        the stack that currently owns the singleton is allowed to move it. */
     if (gAWEDownloadMenuSourceStack != stack) return;
     if (!stack.window) {
-        AWEHideGlobalDownloadMenu();
+        AWERefreshExternalBridgeMenu(nil);
         return;
     }
 
     UIView *avatarAnchor = AWEDownloadMenuProfileAnchorForStack(stack);
-    /* 1.0.52f hard visibility contract: avatar visible -> download visible;
+    /* 1.0.52g hard visibility contract: avatar visible -> download visible;
        avatar gone/hidden -> download gone. This deliberately replaces the old
        strict stack-frame gate, which could reject a valid current cell while
        its avatar was plainly still on screen. */
     if (!avatarAnchor) {
-        AWEHideGlobalDownloadMenu();
+        AWERefreshExternalBridgeMenu(nil);
         return;
     }
 
@@ -8757,16 +8757,29 @@ static void AWERefreshExternalBridgeMenu(UIView *stack) {
     UIView *bestAvatar = bestStack
         ? AWEDownloadMenuProfileAnchorForStack(bestStack)
         : nil;
-    /* A strict stack candidate without an avatar must not steal the singleton
-       from a caller whose avatar is actually visible. */
-    if (bestStack && (bestAvatar || !callerAvatar)) stack = bestStack;
-    UIView *avatarAnchor = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;
-    BOOL strictGeometry = stack && AWEFrameLooksLikeCurrentRightActionStack(stack);
-    if (!stack || !stack.window || (!strictGeometry && !avatarAnchor)) {
+
+    /* 1.0.52g: the visible avatar is now authoritative for BOTH geometry and
+       singleton ownership. The caller is just a refresh hint. A preloaded
+       previous/next AWEElementStackView can no longer steal ownership or make
+       the button disappear merely because its hidden/alpha state changed. */
+    if (bestStack && bestAvatar) {
+        stack = bestStack;
+    } else if (!(callerAvatar && AWEHomeViewEffectivelyVisible(callerAvatar))) {
         UIView *currentAvatar = gAWEDownloadMenuSourceStack
             ? AWEDownloadMenuProfileAnchorForStack(gAWEDownloadMenuSourceStack)
             : nil;
-        if (!currentAvatar) AWEHideGlobalDownloadMenu();
+        if (currentAvatar && AWEHomeViewEffectivelyVisible(currentAvatar)) {
+            stack = gAWEDownloadMenuSourceStack;
+        } else {
+            AWEHideGlobalDownloadMenu();
+            return;
+        }
+    }
+
+    UIView *avatarAnchor = stack ? AWEDownloadMenuProfileAnchorForStack(stack) : nil;
+    if (!stack || !stack.window || !avatarAnchor ||
+        !AWEHomeViewEffectivelyVisible(avatarAnchor)) {
+        AWEHideGlobalDownloadMenu();
         return;
     }
 
@@ -9113,7 +9126,10 @@ static void AWERefreshHomeActionStack(UIView *stack) {
     NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
         AWEHomeActionSlotsForStack(stack);
     if (!stack.window) {
-        if (gAWEDownloadMenuSourceStack == stack) AWEHideGlobalDownloadMenu();
+        // 1.0.52g: a recycled/preloaded stack losing its window must not blank
+        // the singleton. Resolve ownership again from the avatar that is
+        // actually visible right now.
+        if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
         AWEHomeProfileGlassView *profileSlot = objc_getAssociatedObject(
             stack, &kAWEProfileGlassSlotKey);
         profileSlot.hidden = YES;
@@ -9129,7 +9145,9 @@ static void AWERefreshHomeActionStack(UIView *stack) {
         return;
     }
     if (stack.hidden || stack.alpha < 0.01) {
-        if (gAWEDownloadMenuSourceStack == stack) AWEHideGlobalDownloadMenu();
+        // Do not let an old/next preloaded feed stack toggle the global button
+        // off. The visible avatar is the authority for download ownership.
+        if (gAWEDownloadMenuSourceStack == stack) AWERefreshExternalBridgeMenu(nil);
         /* Keep visual slots and source bindings intact. They are children of
            the stack and naturally follow its temporary hidden/offscreen state. */
         AWEExternalBridgeMenuSlotView *bridgeSlot = objc_getAssociatedObject(
@@ -12749,8 +12767,21 @@ static UIView *AWEFindCurrentRightActionStackAcrossWindows(void) {
         NSMutableArray<UIView *> *stacks = [NSMutableArray array];
         AWECollectVisibleHomeActionStacks(window, stacks, 0);
         for (UIView *stack in stacks) {
-            if (!AWEFrameLooksLikeCurrentRightActionStack(stack)) continue;
+            UIView *avatar = AWEDownloadMenuProfileAnchorForStack(stack);
+            if (!avatar || !AWEHomeViewEffectivelyVisible(avatar)) continue;
+
+            /* Avatar visibility is stronger than the old stack-frame heuristic.
+               During paging Douyin can temporarily resize/fade the stack while
+               the user-facing avatar remains perfectly stable. */
+            BOOL strictGeometry = AWEFrameLooksLikeCurrentRightActionStack(stack);
             CGFloat score = AWECurrentRightStackVisibilityScore(stack, window);
+            score += strictGeometry ? 12000.0 : 8000.0;
+
+            CGRect avatarFrame = [avatar convertRect:avatar.bounds toView:window];
+            CGFloat avatarCenterPenalty = fabs(CGRectGetMidY(avatarFrame) -
+                                                CGRectGetMidY(window.bounds));
+            score -= avatarCenterPenalty * 0.15;
+
             if (score > bestScore) {
                 bestScore = score;
                 best = stack;
@@ -14181,7 +14212,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52f";
+    self.title = @"LiquidBar 设置 · 1.0.52g";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {

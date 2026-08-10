@@ -575,13 +575,19 @@ final class AWEAlbumMorphTabController:
                 appearance = UITabBarAppearance()
                 appearance.configureWithDefaultBackground()
             }
-            let offset = UIOffset(horizontal: -6.0, vertical: 0.0)
+            // 1.0.52g: move the unread badge left in BOTH states. UIKit
+            // expands/re-centres the selected native glass item, so the selected
+            // state needs a little more negative adjustment than normal to avoid
+            // drifting toward the capsule's right edge.
+            let normalOffset = UIOffset(horizontal: -8.0, vertical: 0.0)
+            let selectedOffset = UIOffset(horizontal: -12.0, vertical: 0.0)
             for layout in [appearance.stackedLayoutAppearance,
                            appearance.inlineLayoutAppearance,
                            appearance.compactInlineLayoutAppearance] {
-                for state in [layout.normal, layout.selected, layout.disabled, layout.focused] {
-                    state.badgePositionAdjustment = offset
-                }
+                layout.normal.badgePositionAdjustment = normalOffset
+                layout.disabled.badgePositionAdjustment = normalOffset
+                layout.focused.badgePositionAdjustment = normalOffset
+                layout.selected.badgePositionAdjustment = selectedOffset
             }
             item.standardAppearance = appearance
             if #available(iOS 15.0, *) {
@@ -1027,6 +1033,13 @@ final class AWEAlbumMorphTabController:
 
         cachedOriginalIndex = originalIndex
         applyExplicitSelectionImages(selectedIdentifier: selectedTab.identifier)
+        // Native selection can rebuild the concrete UITabBarItem appearance.
+        // Reapply the leftward badge adjustment immediately and once on the
+        // next run loop so selected-state layout cannot push it right again.
+        applyMessageBadge()
+        DispatchQueue.main.async { [weak self] in
+            self?.applyMessageBadge()
+        }
         albumMorphProbe(
             "TAB_SELECT originalIndex=\(originalIndex) previous=\(previousTab?.identifier ?? "nil")"
         )
