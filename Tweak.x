@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52n — download visibility + return-prewarm throttle + Friends caption reserve + auth29
+ AwemeLiquidBar 1.0.52o — download visibility + return-prewarm throttle + Friends caption reserve + auth33
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -475,7 +475,7 @@ static BOOL AWEAvatarMenuDownloadEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.52n: do not opt fresh installs into continuous player quality
+    /* 1.0.52o: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -803,7 +803,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52n_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52o_interaction.log"] copy];
     });
     return path;
 }
@@ -872,7 +872,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52n_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52o_probe.log"] copy];
     });
     return path;
 }
@@ -1100,7 +1100,7 @@ typedef struct {
     uint8_t value[32];
 } AWEAuthorizationDigestPair;
 
-static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[29] = {
+static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[33] = {
     { { 0x59, 0x82, 0x56, 0x11, 0xCC, 0x1E, 0x58, 0xA8, 0xEF, 0xB6, 0x24, 0x7E, 0x97, 0xB8, 0x64, 0x73, 0xCE, 0x8F, 0x7D, 0x23, 0x21, 0xF4, 0xC3, 0xC9, 0x75, 0xD5, 0xCA, 0xF8, 0xE3, 0x16, 0xB1, 0x32 }, { 0x9F, 0x0C, 0xED, 0xA5, 0xCB, 0x5B, 0x84, 0x63, 0xD4, 0x38, 0xC3, 0x54, 0x7D, 0x04, 0x85, 0xBD, 0x81, 0x67, 0xEC, 0xF0, 0x4D, 0xE2, 0x02, 0x72, 0xDC, 0x96, 0xFF, 0xE4, 0x3D, 0x52, 0x81, 0xB2 } },
     { { 0x3F, 0x40, 0x8A, 0x7D, 0x84, 0xB4, 0xFA, 0x3E, 0x5E, 0x8B, 0x01, 0xB5, 0x24, 0xF8, 0xBD, 0xDD, 0x2A, 0xB5, 0xA0, 0xEB, 0xC5, 0xAA, 0x72, 0xCC, 0x16, 0x88, 0x8F, 0xC9, 0x67, 0xCB, 0xCC, 0x73 }, { 0xDE, 0x19, 0x74, 0x29, 0x81, 0xA3, 0x4B, 0xB7, 0x6A, 0xD2, 0x31, 0xA1, 0x70, 0xF0, 0x66, 0xA7, 0xA4, 0xFD, 0x73, 0x60, 0x1A, 0x65, 0xD2, 0x57, 0xCD, 0x90, 0x06, 0x85, 0xD9, 0xCA, 0xDD, 0x34 } },
     { { 0x91, 0xDF, 0x80, 0xC6, 0x2F, 0x47, 0x04, 0xEE, 0x32, 0x74, 0xC6, 0x3B, 0x38, 0xF5, 0x47, 0xF2, 0x01, 0x89, 0xE2, 0x8C, 0x36, 0xC3, 0xE2, 0xE8, 0xA4, 0x62, 0xA2, 0x8E, 0xDC, 0x76, 0xE7, 0xC0 }, { 0x58, 0xFD, 0x08, 0x53, 0xC3, 0x95, 0x41, 0x39, 0x18, 0xBA, 0x8D, 0x20, 0xD0, 0x9D, 0x7B, 0xBD, 0x0A, 0xFF, 0x31, 0xF9, 0x8B, 0xBE, 0x4E, 0xFD, 0xFA, 0x2C, 0x84, 0x7F, 0x07, 0x15, 0x5C, 0x4A } },
@@ -1130,6 +1130,10 @@ static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[29] = {
     { { 0xE9, 0x64, 0x37, 0x23, 0x78, 0x31, 0xEA, 0x77, 0x80, 0x5E, 0x43, 0x1B, 0xC4, 0x54, 0xEC, 0x9A, 0xA2, 0x07, 0x04, 0xFE, 0xC0, 0xD8, 0xB8, 0x69, 0x56, 0x49, 0x12, 0x13, 0xC4, 0x24, 0xFA, 0xEB }, { 0x99, 0x2C, 0xD6, 0x20, 0xF3, 0xDD, 0x0A, 0x42, 0x95, 0x2C, 0xFA, 0x66, 0x8B, 0xA4, 0x94, 0xD4, 0x22, 0xD6, 0xE4, 0x31, 0x79, 0x7D, 0xC9, 0x73, 0x18, 0xB6, 0x0A, 0xB2, 0x97, 0xCC, 0x8E, 0x10 } },
     { { 0x4D, 0xD0, 0x84, 0x0C, 0x7D, 0xB5, 0x27, 0xBD, 0x70, 0x1E, 0xCF, 0x08, 0xC3, 0x23, 0xEB, 0x69, 0xA6, 0xDB, 0xA2, 0xD3, 0x2C, 0x7B, 0x35, 0xF6, 0x5F, 0x33, 0x88, 0x12, 0x3F, 0xDB, 0xD4, 0xA7 }, { 0x3A, 0xCD, 0x79, 0xA9, 0x16, 0x9D, 0xF9, 0x9F, 0xF0, 0xEC, 0xE0, 0x68, 0xDD, 0x06, 0x63, 0xA7, 0xA5, 0x8A, 0x1B, 0xD4, 0x1D, 0x8C, 0xD0, 0xFE, 0x01, 0x32, 0xAD, 0x3C, 0x12, 0x08, 0xAA, 0x86 } },
     { { 0xBB, 0x40, 0xC0, 0xD1, 0xDD, 0xCC, 0x65, 0xB2, 0x2C, 0xFA, 0x11, 0x1B, 0xBF, 0xFE, 0x6E, 0x34, 0xD3, 0x71, 0x6F, 0x5D, 0xF4, 0x43, 0x7C, 0x2E, 0xEF, 0xC8, 0xBC, 0xBA, 0x93, 0xBD, 0x6F, 0x93 }, { 0x5F, 0xE5, 0x97, 0x9A, 0xFE, 0xEA, 0x1D, 0x02, 0x3B, 0xCC, 0x6A, 0x96, 0x62, 0x15, 0x02, 0x2A, 0x4D, 0xEB, 0x87, 0x6C, 0x76, 0x02, 0xFB, 0x9C, 0x44, 0x9E, 0x36, 0xBF, 0xE2, 0x41, 0x93, 0x59 } },
+    { { 0x4B, 0x1E, 0xB1, 0x95, 0xC4, 0x66, 0x6C, 0x6F, 0x51, 0xAB, 0x01, 0xAA, 0x80, 0x39, 0xB6, 0xF2, 0xA3, 0x98, 0xD3, 0xF2, 0x86, 0x13, 0xA3, 0x34, 0x0A, 0xD8, 0x16, 0xBC, 0xF1, 0x3C, 0x02, 0xFB }, { 0xC6, 0x41, 0xA6, 0xCD, 0x97, 0xC2, 0x1F, 0xC8, 0xA2, 0xBC, 0xC8, 0xB6, 0x80, 0xBD, 0x5A, 0x0A, 0xDA, 0x98, 0x11, 0xAB, 0x8F, 0x3B, 0x1E, 0x3C, 0x1F, 0xE0, 0xE9, 0xFB, 0xFF, 0x6B, 0xF0, 0xE9 } },
+    { { 0x85, 0xD4, 0x62, 0x31, 0xD7, 0xE0, 0x24, 0x76, 0x52, 0xAF, 0x7D, 0x2D, 0xEB, 0x8F, 0xCE, 0x20, 0x87, 0xEE, 0x9A, 0x4C, 0xD3, 0x3A, 0x41, 0xB9, 0x47, 0xB4, 0x17, 0x63, 0xF6, 0xC9, 0xB6, 0xC8 }, { 0xDB, 0xE3, 0xBB, 0x84, 0x5C, 0xEE, 0xAB, 0xF8, 0x53, 0x2A, 0xEA, 0x1B, 0x75, 0xD3, 0xBD, 0xD2, 0x94, 0xFA, 0xFE, 0x08, 0x13, 0xE9, 0x4E, 0x7B, 0xB3, 0x80, 0x70, 0x0A, 0x1D, 0x71, 0x8B, 0xBA } },
+    { { 0xA2, 0xCD, 0x6C, 0x26, 0x49, 0x3E, 0xF7, 0x4C, 0x92, 0xCF, 0xB8, 0x43, 0xA6, 0x21, 0x75, 0x3C, 0xB7, 0x90, 0xD0, 0xFD, 0xA5, 0xB0, 0xBE, 0x03, 0x26, 0xC0, 0xBD, 0xC1, 0x99, 0xAD, 0xFA, 0xE9 }, { 0xA3, 0x31, 0xD8, 0x56, 0x38, 0x42, 0x08, 0x77, 0x9B, 0xD3, 0xCB, 0x99, 0xB2, 0x6B, 0x77, 0x4B, 0xD2, 0x75, 0x0B, 0xDD, 0x4D, 0x83, 0xEB, 0xFF, 0x93, 0x5A, 0x64, 0x80, 0xA2, 0x69, 0x05, 0x83 } },
+    { { 0xCF, 0xDD, 0x88, 0xC7, 0xD8, 0x25, 0xA7, 0xA4, 0x49, 0x3A, 0xCA, 0x20, 0x95, 0xF3, 0xA2, 0x80, 0x0B, 0x6E, 0x35, 0x65, 0x78, 0x54, 0x33, 0x8D, 0x6B, 0xAC, 0x05, 0x23, 0x96, 0x3B, 0x8B, 0xE0 }, { 0x2C, 0x4F, 0x76, 0x91, 0x45, 0x8E, 0x3D, 0x6C, 0x74, 0x9C, 0xD1, 0x13, 0xA9, 0x74, 0x69, 0xB8, 0x3E, 0x92, 0xEE, 0x5F, 0xA0, 0x71, 0x78, 0x6C, 0xBF, 0x04, 0xAE, 0x53, 0xCE, 0x1C, 0x2B, 0x5C } },
 
 };
 
@@ -1149,7 +1153,7 @@ static uint32_t AWEAuthorizationDigestTag(const uint8_t *bytes) {
 }
 
 static const uint32_t kAWEAuthorizationDigestTags[AWE_AUTHORIZATION_DIGEST_COUNT] = {
-    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u, 0x2C934A14u
+    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u, 0x2C934A14u, 0x7D879147u, 0x52083C3Fu, 0xD22A2870u, 0x155CC3CAu
 };
 
 static BOOL AWEConstantTimeEqual(const uint8_t *left, const uint8_t *right, size_t length) {
@@ -5909,7 +5913,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.52n: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.52o: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6914,7 +6918,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.52n is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.52o is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8549,7 +8553,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52n: keep the singleton download control inside the *current feed
+    /* 1.0.52o: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8624,7 +8628,7 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     (void)stack;
-    /* 1.0.52n: independent download button retired. Download now lives only
+    /* 1.0.52o: independent download button retired. Download now lives only
        in the stable avatar-base menu, so no feed/right-stack geometry can
        create, move, hide, or resurrect a floating download control. */
     AWEHideGlobalDownloadMenu();
@@ -8862,6 +8866,121 @@ static void AWERefreshProfileAvatarGlass(UIView *stack) {
     AWEConfigureAdaptiveSystemGlassPlateButton(
         slot.glassButton, @"right.profile.avatar", AWEHomeTintedGlassEnabled());
     AWEInstallGlassPressFeedback(slot.menuButton, slot.glassButton);
+}
+
+static NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *
+AWEHomeActionSlotsForStack(UIView *stack) {
+    NSMutableDictionary *slots = objc_getAssociatedObject(stack,
+                                                           &kAWEHomeActionStackSlotsKey);
+    if (!slots) {
+        slots = [NSMutableDictionary dictionary];
+        objc_setAssociatedObject(stack, &kAWEHomeActionStackSlotsKey, slots,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return slots;
+}
+
+static AWEHomeActionSlotView *AWEEnsureHomeActionSlot(UIView *stack,
+                                                       AWEHomeActionKind kind) {
+    if (!stack || kind == AWEHomeActionKindUnknown) return nil;
+    NSMutableDictionary *slots = AWEHomeActionSlotsForStack(stack);
+    NSNumber *key = @(kind);
+    AWEHomeActionSlotView *slot = slots[key];
+    if (!slot) {
+        slot = [[AWEHomeActionSlotView alloc] initWithFrame:CGRectZero];
+        slot.accessibilityIdentifier = [NSString stringWithFormat:
+            @"AwemeLiquidBar.HomeActionSlot.%ld", (long)kind];
+        slot.userInteractionEnabled = NO;
+        slot.backgroundColor = UIColor.clearColor;
+        slot.opaque = NO;
+
+        if (@available(iOS 26.0, *)) {
+            UIButton *glassButton = [UIButton buttonWithType:UIButtonTypeCustom];
+            glassButton.userInteractionEnabled = NO;
+            glassButton.backgroundColor = UIColor.clearColor;
+            glassButton.opaque = NO;
+            glassButton.clipsToBounds = NO;
+            [slot addSubview:glassButton];
+            slot.systemGlassButton = glassButton;
+        }
+        slot.actionKind = kind;
+
+        slots[key] = slot;
+        [stack addSubview:slot];
+    } else if (slot.superview != stack) {
+        [slot removeFromSuperview];
+        [stack addSubview:slot];
+    }
+    return slot;
+}
+
+static void AWEConfigureHomeActionSlot(AWEHomeActionSlotView *slot,
+                                        UIView *button,
+                                        UIImageView *source,
+                                        AWEHomeActionKind kind,
+                                        BOOL selected,
+                                        CGPoint center) {
+    const CGFloat diameter = 46.0;
+    const CGFloat symbolSize = (kind == AWEHomeActionKindShare) ? 20.0 : 21.0;
+    NSString *symbolKey = AWEHomeActionSymbolKey(kind, selected);
+    BOOL originalPNG = NO;
+    UIImage *symbol = AWEConfiguredRoleImage(
+        symbolKey, AWEHomeActionSymbolNames(kind, selected), symbolSize,
+        UIImageSymbolWeightSemibold, &originalPNG);
+    if (!symbol) { slot.hidden = YES; return; }
+
+    slot.originalView = button;
+    slot.sourceImageView = source;
+    slot.actionKind = kind;
+    slot.bounds = CGRectMake(0.0, 0.0, diameter, diameter);
+    slot.center = CGPointMake(center.x, center.y - 4.0);
+    slot.hidden = NO;
+    slot.alpha = 1.0;
+    slot.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
+    /* Keep the verified pass-through interaction path: Douyin's original
+       AWEFeedVideoButton remains the sole touch owner.  The glass is visual
+       only, so like/comment/favorite/share cannot be intercepted or duplicated. */
+    slot.userInteractionEnabled = NO;
+    slot.systemGlassButton.userInteractionEnabled = NO;
+    slot.systemGlassButton.frame = slot.bounds;
+
+    UIColor *foregroundColor = nil;
+    if (!originalPNG) {
+        AWEConfiguredIconColorMode colorMode = AWEStoredSymbolColorMode(symbolKey);
+        if (colorMode != AWEConfiguredIconColorModeAutomatic) {
+            /* Fixed/accent/custom always outrank every automatic state colour. */
+            foregroundColor = AWEApplyConfiguredIconColorMode(symbolKey, nil);
+        } else if (selected && kind == AWEHomeActionKindLike) {
+            foregroundColor = UIColor.systemPinkColor;
+        } else if (selected && kind == AWEHomeActionKindFavorite) {
+            foregroundColor = UIColor.systemYellowColor;
+        } else if (AWEHomeTransparentGlassEnabled()) {
+            /* The experimental per-button material sampler is intentionally
+               not used for the right action stack.  It could hide the glyph
+               and, more importantly, forced the overlay to own touches.  Use
+               the last stable source-tint fallback while the original Douyin
+               button continues to receive every gesture. */
+            foregroundColor = AWEHomeExplicitForegroundForSource(
+                source, slot, YES);
+        }
+    }
+
+    if (@available(iOS 26.0, *)) {
+        slot.photosGlassHost.hidden = YES;
+        slot.systemGlassButton.hidden = NO;
+        AWEConfigureAdaptiveSystemGlassIconButton(
+            slot.systemGlassButton,
+            symbol,
+            symbolKey,
+            symbolSize,
+            foregroundColor,
+            originalPNG,
+            AWEHomeTintedGlassEnabled(),
+            NO);
+        AWEInstallGlassPressFeedback(button, slot.systemGlassButton);
+    } else {
+        slot.hidden = YES;
+    }
 }
 
 static void AWEHideAndReleaseHomeActionSlot(AWEHomeActionSlotView *slot) {
@@ -13946,7 +14065,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52n";
+    self.title = @"LiquidBar 设置 · 1.0.52o";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15231,7 +15350,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52n image=%@ ==========" ,
+            @"========== START build=1.0.52o image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15298,7 +15417,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52n diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52o diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15313,7 +15432,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52n_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52o_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -17195,7 +17314,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52n os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52o os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

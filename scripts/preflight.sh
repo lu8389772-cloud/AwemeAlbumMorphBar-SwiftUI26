@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52n'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52n-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52n'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52n'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52n_interaction.log'),
+    ('control', control, 'Version: 1.0.52o'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52o-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52o'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52o'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52o_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,7 +36,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52n', 'LiquidBar 设置 · 1.0.52n',
+    'AwemeLiquidBar 1.0.52o', 'LiquidBar 设置 · 1.0.52o',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -85,14 +85,14 @@ for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','br
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[29]' not in objc:
-    raise SystemExit('auth29 digest table declaration missing')
-start = objc.index('kAWEAuthorizationDigests[29]')
+if 'kAWEAuthorizationDigests[33]' not in objc:
+    raise SystemExit('auth33 digest table declaration missing')
+start = objc.index('kAWEAuthorizationDigests[33]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
         if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
-if len(rows) != 29:
-    raise SystemExit(f'auth digest row count is {len(rows)}, expected 29')
+if len(rows) != 33:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 33')
 
 for token in [
     '[PHPhotoLibrary sharedPhotoLibrary] performChanges:',
@@ -103,5 +103,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52n avatar-menu/native-badges/comment-stable preflight passed')
+print('AwemeLiquidBar 1.0.52o avatar-menu/native-badges/comment-stable preflight passed')
 PY2
