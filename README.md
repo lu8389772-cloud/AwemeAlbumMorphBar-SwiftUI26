@@ -1,6 +1,12 @@
-# AwemeLiquidBar 1.0.52d
+# AwemeLiquidBar 1.0.52e
 
-## 1.0.52d
+## 1.0.52e additions
+
+- Fixes the Xcode 27 badge compile error by applying `badgePositionAdjustment` through `UITabBarItemStateAppearance` rather than `UITabBarItem`.
+- Adds a `显示右侧下载按钮` switch. It is opt-in by default; turning it off immediately hides the singleton download control.
+- Authorization table expanded from 29 to 30 encrypted entries; no plaintext account identifier is stored.
+
+## 1.0.52e
 - Stabilizes the singleton download button across preloaded/recycled feed cells: only the selected current right-action stack owns and moves it.
 - Uses the right-action stack top edge as the download-button anchor instead of transient avatar views.
 - Keeps a pending download menu/button visible while the current aweme model is briefly unavailable during paging.
@@ -11,7 +17,7 @@
 
 ## Download visibility / transition throttle / Friends caption reserve
 
-This build is based on **1.0.52b**. The encrypted **auth29** table, top-category centering, and the profile-fullscreen right-stack recovery are retained.
+This build is based on **1.0.52b**. The encrypted **auth30** table, top-category centering, and the profile-fullscreen right-stack recovery are retained.
 
 ### Main changes
 

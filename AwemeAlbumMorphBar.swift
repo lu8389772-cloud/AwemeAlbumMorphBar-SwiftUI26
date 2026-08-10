@@ -560,12 +560,33 @@ final class AWEAlbumMorphTabController:
         }
         if let index = tabs.firstIndex(where: { $0 === messageTab }),
            let items = tabBar.items, index < items.count {
-            items[index].badgeValue = normalized
-            items[index].badgeColor = .systemRed
-            // Keep the unread badge comfortably inside the selected glass
-            // capsule. The system default sits too far toward the trailing
-            // edge with our large icon/title geometry.
-            items[index].badgePositionAdjustment = UIOffset(horizontal: -6.0, vertical: 0.0)
+            let item = items[index]
+            item.badgeValue = normalized
+            item.badgeColor = .systemRed
+            // UITabBarItem itself has no badgePositionAdjustment property.
+            // Apply the offset through the per-state item appearance so the
+            // unread badge stays inside the selected Liquid Glass capsule.
+            let appearance: UITabBarAppearance
+            if let existing = item.standardAppearance?.copy() as? UITabBarAppearance {
+                appearance = existing
+            } else if let existing = tabBar.standardAppearance.copy() as? UITabBarAppearance {
+                appearance = existing
+            } else {
+                appearance = UITabBarAppearance()
+                appearance.configureWithDefaultBackground()
+            }
+            let offset = UIOffset(horizontal: -6.0, vertical: 0.0)
+            for layout in [appearance.stackedLayoutAppearance,
+                           appearance.inlineLayoutAppearance,
+                           appearance.compactInlineLayoutAppearance] {
+                for state in [layout.normal, layout.selected, layout.disabled, layout.focused] {
+                    state.badgePositionAdjustment = offset
+                }
+            }
+            item.standardAppearance = appearance
+            if #available(iOS 15.0, *) {
+                item.scrollEdgeAppearance = appearance
+            }
         }
         tabBar.setNeedsLayout()
     }

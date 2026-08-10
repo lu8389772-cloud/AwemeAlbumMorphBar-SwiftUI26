@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52d'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52d-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52d'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52d'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52d_interaction.log'),
+    ('control', control, 'Version: 1.0.52e'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52e-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52e'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52e'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52e_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -28,14 +28,14 @@ for name, text, token in checks:
 for token in [
     'tabBarMinimizeBehavior = .never', 'let search = UISearchTab',
     '@objc(updateMessageBadgeValue:)', 'applyMessageBadge()',
-    'badgePositionAdjustment = UIOffset(horizontal: -6.0, vertical: 0.0)',
+    'state.badgePositionAdjustment = offset',
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
 ]:
     if token not in swift: raise SystemExit(f'missing Swift token: {token}')
 
 for token in [
-    'AwemeLiquidBar 1.0.52d', 'LiquidBar 设置 · 1.0.52d',
+    'AwemeLiquidBar 1.0.52e', 'LiquidBar 设置 · 1.0.52e',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'awelistkit_cellContext',
     'AWERobustVideoURLForAweme', '@"h264URL"', '@"originURLList"',
@@ -57,6 +57,7 @@ for token in [
     'AwemeLiquidBarSettingsGestureMineOnlyV1',
     '双指长按仅在‘我’页面触发', 'AWECurrentPageAllowsSettingsGesture',
     '显示消息未读角标', 'AWEUpdateAlbumMorphMessageBadge',
+    '显示右侧下载按钮', 'AWEDownloadButtonEnabled', 'downloadButtonSwitchChanged:',
     '%hook AWENormalModeTabBarBadgeContainerView',
     'AWEInstallGlassPressFeedback', 'AWEGlassPressFeedbackTarget',
     'RIGHT_REBIND_PASS', 'AWEFrameForTopLiquidGroup',
@@ -82,15 +83,17 @@ for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','br
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[29]' not in objc:
-    raise SystemExit('auth29 digest table declaration missing')
-start = objc.index('kAWEAuthorizationDigests[29]')
+if 'kAWEAuthorizationDigests[30]' not in objc:
+    raise SystemExit('auth30 digest table declaration missing')
+start = objc.index('kAWEAuthorizationDigests[30]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
         if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
-if len(rows) != 29:
-    raise SystemExit(f'auth digest row count is {len(rows)}, expected 29')
+if len(rows) != 30:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 30')
 
+if 'items[index].badgePositionAdjustment' in swift:
+    raise SystemExit('invalid UITabBarItem.badgePositionAdjustment regression remains')
 if 'menuWithTitle:@"" options:UIMenuOptionsDisplayInline' in objc:
     raise SystemExit('invalid UIMenu selector menuWithTitle:options:children: remains')
 
@@ -139,7 +142,7 @@ for token in [
     'CGRectGetMinY(stackFrame) - 29.0',
 ]:
     if token not in objc:
-        raise SystemExit(f'1.0.52d stability token missing: {token}')
+        raise SystemExit(f'1.0.52e stability token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52d stable-download-owner/message-badge preflight passed')
+print('AwemeLiquidBar 1.0.52e compile/auth30/download-toggle preflight passed')
 PY2
