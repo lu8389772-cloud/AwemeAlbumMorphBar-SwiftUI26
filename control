@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52p
+Version: 1.0.52q
 Architecture: iphoneos-arm
-Description: Adds avatar-menu clean screen with avatar-only recovery, strengthens profile-fullscreen right-action/comment layout recovery, and preserves auth33.
+Description: Fixes private-class runtime linking and zero-count message badges while preserving 1.0.52p clean-screen/profile recovery and auth33.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

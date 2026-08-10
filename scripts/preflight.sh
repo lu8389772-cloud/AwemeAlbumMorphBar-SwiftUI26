@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52p'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52p-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52p'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52p'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52p_interaction.log'),
+    ('control', control, 'Version: 1.0.52q'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52q-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52q'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52q'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52q_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,7 +36,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52p', 'LiquidBar 设置 · 1.0.52p',
+    'AwemeLiquidBar 1.0.52q', 'LiquidBar 设置 · 1.0.52q',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -110,5 +110,11 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52p clean-screen/profile-fullscreen preflight passed')
+
+# 1.0.52q linker/badge regressions
+assert 'AWEPlayInteractionViewController.class' not in objc, 'static private-class reference would reintroduce linker failure'
+assert 'NSClassFromString(@"AWEPlayInteractionViewController")' in objc, 'runtime private-class lookup missing'
+assert 'if (![scanner scanInteger:&count] || count <= 0) return nil;' in objc, 'zero-count Messages badge guard missing'
+
+print('AwemeLiquidBar 1.0.52q clean-screen/profile-fullscreen preflight passed')
 PY2

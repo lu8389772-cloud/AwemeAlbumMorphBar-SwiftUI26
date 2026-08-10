@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.52p test protocol
+AwemeLiquidBar 1.0.52q test protocol
 
 A. Other-profile fullscreen / right actions
 1. Enable the third-party fullscreen playback tweak.
@@ -21,3 +21,9 @@ C. Regression
 2. Friends: bottom bar and caption spacing unchanged outside clean screen.
 3. Avatar menu: 进入主页 and download/copy items still work.
 4. Messages/Friends unread badges remain unchanged from 1.0.52o.
+
+1.0.52q targeted regression checks
+- GitHub Actions must reach the package stage without `_OBJC_CLASS_$_AWEPlayInteractionViewController` undefined-symbol errors.
+- Clear all unread Messages. The LiquidBar Messages tab must have no red circle at count 0.
+- Generate one or more unread Messages. The numeric badge must appear, then disappear again after the count returns to 0.
+- Friends red-dot/numeric reminder behavior must remain unchanged.

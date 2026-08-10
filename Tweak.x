@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52p — clean screen + profile fullscreen/comment stability + auth33
+ AwemeLiquidBar 1.0.52q — clean screen + profile fullscreen/comment stability + auth33
 
  Incremental release on top of 1.0.52o:
  - adds avatar-menu clean screen without creating a full-screen touch overlay;
@@ -419,7 +419,7 @@ static __weak UIView *gAWECommentRightStackBefore = nil;
 static BOOL gAWEFriendsTabLatched = NO;
 static NSString *gAWEDownloadSlotProbeSignature = nil;
 
-/* 1.0.52p: single-state feed pure mode. It deliberately preserves the feed
+/* 1.0.52q: single-state feed pure mode. It deliberately preserves the feed
    hierarchy/layout and only suppresses visual/interaction chrome, so vertical
    paging remains owned by Douyin and no safe-area/frame rewrite is required. */
 static BOOL gAWECleanScreenEnabled = NO;
@@ -495,7 +495,7 @@ static BOOL AWEAvatarMenuDownloadEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.52p: do not opt fresh installs into continuous player quality
+    /* 1.0.52q: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -823,7 +823,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52p_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52q_interaction.log"] copy];
     });
     return path;
 }
@@ -892,7 +892,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52p_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52q_probe.log"] copy];
     });
     return path;
 }
@@ -4322,7 +4322,24 @@ static NSString *AWECurrentOriginalBadgeValueForButtonIndex(NSUInteger index) {
 }
 
 static NSString *AWECurrentOriginalMessagesBadgeValue(void) {
-    return AWECurrentOriginalBadgeValueForButtonIndex(3);
+    NSString *value = AWECurrentOriginalBadgeValueForButtonIndex(3);
+    if (!value.length) return nil;
+
+    /*
+     1.0.52q: the native badge container may remain alive and visible even
+     after Douyin's unread count reaches zero. 1.0.52c/n mirrored that empty
+     container as @" ", which makes UIKit draw an empty red circle on our
+     Messages tab. Messages is a numeric unread counter, so only mirror a
+     strictly positive count. This still accepts compact forms such as 99+.
+    */
+    NSString *trimmed = [value stringByTrimmingCharactersInSet:
+        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!trimmed.length) return nil;
+
+    NSScanner *scanner = [NSScanner scannerWithString:trimmed];
+    NSInteger count = 0;
+    if (![scanner scanInteger:&count] || count <= 0) return nil;
+    return trimmed;
 }
 
 static NSString *AWECurrentOriginalSecondBadgeValue(void) {
@@ -5933,7 +5950,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.52p: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.52q: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6938,7 +6955,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.52p is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.52q is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8573,7 +8590,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.52p: keep the singleton download control inside the *current feed
+    /* 1.0.52q: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8648,7 +8665,7 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     (void)stack;
-    /* 1.0.52p: independent download button retired. Download now lives only
+    /* 1.0.52q: independent download button retired. Download now lives only
        in the stable avatar-base menu, so no feed/right-stack geometry can
        create, move, hide, or resurrect a floating download control. */
     AWEHideGlobalDownloadMenu();
@@ -8708,7 +8725,7 @@ static UIView *AWETopLevelDescendantOfStack(UIView *view, UIView *stack) {
 }
 
 
-#pragma mark - 1.0.52p avatar clean-screen mode
+#pragma mark - 1.0.52q avatar clean-screen mode
 
 static NSHashTable<UIView *> *AWECleanScreenSuppressedViews(void) {
     if (!gAWECleanScreenSuppressedViews) {
@@ -8767,6 +8784,13 @@ static void AWEInvokeBooleanSelectorIfAvailable(id target, NSString *selectorNam
     ((void (*)(id, SEL, BOOL))objc_msgSend)(target, selector, value);
 }
 
+
+static BOOL AWEObjectIsPlayInteractionController(id object) {
+    if (!object) return NO;
+    Class runtimeClass = NSClassFromString(@"AWEPlayInteractionViewController");
+    return runtimeClass && [object isKindOfClass:runtimeClass];
+}
+
 static BOOL AWEInvokePureModeSelectorsIfAvailable(id target, BOOL enabled) {
     if (!target) return NO;
     AWEInvokeBooleanSelectorIfAvailable(target, @"setRightAreaHidden:", enabled);
@@ -8805,7 +8829,7 @@ static void AWEApplyRuntimePureModeToControllerTree(UIViewController *controller
 static UIViewController *AWEInteractionControllerForView(UIView *view) {
     UIResponder *responder = view;
     while (responder) {
-        if ([responder isKindOfClass:AWEPlayInteractionViewController.class]) {
+        if (AWEObjectIsPlayInteractionController(responder)) {
             return (UIViewController *)responder;
         }
         responder = responder.nextResponder;
@@ -12944,7 +12968,7 @@ static void AWERefreshHomeChromeInWindow(UIWindow *window) {
 static UIViewController *AWEFindVisiblePlayInteractionController(
     UIViewController *controller, NSUInteger depth) {
     if (!controller || depth > 14) return nil;
-    if ([controller isKindOfClass:AWEPlayInteractionViewController.class] &&
+    if (AWEObjectIsPlayInteractionController(controller) &&
         controller.viewIfLoaded.window) {
         return controller;
     }
@@ -12979,7 +13003,7 @@ static void AWECaptureProfileCommentLayoutIfNeeded(UIViewController *controller,
                                                     NSString *reason) {
     if (!AWEShouldSuppressBarForUserDetailRoute()) return;
     UIViewController *target = controller;
-    if (![target isKindOfClass:AWEPlayInteractionViewController.class] ||
+    if (!AWEObjectIsPlayInteractionController(target) ||
         !target.viewIfLoaded.window) {
         UIWindow *window = AWEActiveMainWindow();
         target = AWEFindVisiblePlayInteractionController(
@@ -14683,7 +14707,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52p";
+    self.title = @"LiquidBar 设置 · 1.0.52q";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15968,7 +15992,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52p image=%@ ==========" ,
+            @"========== START build=1.0.52q image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16035,7 +16059,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52p diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52q diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16050,7 +16074,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52p_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52q_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -17999,7 +18023,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52p os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52q os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
