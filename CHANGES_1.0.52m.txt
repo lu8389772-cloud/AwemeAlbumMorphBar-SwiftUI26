@@ -1,9 +1,0 @@
-AwemeLiquidBar 1.0.52m
-
-- True fixed-screen download singleton; no stack/avatar geometry dependency.
-- Current-stack ownership only; stale/preload stacks cannot move or hide the control.
-- Download display switch isolated from layout.
-- Plugin-owned 16 pt Friends/Messages unread badges; native badge visuals cleared.
-- Friends external-fullscreen reserve uses full LiquidBar height and is reasserted after feed layout.
-- Bounded leaked top “直播” pill cleanup on top-bar layout.
-- Version/log/export/workflow/preflight strings updated to 1.0.52m.

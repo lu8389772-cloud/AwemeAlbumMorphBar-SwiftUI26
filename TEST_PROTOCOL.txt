@@ -1,24 +1,10 @@
-AwemeLiquidBar 1.0.52m device test
+AwemeLiquidBar 1.0.52n device test
 
-1. Download position stability
-- Keep “显示下载按钮” ON.
-- Enter Home and Friends, then swipe at least 15 posts quickly and slowly.
-- The download button must stay at one fixed screen coordinate. It must not follow avatar/right-stack vertical movement and must not jump between cells.
-- Open/close comments and return to the feed. The button may hide for the blocked route, but when visible it must return to the exact same coordinate.
-
-2. Download switch
-- Turn the switch OFF and ON repeatedly.
-- Only visibility may change. X/Y must not change and the right-side native controls must not move.
-
-3. Unread badges
-- With unread counts present, verify Friends and Messages both show plugin-owned badges.
-- Numeric badge height is 16 pt; a dot badge is 8 pt.
-- The two tabs must use identical sizing rules.
-
-4. Friends + external fullscreen
-- Enable the other tweak's fullscreen playback and cold-enter Friends.
-- The poster avatar/title/caption area must remain above the custom LiquidBar on the first entry, without requiring a swipe.
-
-5. Follow live pill
-- On an account where Follow has a pink/red “直播” pill, enable the plugin top group.
-- The native pill must not remain visible beneath the custom top group.
+1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
+2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
+3. Return to feed; tap avatar again. Download/copy actions should be in the same menu when “头像菜单显示下载功能” is enabled.
+4. Turn that switch off/on. Avatar position and right-side action positions must not move.
+5. Open and close comments repeatedly, including with the external fullscreen tweak enabled. Right-side actions should recover as in 1.0.52c.
+6. Scroll rapidly through at least 15 items. No independent download button should appear anywhere.
+7. With unread state present, Friends and Messages badges should mirror the original Douyin bottom bar. If slot two is Shop, no Shop promotional dot should be copied to Friends.
+8. Compare badge size with the original: plugin badge should use the native badge path with the final visual scaled to about 90%.
