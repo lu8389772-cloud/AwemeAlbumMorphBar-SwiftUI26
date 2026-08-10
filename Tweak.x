@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52b — download overlay anchor + profile-fullscreen comment guard + Friends first-layout prime + auth29
+ AwemeLiquidBar 1.0.52c — download visibility + return-prewarm throttle + Friends caption reserve + auth29
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -234,6 +234,7 @@ static char kAWEProfileOriginalBorderWidthKey;
 static char kAWEProfileOriginalBorderColorKey;
 static char kAWEProfileVisualMarkerKey;
 static char kAWEAlbumMorphCollapseGestureKey;
+static char kAWEFriendsOriginalAdditionalSafeAreaInsetsKey;
 
 typedef NS_ENUM(NSInteger, AWEHomeDiagnosticForegroundMode) {
     AWEHomeDiagnosticForegroundModeAutomatic = 0,
@@ -417,6 +418,7 @@ static NSUInteger gAWECommentRightRebindGeneration = 0;
 static NSString *gAWECommentRightHostBefore = nil;
 static __weak UIView *gAWECommentRightStackBefore = nil;
 static BOOL gAWEFriendsTabLatched = NO;
+static NSString *gAWEDownloadSlotProbeSignature = nil;
 
 
 #pragma mark - iOS 26/27 global glass style and adaptive foreground
@@ -464,7 +466,7 @@ static BOOL AWEMessageBadgeEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.52b: do not opt fresh installs into continuous player quality
+    /* 1.0.52c: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -792,7 +794,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52c_interaction.log"] copy];
     });
     return path;
 }
@@ -861,7 +863,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52c_probe.log"] copy];
     });
     return path;
 }
@@ -5871,7 +5873,13 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    (void)controller;
+    /* 1.0.52c: viewWillDisappear is emitted by many nested feed controllers
+       during ordinary paging and settings teardown. Prewarming on every one
+       caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
+       which also exposed a one-frame caption/safe-area drop. Only genuine
+       return transitions need this path; the helper above already encodes
+       that condition. */
+    if (!AWEControllerShouldBeginReturnPrewarm(controller)) return;
     /*
      Preserve the verified 1.0.10b invariant for both implementations: the
      glass object already exists before the return transition starts and only
@@ -6869,7 +6877,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.52b is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.52c is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8489,39 +8497,48 @@ static void AWEHideGlobalDownloadMenu(void) {
 static BOOL AWEDownloadMenuRouteBlocked(void) {
     if (gAWESettingsVisible) return YES;
     if (AWEAnyVisibleCommentPanelForRightRecovery()) return YES;
-    if (AWEImmediateSensitiveDestinationVisible()) return YES;
     if (AWEShouldSuppressBarForSearch() || AWEImmediateCommerceProductDetailVisible()) return YES;
 
-    /* A normal user-detail/profile page can leave the previous feed cell alive
-       underneath it. Never let that stale cell keep the floating download
-       button on screen. The only exception is an actual playable full-screen
-       feed controller (including the profile-video fullscreen mode supplied by
-       another tweak). */
-    if (AWEShouldSuppressBarForUserDetailRoute() &&
-        !AWECurrentRouteHasPlayableFeedController()) {
-        return YES;
-    }
+    BOOL playableFeed = AWECurrentRouteHasPlayableFeedController();
+    /* Stale sensitive-controller registrations can survive a completed route
+       transition for a short time. Do not let those stale objects suppress the
+       download control when a real playable feed is already visible. */
+    if (AWEImmediateSensitiveDestinationVisible() && !playableFeed) return YES;
+
+    if (AWEShouldSuppressBarForUserDetailRoute() && !playableFeed) return YES;
     return NO;
 }
 
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
-    UIView *controllerView = gAWEAlbumMorphController.viewIfLoaded;
-    if (controllerView && controllerView.window &&
-        CGRectGetWidth(controllerView.bounds) > 100.0 &&
-        CGRectGetHeight(controllerView.bounds) > 100.0) {
-        return controllerView;
-    }
+    if (!stack || !stack.window) return nil;
 
-    AWEAlbumMorphOverlayWindow *overlay =
-        (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
-    UIView *rootView = overlay.rootViewController.viewIfLoaded;
-    if (rootView && rootView.window &&
-        CGRectGetWidth(rootView.bounds) > 100.0 &&
-        CGRectGetHeight(rootView.bounds) > 100.0) {
-        return rootView;
-    }
+    /* 1.0.52c: keep the singleton download control inside the *current feed
+       cell's interaction hierarchy instead of the independent bottom-bar
+       UIWindow. The latter is intentionally masked/parked during route and
+       settings transitions, so a perfectly valid download button could exist
+       but never be composited. A cell-owned overlay also disappears naturally
+       with paging/profile/comment transitions without becoming an arranged
+       element of AWEElementStackView. */
+    UIView *fallback = nil;
+    for (UIView *cursor = stack.superview;
+         cursor && cursor != (UIView *)stack.window;
+         cursor = cursor.superview) {
+        if (cursor.window != stack.window) break;
+        CGFloat width = CGRectGetWidth(cursor.bounds);
+        CGFloat height = CGRectGetHeight(cursor.bounds);
+        if (!fallback && width > 220.0 && height > 320.0) fallback = cursor;
 
-    return stack.window ?: AWEActiveMainWindow();
+        NSString *lower = NSStringFromClass(cursor.class).lowercaseString;
+        BOOL interactionHost =
+            [lower containsString:@"playinteraction"] ||
+            [lower containsString:@"feedcell"] ||
+            [lower containsString:@"playercontainer"] ||
+            [lower containsString:@"richcontent"];
+        if (interactionHost && width > 220.0 && height > 320.0) {
+            return cursor;
+        }
+    }
+    return fallback ?: stack.superview;
 }
 
 static UIView *AWEDownloadMenuProfileAnchorForStack(UIView *stack) {
@@ -8570,11 +8587,14 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     if (!stack || !gAWEDownloadMenuSlot) return;
-    if (AWEDownloadMenuRouteBlocked()) { AWEHideGlobalDownloadMenu(); return; }
-
-    UIView *current = AWEFindCurrentRightActionStackAcrossWindows();
-    if (!current) { AWEHideGlobalDownloadMenu(); return; }
-    if (current != stack || !AWEFrameLooksLikeCurrentRightActionStack(stack)) return;
+    if (AWEDownloadMenuRouteBlocked()) {
+        AWEHideGlobalDownloadMenu();
+        return;
+    }
+    if (!stack.window || !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
+        if (gAWEDownloadMenuSourceStack == stack) AWEHideGlobalDownloadMenu();
+        return;
+    }
 
     UIView *hostView = AWEDownloadMenuOverlayHostView(stack);
     if (!hostView || !hostView.window ||
@@ -8593,11 +8613,10 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     UIView *anchor = AWEDownloadMenuProfileAnchorForStack(stack);
     if (anchor && anchor.superview) {
         CGPoint anchorCenter = [anchor.superview convertPoint:anchor.center toView:hostView];
-        center = CGPointMake(anchorCenter.x, anchorCenter.y - 61.0);
+        center = CGPointMake(anchorCenter.x, anchorCenter.y - 59.0);
     } else {
         CGRect stackFrame = [stack convertRect:stack.bounds toView:hostView];
-        center = CGPointMake(CGRectGetMidX(stackFrame),
-                             CGRectGetMinY(stackFrame) - 27.0);
+        center = CGPointMake(CGRectGetMidX(stackFrame), CGRectGetMinY(stackFrame) + 23.0);
     }
 
     if (!isfinite(center.x) || !isfinite(center.y)) {
@@ -8610,21 +8629,34 @@ static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     gAWEDownloadMenuSlot.menuButton.frame = gAWEDownloadMenuSlot.bounds;
 
     CGRect frame = gAWEDownloadMenuSlot.frame;
-    BOOL onScreen = CGRectGetMidX(frame) > -diameter &&
-                    CGRectGetMidX(frame) < CGRectGetWidth(hostView.bounds) + diameter &&
-                    CGRectGetMidY(frame) > -diameter &&
-                    CGRectGetMidY(frame) < CGRectGetHeight(hostView.bounds) + diameter;
+    BOOL onScreen = CGRectGetMaxX(frame) > 0.0 &&
+                    CGRectGetMinX(frame) < CGRectGetWidth(hostView.bounds) &&
+                    CGRectGetMaxY(frame) > 0.0 &&
+                    CGRectGetMinY(frame) < CGRectGetHeight(hostView.bounds);
     gAWEDownloadMenuSlot.hidden = !onScreen;
     gAWEDownloadMenuSlot.alpha = onScreen ? 1.0 : 0.0;
     if (onScreen) [hostView bringSubviewToFront:gAWEDownloadMenuSlot];
+
+    NSString *signature = [NSString stringWithFormat:@"%@|%@|%d|%.0f,%.0f",
+        AWEInteractionObjectSummary(stack), NSStringFromClass(hostView.class),
+        onScreen, center.x, center.y];
+    if (![gAWEDownloadSlotProbeSignature isEqualToString:signature]) {
+        gAWEDownloadSlotProbeSignature = [signature copy];
+        AWEAlbumMorphProbeWrite(
+            @"DOWNLOAD_SLOT state=%@ stack=%@ host=%@ center=(%.1f,%.1f) frame=%@",
+            onScreen ? @"visible" : @"offscreen",
+            AWEInteractionObjectSummary(stack), AWEInteractionObjectSummary(hostView),
+            center.x, center.y, NSStringFromCGRect(frame));
+    }
 }
 
 static void AWERefreshExternalBridgeMenu(UIView *stack) {
     if (!stack) return;
     if (AWEDownloadMenuRouteBlocked()) { AWEHideGlobalDownloadMenu(); return; }
-    UIView *current = AWEFindCurrentRightActionStackAcrossWindows();
-    if (!current) { AWEHideGlobalDownloadMenu(); return; }
-    if (current != stack || !AWEFrameLooksLikeCurrentRightActionStack(stack)) return;
+    if (!stack.window || !AWEFrameLooksLikeCurrentRightActionStack(stack)) {
+        if (gAWEDownloadMenuSourceStack == stack) AWEHideGlobalDownloadMenu();
+        return;
+    }
 
     id aweme = AWECurrentAwemeModelForStack(stack);
     if (!aweme) { AWEHideGlobalDownloadMenu(); return; }
@@ -10603,6 +10635,8 @@ static void AWEApplyAlbumMorphResolvedAppearance(
             originalBar.alpha = 1.0;
         }];
         AWEApplyAlbumMorphOriginalSuppression((UIView *)originalBar, YES);
+        [originalBar.superview setNeedsLayout];
+        [originalBar.superview layoutIfNeeded];
     }
 
     if (index == 2) {
@@ -10685,7 +10719,8 @@ static void AWEApplyAlbumMorphResolvedAppearance(
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     AWEExternalBridgeMenuSlotView *downloadSlot = gAWEDownloadMenuSlot;
-    if (downloadSlot && !downloadSlot.hidden && downloadSlot.alpha > 0.01 &&
+    if (downloadSlot && downloadSlot.window == self &&
+        !downloadSlot.hidden && downloadSlot.alpha > 0.01 &&
         downloadSlot.userInteractionEnabled) {
         CGPoint pointInDownload = [self convertPoint:point toView:downloadSlot];
         if ([downloadSlot pointInside:pointInDownload withEvent:event]) {
@@ -14014,7 +14049,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52b";
+    self.title = @"LiquidBar 设置 · 1.0.52c";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14786,6 +14821,22 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
+    /* Restore the invisible native bar's layout footprint before the settings
+       dismissal snapshot. Without this, the Home feed can perform one layout
+       pass with a zero bottom reserve and its caption briefly touches the
+       screen edge underneath the resident LiquidBar. */
+    if (AWEAlbumMorphStyleEnabled() && gAWELastTabBar) {
+        UIView *bar = (UIView *)gAWELastTabBar;
+        AWESetApplying(bar, YES);
+        [UIView performWithoutAnimation:^{
+            bar.hidden = NO;
+            bar.alpha = 1.0;
+        }];
+        AWESetApplying(bar, NO);
+        AWEApplyAlbumMorphOriginalSuppression(bar, YES);
+        [bar.superview setNeedsLayout];
+        [bar.superview layoutIfNeeded];
+    }
     [super viewWillDisappear:animated];
     gAWESettingsVisible = NO;
     [self.systemThemeTimer invalidate];
@@ -15258,7 +15309,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52b image=%@ ==========" ,
+            @"========== START build=1.0.52c image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15325,7 +15376,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52c diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15340,7 +15391,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52c_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16799,6 +16850,61 @@ static void AWEScheduleFullscreenRightCompatibilityRecovery(UIViewController *co
     }
 }
 
+static BOOL AWEClassNameLooksLikeFriendsFeedContentController(NSString *className) {
+    if (className.length == 0 || AWESecondTabIsShop()) return NO;
+    return [className containsString:@"AWEFeedTableViewController"];
+}
+
+static void AWEApplyFriendsCaptionBottomReserve(UIViewController *controller,
+                                                 BOOL enabled,
+                                                 NSString *reason) {
+    if (!controller || !AWEClassNameLooksLikeFriendsFeedContentController(
+            NSStringFromClass(controller.class))) return;
+
+    NSValue *stored = objc_getAssociatedObject(
+        controller, &kAWEFriendsOriginalAdditionalSafeAreaInsetsKey);
+    if (!enabled) {
+        if (stored) {
+            controller.additionalSafeAreaInsets = stored.UIEdgeInsetsValue;
+            objc_setAssociatedObject(controller,
+                &kAWEFriendsOriginalAdditionalSafeAreaInsetsKey,
+                nil, OBJC_ASSOCIATION_ASSIGN);
+            AWEAlbumMorphProbeWrite(@"FRIENDS_CAPTION_RESERVE state=restore class=%@ reason=%@",
+                NSStringFromClass(controller.class), reason ?: @"unknown");
+        }
+        return;
+    }
+
+    if (!stored) {
+        stored = [NSValue valueWithUIEdgeInsets:controller.additionalSafeAreaInsets];
+        objc_setAssociatedObject(controller,
+            &kAWEFriendsOriginalAdditionalSafeAreaInsetsKey,
+            stored, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+
+    UIWindow *window = controller.view.window ?: AWEActiveMainWindow();
+    CGFloat systemBottom = window ? window.safeAreaInsets.bottom : 0.0;
+    CGFloat barHeight = gAWEAlbumMorphController
+        ? CGRectGetHeight(gAWEAlbumMorphController.tabBar.bounds) : 0.0;
+    if (barHeight < 40.0 && gAWELastTabBar) {
+        barHeight = CGRectGetHeight(((UIView *)gAWELastTabBar).bounds);
+    }
+    if (barHeight < 40.0) barHeight = 83.0;
+    CGFloat reserve = MAX(0.0, barHeight - systemBottom);
+
+    UIEdgeInsets base = stored.UIEdgeInsetsValue;
+    UIEdgeInsets target = base;
+    target.bottom = MAX(base.bottom, reserve);
+    if (fabs(controller.additionalSafeAreaInsets.bottom - target.bottom) > 0.5) {
+        controller.additionalSafeAreaInsets = target;
+        [controller.view setNeedsLayout];
+        AWEAlbumMorphProbeWrite(
+            @"FRIENDS_CAPTION_RESERVE state=apply class=%@ bottom=%.1f bar=%.1f system=%.1f reason=%@",
+            NSStringFromClass(controller.class), target.bottom, barHeight,
+            systemBottom, reason ?: @"unknown");
+    }
+}
+
 static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
     if (className.length == 0 || AWESecondTabIsShop()) return NO;
     return [className containsString:@"AFDContainerViewController"] ||
@@ -16892,9 +16998,19 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
     }
 
+    BOOL friendsFeedContent = AWEClassNameLooksLikeFriendsFeedContentController(className);
+    if (friendsFeedContent && !AWESecondTabIsShop() &&
+        (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched)) {
+        AWEApplyFriendsCaptionBottomReserve(self, YES, @"viewWillAppear.before");
+    }
+
     %orig(animated);
     if (friendsRootController) {
         AWEPrimeFriendsNativeLayoutFootprint(self, @"willAppear.after");
+    }
+    if (friendsFeedContent && !AWESecondTabIsShop() &&
+        (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched)) {
+        AWEApplyFriendsCaptionBottomReserve(self, YES, @"viewWillAppear.after");
     }
     AWEStartBarVisibilityDriver();
     AWELogBarSnapshot(@"vc.viewWillAppear", self, YES);
@@ -16938,6 +17054,11 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         gAWEFriendsTabLatched = YES;
         AWEPrimeFriendsNativeLayoutFootprint(self, @"didAppear");
     }
+    if (AWEClassNameLooksLikeFriendsFeedContentController(className) &&
+        !AWESecondTabIsShop() &&
+        (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched)) {
+        AWEApplyFriendsCaptionBottomReserve(self, YES, @"viewDidAppear");
+    }
     if (AWEDownloadMenuRouteBlocked()) {
         AWEHideGlobalDownloadMenu();
     }
@@ -16971,6 +17092,9 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 
 - (void)viewWillDisappear:(BOOL)animated {
     NSString *departingClassName = NSStringFromClass(self.class);
+    if (objc_getAssociatedObject(self, &kAWEFriendsOriginalAdditionalSafeAreaInsetsKey)) {
+        AWEApplyFriendsCaptionBottomReserve(self, NO, @"viewWillDisappear");
+    }
     AWELogBarSnapshot(@"vc.viewWillDisappear", self, YES);
     AWEProbeStartSampling(
         [NSString stringWithFormat:@"willDisappear.%@",
@@ -17149,7 +17273,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52c os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

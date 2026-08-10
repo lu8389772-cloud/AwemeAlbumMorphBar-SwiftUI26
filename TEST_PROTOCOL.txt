@@ -1,30 +1,34 @@
-AwemeLiquidBar 1.0.52b device test
+AwemeLiquidBar 1.0.52c device test
 
-1. Download button
+1. Download visibility
 - Kill and relaunch Douyin.
-- On a normal video, confirm exactly ONE download button appears above the avatar/right-action column.
-- Swipe 5-10 videos. It should neither vanish on a normal feed nor duplicate/stack.
-- Tap it: the native Liquid Glass menu should open.
-- Test Save current video. On an image post test Save current image / Save all images.
-- If any action fails, export diagnostics immediately and look for DOWNLOAD_BUTTON_HIT / DOWNLOAD_MENU_READY / DOWNLOAD_ACTION / DOWNLOAD_*_HTTP.
+- On Home/Friends normal video, confirm exactly ONE download button appears immediately above the avatar/right-action column.
+- Swipe 5-10 videos; it must follow the current cell and never duplicate.
+- Open comments / user profile; the button must disappear with the feed and return with the feed.
+- Probe log should contain DOWNLOAD_SLOT state=visible while the button is on-screen.
+- Tap it and verify the UIMenu actions appear.
 
-2. Profile fullscreen + comments
-- Enable the other tweak's “open another user's profile video fullscreen” option.
-- Enter another user's profile video, open comments, then close comments.
-- Right-side glass controls should remain/recover after the late fullscreen-tweak transition.
-- Diagnostic signals may include RIGHT_FULLSCREEN_COMMENT_PROTECT / RIGHT_FULLSCREEN_BLOCK_HIDE / RIGHT_FULLSCREEN_BLOCK_ALPHA / RIGHT_FULLSCREEN_BLOCK_REMOVE / RIGHT_REBIND_PASS.
+2. Friends caption reserve
+- Relaunch, enter Friends.
+- The first video's nickname/caption/recommendation area must remain above LiquidBar.
+- Continue through the recent-works transition; LiquidBar should remain visible.
+- Probe should contain FRIENDS_CAPTION_RESERVE state=apply for AWEFeedTableViewController.
 
-3. Friends first video
-- Relaunch Douyin, enter Friends from Home.
-- On the very first Friends video, nickname/caption/recommendation text must keep the normal bottom-bar clearance and must not fall under LiquidBar.
-- Continue scrolling through the “recent works viewed” transition; LiquidBar should remain visible.
+3. Settings return
+- From Home open plugin Settings, then close it.
+- The Home nickname/caption area must not briefly fall to the physical bottom.
 
-4. Performance
-- Swipe 10-15 videos and open Settings.
-- Interaction logs should no longer contain hundreds of identical ALBUM_MORPH_OVERLAY lines for the same unchanged state.
+4. Profile fullscreen + comments
+- Enable the other tweak's profile-video default-fullscreen option.
+- Enter another user's profile video, open comments, close comments.
+- The right-side action column should remain/recover as in 1.0.52b.
 
-5. Regression
-- Top category group remains centered with either/both top-side buttons hidden.
-- Publish/share/search sensitive-route suppression remains intact.
+5. Performance
+- Swipe 10-15 videos, open/close Settings several times.
+- Probe log should no longer show hundreds of return.prewarm.resident / install.original-state oscillations caused by ordinary feed controller disappear callbacks.
+
+6. Regression
+- Top category group remains centered.
+- Publish/share/search route suppression remains intact.
 - Settings gesture remains available.
-- auth29 remains unchanged.
+- auth29 unchanged.
