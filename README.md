@@ -1,13 +1,17 @@
-# AwemeLiquidBar 1.0.52o
+# AwemeLiquidBar 1.0.52x
 
-This build is rebuilt from the **1.0.52c stable baseline**, not from 1.0.52m.
+Rebuilt directly from the **1.0.52o** project. This build intentionally does not carry the later p-w clean-screen/layout experiments.
 
-## 1.0.52o scope
+## Scope
 
-- Retains the 1.0.52c profile-fullscreen/comment right-action recovery path.
-- Retires the independent floating download button. No right-action/profile geometry can position a separate download control.
-- A single tap on the plugin-owned avatar glass base now opens a native menu. `进入主页` and the current-item download/copy actions are in that menu.
-- Adds `头像菜单显示下载功能`; it only changes menu contents and cannot alter layout.
-- Restores native `badgeValue` rendering for Messages and mirrors the same path to Friends. Shop promotional badges are not mirrored as Friends unread counts.
-- Native badge visuals receive a bounded 0.90 scale after UIKit lays them out.
-- Expands the local opaque authorization digest table from 29 to 33 entries; no plaintext account identifiers are stored.
+- Only rebuilds the right-side action recovery after closing comments.
+- Removes the old captured-stack pinning that could keep an obsolete `AWEElementStackView` alive.
+- Lets Douyin / the external fullscreen tweak replace the native right-action stack normally.
+- During a short 2.6 s post-comment window, actual `AWEFeedVideoButton` lifecycle/layout callbacks are the source of truth. When the native buttons exist again, the plugin rebinds/recreates the 46 pt glass slots on that exact current stack.
+- Resets stale press/stretch transforms on repaired glass buttons.
+- Adds bounded fallback passes only for cases where the native button does not emit a useful lifecycle callback.
+- Leaves the 1.0.52o bottom bar, avatar menu, badges, download menu, Friends handling and auth33 otherwise unchanged.
+
+## Diagnostic markers
+
+`RIGHT_NATIVE_REPAIR_ARM`, `RIGHT_NATIVE_REPAIR`, and `RIGHT_NATIVE_REPAIR_PASS` are written to the interaction log.
