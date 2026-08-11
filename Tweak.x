@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.53e — hard clean-screen gate, photo-menu paging freeze, sticky right self-heal
+ AwemeLiquidBar 1.0.53f — hard clean-screen gate, photo-menu paging freeze, sticky right self-heal
 
  Focused rebuild:
  - profile-video right actions no longer pin/capture an old AWEElementStackView;
@@ -424,7 +424,7 @@ static NSUInteger gAWECommentRightRebindGeneration = 0;
 static BOOL gAWEFriendsTabLatched = NO;
 static NSString *gAWEDownloadSlotProbeSignature = nil;
 
-/* 1.0.53e: three deliberately independent state machines.
+/* 1.0.53f: three deliberately independent state machines.
    - Avatar menu anchor lives in the app UIWindow, never in AWEElementStackView.
    - Clean screen suppresses chrome only; it never reparents/recreates avatar UI.
    - Post-comment recovery only re-runs the proven home native-button binding. */
@@ -441,10 +441,10 @@ static NSHashTable<UIView *> *gAWECleanScreenSuppressedViews = nil;
 static __weak UIView *gAWECleanScreenCurrentStack = nil;
 static id gAWECleanScreenRecoveryTarget = nil;
 
-/* 1.0.53e: avatar-menu presentation and clean-screen are hard gates, not
+/* 1.0.53f: avatar-menu presentation and clean-screen are hard gates, not
    suggestions.  While the avatar UIMenu is visible we freeze only horizontal
    paging scroll views so a photo carousel cannot switch page and trigger the
-   83-pt interaction-stack relocation observed in 1.0.53e logs. */
+   83-pt interaction-stack relocation observed in 1.0.53f logs. */
 static BOOL gAWE53AvatarMenuPresentationActive = NO;
 static BOOL gAWE53AvatarContextMenuVisible = NO;
 static CFTimeInterval gAWE53AvatarMenuPendingUntil = 0.0;
@@ -452,7 +452,7 @@ static NSHashTable<UIScrollView *> *gAWE53FrozenPhotoScrollViews = nil;
 static id gAWE53AvatarMenuPresentationTarget = nil;
 static char kAWE53FrozenScrollOriginalEnabledKey;
 
-/* 1.0.53e: comment recovery follows whichever right stack is actually live.
+/* 1.0.53f: comment recovery follows whichever right stack is actually live.
    Never pin the pre-comment stack; remember only the most recent right-side
    stack that UIKit itself laid out. */
 static __weak UIView *gAWE53LastLiveRightStack = nil;
@@ -511,7 +511,7 @@ static BOOL AWEAvatarMenuDownloadEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.53e: do not opt fresh installs into continuous player quality
+    /* 1.0.53f: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -839,7 +839,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.53e_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.53f_interaction.log"] copy];
     });
     return path;
 }
@@ -908,7 +908,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.53e_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.53f_probe.log"] copy];
     });
     return path;
 }
@@ -5959,7 +5959,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.53e: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.53f: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6957,7 +6957,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.53e is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.53f is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8592,7 +8592,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.53e: keep the singleton download control inside the *current feed
+    /* 1.0.53f: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8667,7 +8667,7 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     (void)stack;
-    /* 1.0.53e: independent download button retired. Download now lives only
+    /* 1.0.53f: independent download button retired. Download now lives only
        in the stable avatar-base menu, so no feed/right-stack geometry can
        create, move, hide, or resurrect a floating download control. */
     AWEHideGlobalDownloadMenu();
@@ -8727,7 +8727,7 @@ static UIView *AWETopLevelDescendantOfStack(UIView *view, UIView *stack) {
 }
 
 
-#pragma mark - 1.0.53e isolated avatar-menu anchor / clean screen
+#pragma mark - 1.0.53f isolated avatar-menu anchor / clean screen
 
 @interface AWE53CleanScreenRecoveryTarget : NSObject
 - (void)handleAvatarRecoveryTap:(UIButton *)button;
@@ -9046,7 +9046,7 @@ static UIViewController *AWE53InteractionControllerForView(UIView *view) {
 }
 
 
-/* 1.0.53e: the avatar menu is no longer hosted in a separate UIWindow and is
+/* 1.0.53f: the avatar menu is no longer hosted in a separate UIWindow and is
    never a direct child of AWEElementStackView.  It lives inside Douyin's
    existing profile host, so a single tap still opens the menu while photo
    paging cannot count/reorder it as one of the stack's own arranged children. */
@@ -9245,7 +9245,7 @@ static void AWEApplyCleanScreenToInteractionController(UIViewController *control
     if (!window) return;
     AWE53CleanSuppressTree(controller.view, window, 0);
     /* The feed top bar is outside AWEPlayInteractionViewController on current
-       Douyin builds. 1.0.53e only suppressed controller.view, so TOP_BIND kept
+       Douyin builds. 1.0.53f only suppressed controller.view, so TOP_BIND kept
        recreating visible glass while clean=1. Suppress the real global chrome
        containers and keep all refreshers hard-gated until exit. */
     AWE53ApplyCleanScreenGlobalChrome();
@@ -9268,7 +9268,7 @@ static void AWEEnterCleanScreenFromStack(UIView *stack) {
                                   AWEInteractionObjectSummary(interaction));
 }
 
-/* 1.0.53e: forward declarations for helpers implemented later in this file.
+/* 1.0.53f: forward declarations for helpers implemented later in this file.
    Keep these here because clean-screen exit invokes both before their definitions. */
 static void AWEScheduleHomeChromeRecovery(UIWindow *window);
 static NSUInteger AWE53RebindNativeHomeActionsInForegroundWindows(NSString *reason);
@@ -9406,7 +9406,7 @@ static AWEHomeProfileGlassView *AWEEnsureProfileGlassSlot(UIView *stack) {
         button.clipsToBounds = NO;
         [slot addSubview:button];
         slot.glassButton = button;
-        /* 1.0.53e: never add the tap/menu control directly to
+        /* 1.0.53f: never add the tap/menu control directly to
            AWEElementStackView. It will be parented inside Douyin's existing
            profile host once that host is known. */
         slot.menuButton = nil;
@@ -9618,6 +9618,8 @@ static void AWEHideAndReleaseHomeActionSlot(AWEHomeActionSlotView *slot) {
     slot.userInteractionEnabled = NO;
     slot.hidden = YES;
 }
+
+static void AWELayoutBoundHomeActionSlots(UIView *stack);
 
 static void AWERefreshHomeActionStack(UIView *stack) {
     if (!AWEPluginFeaturesEnabled() || gAWESettingsVisible) return;
@@ -14839,7 +14841,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.53e";
+    self.title = @"LiquidBar 设置 · 1.0.53f";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16124,7 +16126,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.53e image=%@ ==========" ,
+            @"========== START build=1.0.53f image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16191,7 +16193,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.53e diagnostic export\n"
+                @"AwemeLiquidBar 1.0.53f diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16206,7 +16208,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.53e_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.53f_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -18158,7 +18160,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.53e os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.53f os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
