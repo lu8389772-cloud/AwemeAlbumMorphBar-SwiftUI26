@@ -1,1 +1,1 @@
-AwemeLiquidBar 1.0.53b is a complete project rebuilt from the 1.0.52o auth34 line. Replace the whole working tree (except .git) with this archive; do not layer it on 1.0.53a or the 1.0.52p-1.0.52z experiments.
+AwemeLiquidBar 1.0.53c is a complete project rebuilt from the 1.0.52o auth34 line. Replace the whole working tree (except .git) with this archive; do not layer it on 1.0.53a or the 1.0.52p-1.0.52z experiments.
