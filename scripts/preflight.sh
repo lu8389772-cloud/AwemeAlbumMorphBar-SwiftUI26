@@ -14,12 +14,12 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.53a'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.53a-Xcode27-rootless'),
+    ('control', control, 'Version: 1.0.53b'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.53b-Xcode27-rootless'),
     ('workflow', workflow, 'chmod 755 layout/DEBIAN/postinst'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.53a'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.53a'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.53a_interaction.log'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.53b'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.53b'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.53b_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -37,21 +37,24 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.53a', 'LiquidBar 设置 · 1.0.53a',
+    'AwemeLiquidBar 1.0.53b', 'LiquidBar 设置 · 1.0.53b',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
     'AWEDownloadAudioForAweme', 'AWECopyCompleteTextForAweme',
     'AWEAvatarBaseMenuForStack', '@"进入主页"', '@"一键清屏"', '@"退出清屏"',
     '@"头像菜单显示下载功能"', 'AWEAvatarMenuDownloadEnabled',
-    'AwemeLiquidBar.AvatarMenu.WindowAnchor',
-    '[window addSubview:gAWEAvatarMenuOverlayButton];',
-    'button.showsMenuAsPrimaryAction = YES;',
-    'AWE53UpdateAvatarMenuOverlay', 'AWERefreshAvatarMenuOverlayForStack',
-    'CLEAN_SCREEN enter isolated_anchor', 'CLEAN_SCREEN avatar_reveal window_anchor',
+    'AwemeLiquidBar.HomeAction.ProfileMenu',
+    '[profileHost addSubview:button];',
+    'AWE53ConfigureNestedAvatarMenu', 'AWERefreshAvatarMenuOverlayForStack',
+    'AVATAR_MENU_NESTED',
+    'CLEAN_SCREEN enter nested_menu', 'CLEAN_SCREEN avatar_reveal real_avatar',
     'if (gAWECleanScreenEnabled) fraction = 0.0;',
-    'RIGHT_NATIVE_LIFECYCLE_ARM', 'RIGHT_NATIVE_LIFECYCLE_RESCAN',
+    'RIGHT_FLEX_ARM', 'RIGHT_FLEX_RESCAN', 'RIGHT_FLEX_REPAIR',
     'AWE53RebindNativeHomeActionsInForegroundWindows',
+    'AWE53BindFallbackActionOwners',
+    'gAWE53PostCommentFlexibleRepairUntil',
+    'NESTED_FEED_BAR_RECOVERY_SKIPPED',
     '%hook AWEFeedVideoButton', 'AWEScheduleHomeActionRefreshForButton',
     '%hook AWEElementStackView',
     'RIGHT_INPUT_HELPER_TRANSPARENT',
@@ -63,12 +66,13 @@ for token in required_objc:
     if token not in objc:
         raise SystemExit(f'missing Objective-C token: {token}')
 
-# The image-paging fix depends on keeping the primary-action menu source OUT of
-# Douyin's private AWEElementStackView. The only stack child is the visual glass.
+# The menu hit view may live under the native profile host, but never as a
+# direct AWEElementStackView child and never in a separate window-level menu
+# host. The old profile-stack pinning experiments also stay deleted.
 for forbidden in [
     '[stack addSubview:menuButton]',
-    'slot.menuButton.menu = AWEAvatarBaseMenuForStack',
-    'slot.menuButton.showsMenuAsPrimaryAction = YES',
+    'AwemeLiquidBar.AvatarMenu.WindowAnchor',
+    '[window addSubview:gAWEAvatarMenuOverlayButton];',
     'UIContextMenuInteraction',
     'RIGHT_FULLSCREEN_COMMENT_PROTECT',
     'RIGHT_FULLSCREEN_BLOCK_HIDE',
@@ -125,5 +129,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.53a right-action/photo-menu/clean-screen rebuild preflight passed')
+print('AwemeLiquidBar 1.0.53b flexible-right/nested-menu/paging-safe clean-screen preflight passed')
 PY2

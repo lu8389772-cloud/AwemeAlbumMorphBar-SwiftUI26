@@ -1,30 +1,18 @@
-# AwemeLiquidBar 1.0.53a
+# AwemeLiquidBar 1.0.53b
 
-This build is a clean rebuild from **1.0.52o auth34**. It intentionally does not inherit the later 1.0.52p–1.0.52z experimental profile-stack, footprint, long-press, or clean-screen implementations.
+Rebuilt from the **1.0.52o auth34** line. This build does not inherit the 1.0.53a UIWindow avatar-menu anchor or the old profile-video "pin the pre-comment stack" protection.
 
-## 1.0.53a scope
+## Focus of 1.0.53b
 
-### Profile-video right actions
-- Deletes the profile-only "keep the old AWEElementStackView alive" protection path.
-- Profile video now uses the same native lifecycle repair strategy as Home: live `AWEFeedVideoButton` instances identify their real current `AWEElementStackView`, then the existing 46 pt Liquid Glass slots are recreated/rebound there.
-- After a visible comment panel closes, only bounded rescans of *currently live native buttons* run. No captured old Stack is pinned, forced visible, or moved.
-- Delayed `AWECommentInputViewController` helpers are recovery-transparent and cannot start a second route/right-action recovery.
+- **Profile video / comments:** the post-comment repair now follows the *currently live* right-side `AWEElementStackView`. It scans all foreground app windows (not only normal-level windows), tracks newly laid-out right stacks directly, and can bind the four Liquid Glass action bases from exact `AWEFeedVideoButton` instances or conservative accessibility/geometry fallback owners. Old pre-comment stacks are never pinned.
+- **Avatar menu:** single tap remains the interaction. The menu button is nested inside the native profile host instead of being a global UIWindow hit target or a direct child of `AWEElementStackView`. No long-press-only interaction is used.
+- **Photo paging / 83-pt drop:** nested/recycled feed, player, interaction, photo/gallery controllers no longer drive AlbumMorph's *global* bar route-recovery/prewarm state. Their own page lifecycle can continue without moving the global 83-pt bottom-bar state.
+- **Clean screen:** uses the real profile/avatar hierarchy. No fake avatar, snapshot avatar, or reparented avatar is created. The existing transparent menu hit area stays on the real profile path so the original Liquid Glass avatar can be revealed and the same full single-tap menu can be used to exit clean screen.
+- Keeps auth34, zero-unread badge cleanup, and menu-based download/copy functions.
 
-### Photo paging + avatar menu
-- Keeps the avatar interaction as **single tap**, not long press.
-- The real avatar and its Liquid Glass visual remain in Douyin's native right stack.
-- The menu presentation hit target is a transparent `UIWindow` child aligned over the real avatar. It is not a child of `AWEElementStackView`, so opening the menu cannot participate in Douyin's private photo-page stack layout.
-- The full menu remains: `进入主页`, clean screen, save current item/all images/audio, and copy text.
+## New diagnostics
 
-### One-tap clean screen
-- `一键清屏` is only a menu action; it does not reparent or recreate the real avatar.
-- Hides status bar, top/left/right chrome, original bottom bar, and AlbumMorph LiquidBar while leaving the video/photo content and vertical feed swipe path intact.
-- The window-level transparent avatar anchor remains at the real avatar position while clean screen is active.
-- First tap at that position restores only the **real native avatar + real Liquid Glass avatar base**. Other chrome remains hidden.
-- A subsequent single tap opens the same full menu, where the action becomes `退出清屏`.
-- Exiting restores the suppressed views rather than replacing the avatar with a copied/temporary view.
-
-### Preserved fixes
-- Authorization table remains **auth34**, including the added `L1u7lnG` digest; no plaintext account identifier is stored.
-- Messages unread badge is removed when its parsed count is 0; Friends badge mirroring remains supported.
-- Independent floating download button remains retired; download/copy actions live in the avatar menu.
+- `RIGHT_FLEX_ARM`
+- `RIGHT_FLEX_RESCAN`
+- `RIGHT_FLEX_REPAIR`
+- `NESTED_FEED_BAR_RECOVERY_SKIPPED`
