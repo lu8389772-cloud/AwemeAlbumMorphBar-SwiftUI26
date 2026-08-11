@@ -1,10 +1,13 @@
-AwemeLiquidBar 1.0.52x device test
+AwemeLiquidBar 1.0.52y device test
 
-1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
-2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
-3. Return to feed; tap avatar again. Download/copy actions should be in the same menu when “头像菜单显示下载功能” is enabled.
-4. Turn that switch off/on. Avatar position and right-side action positions must not move.
-5. Open and close comments repeatedly, including with the external fullscreen tweak enabled. Right-side actions should recover as in 1.0.52c.
-6. Scroll rapidly through at least 15 items. No independent download button should appear anywhere.
-7. With unread state present, Friends and Messages badges should mirror the original Douyin bottom bar. If slot two is Shop, no Shop promotional dot should be copied to Friends.
-8. Compare badge size with the original: plugin badge should use the native badge path with the final visual scaled to about 90%.
+Primary test only:
+1. Open another user's profile video while the external fullscreen tweak is enabled.
+2. Open comments, then close comments.
+3. Wait at least 4 seconds after closing; the right-side liquid buttons must remain.
+4. Repeat 5 times on video works.
+
+If diagnostics are enabled, successful behavior should show:
+- RIGHT_REBIND_PASS ... restored=1
+- RIGHT_PROFILE_PROTECT_TARGET ...
+- later RIGHT_PROFILE_INPUT_HELPER_IGNORED for AWECommentInputViewController
+and there must be no second RIGHT_REBIND_SCHEDULE caused by AWECommentInputViewController.

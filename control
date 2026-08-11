@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52x
+Version: 1.0.52y
 Architecture: iphoneos-arm
-Description: Rebuilt from 1.0.52o; repairs post-comment right-action glass from live native AWEFeedVideoButton lifecycle while preserving the 1.0.52o UI baseline and auth33.
+Description: Rebuilt from 1.0.52o auth34; fixes delayed profile-video comment input-helper teardown from destroying the recovered right-action stack.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

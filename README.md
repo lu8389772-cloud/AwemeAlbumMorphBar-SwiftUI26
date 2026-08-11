@@ -1,17 +1,19 @@
-# AwemeLiquidBar 1.0.52x
+# AwemeLiquidBar 1.0.52y
 
-Rebuilt directly from the **1.0.52o** project. This build intentionally does not carry the later p-w clean-screen/layout experiments.
+Rebuilt directly from **1.0.52o auth34**. No p–x experimental UI/layout changes are inherited.
 
 ## Scope
 
-- Only rebuilds the right-side action recovery after closing comments.
-- Removes the old captured-stack pinning that could keep an obsolete `AWEElementStackView` alive.
-- Lets Douyin / the external fullscreen tweak replace the native right-action stack normally.
-- During a short 2.6 s post-comment window, actual `AWEFeedVideoButton` lifecycle/layout callbacks are the source of truth. When the native buttons exist again, the plugin rebinds/recreates the 46 pt glass slots on that exact current stack.
-- Resets stale press/stretch transforms on repaired glass buttons.
-- Adds bounded fallback passes only for cases where the native button does not emit a useful lifecycle callback.
-- Leaves the 1.0.52o bottom bar, avatar menu, badges, download menu, Friends handling and auth33 otherwise unchanged.
+This release changes only profile-video post-comment right-action recovery.
 
-## Diagnostic markers
+The 1.0.52x interaction log proved that visible comment-panel dismissal restored the
+right action stack (`native=4`, `glass=4`), then roughly two seconds later
+`AWECommentInputViewController` exited and incorrectly started a second recovery
+cycle with the captured stack already detached (`window=0`, all repair passes 0).
 
-`RIGHT_NATIVE_REPAIR_ARM`, `RIGHT_NATIVE_REPAIR`, and `RIGHT_NATIVE_REPAIR_PASS` are written to the interaction log.
+1.0.52y:
+- never lets the delayed input-only helper create a second right-action generation;
+- skips its late profile-route recovery during the bounded ignore window;
+- keeps the valid on-screen profile-video right stack protected through that teardown;
+- updates protection to the actually restored on-screen stack if Douyin swaps it;
+- preserves auth34 and all 1.0.52o UI/layout behavior.

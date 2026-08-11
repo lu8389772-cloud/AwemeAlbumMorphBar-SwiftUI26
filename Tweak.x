@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52x — rebuilt from 1.0.52o; native-button right-action recovery + auth33
+ AwemeLiquidBar 1.0.52y — download visibility + return-prewarm throttle + Friends caption reserve + auth34
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -131,10 +131,6 @@ static BOOL AWEFrameLooksLikeCurrentRightActionStack(UIView *stack);
 static BOOL AWEClassNameLooksLikePlayableFeedController(NSString *className);
 static BOOL AWECurrentRouteHasPlayableFeedController(void);
 static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack);
-static void AWECollectVisibleHomeActionStacks(UIView *root,
-                                               NSMutableArray<UIView *> *result,
-                                               NSUInteger depth);
-static NSArray<UIWindow *> *AWEForegroundNormalWindowsForHomeChrome(void);
 
 static char kAWENativeBarKey;
 static char kAWEDelegateKey;
@@ -424,13 +420,6 @@ static BOOL gAWECommentRightRebindPending = NO;
 static NSUInteger gAWECommentRightRebindGeneration = 0;
 static NSString *gAWECommentRightHostBefore = nil;
 static __weak UIView *gAWECommentRightStackBefore = nil;
-/* 1.0.52x: after a comment sheet closes, follow the native AWEFeedVideoButton
-   lifecycle instead of pinning an old AWEElementStackView in place. The
-   repair window is short and only reasserts our visual glass slots when the
-   native buttons actually exist again. */
-static CFTimeInterval gAWEPostCommentNativeRightRepairUntil = 0.0;
-static NSUInteger gAWEPostCommentNativeRightRepairGeneration = 0;
-static char kAWEPostCommentNativeRightRepairStampKey;
 static BOOL gAWEFriendsTabLatched = NO;
 static NSString *gAWEDownloadSlotProbeSignature = nil;
 
@@ -814,7 +803,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52x_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52y_interaction.log"] copy];
     });
     return path;
 }
@@ -883,7 +872,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52x_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52y_probe.log"] copy];
     });
     return path;
 }
@@ -1111,7 +1100,7 @@ typedef struct {
     uint8_t value[32];
 } AWEAuthorizationDigestPair;
 
-static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[33] = {
+static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[34] = {
     { { 0x59, 0x82, 0x56, 0x11, 0xCC, 0x1E, 0x58, 0xA8, 0xEF, 0xB6, 0x24, 0x7E, 0x97, 0xB8, 0x64, 0x73, 0xCE, 0x8F, 0x7D, 0x23, 0x21, 0xF4, 0xC3, 0xC9, 0x75, 0xD5, 0xCA, 0xF8, 0xE3, 0x16, 0xB1, 0x32 }, { 0x9F, 0x0C, 0xED, 0xA5, 0xCB, 0x5B, 0x84, 0x63, 0xD4, 0x38, 0xC3, 0x54, 0x7D, 0x04, 0x85, 0xBD, 0x81, 0x67, 0xEC, 0xF0, 0x4D, 0xE2, 0x02, 0x72, 0xDC, 0x96, 0xFF, 0xE4, 0x3D, 0x52, 0x81, 0xB2 } },
     { { 0x3F, 0x40, 0x8A, 0x7D, 0x84, 0xB4, 0xFA, 0x3E, 0x5E, 0x8B, 0x01, 0xB5, 0x24, 0xF8, 0xBD, 0xDD, 0x2A, 0xB5, 0xA0, 0xEB, 0xC5, 0xAA, 0x72, 0xCC, 0x16, 0x88, 0x8F, 0xC9, 0x67, 0xCB, 0xCC, 0x73 }, { 0xDE, 0x19, 0x74, 0x29, 0x81, 0xA3, 0x4B, 0xB7, 0x6A, 0xD2, 0x31, 0xA1, 0x70, 0xF0, 0x66, 0xA7, 0xA4, 0xFD, 0x73, 0x60, 0x1A, 0x65, 0xD2, 0x57, 0xCD, 0x90, 0x06, 0x85, 0xD9, 0xCA, 0xDD, 0x34 } },
     { { 0x91, 0xDF, 0x80, 0xC6, 0x2F, 0x47, 0x04, 0xEE, 0x32, 0x74, 0xC6, 0x3B, 0x38, 0xF5, 0x47, 0xF2, 0x01, 0x89, 0xE2, 0x8C, 0x36, 0xC3, 0xE2, 0xE8, 0xA4, 0x62, 0xA2, 0x8E, 0xDC, 0x76, 0xE7, 0xC0 }, { 0x58, 0xFD, 0x08, 0x53, 0xC3, 0x95, 0x41, 0x39, 0x18, 0xBA, 0x8D, 0x20, 0xD0, 0x9D, 0x7B, 0xBD, 0x0A, 0xFF, 0x31, 0xF9, 0x8B, 0xBE, 0x4E, 0xFD, 0xFA, 0x2C, 0x84, 0x7F, 0x07, 0x15, 0x5C, 0x4A } },
@@ -1145,6 +1134,7 @@ static const AWEAuthorizationDigestPair kAWEAuthorizationDigests[33] = {
     { { 0x85, 0xD4, 0x62, 0x31, 0xD7, 0xE0, 0x24, 0x76, 0x52, 0xAF, 0x7D, 0x2D, 0xEB, 0x8F, 0xCE, 0x20, 0x87, 0xEE, 0x9A, 0x4C, 0xD3, 0x3A, 0x41, 0xB9, 0x47, 0xB4, 0x17, 0x63, 0xF6, 0xC9, 0xB6, 0xC8 }, { 0xDB, 0xE3, 0xBB, 0x84, 0x5C, 0xEE, 0xAB, 0xF8, 0x53, 0x2A, 0xEA, 0x1B, 0x75, 0xD3, 0xBD, 0xD2, 0x94, 0xFA, 0xFE, 0x08, 0x13, 0xE9, 0x4E, 0x7B, 0xB3, 0x80, 0x70, 0x0A, 0x1D, 0x71, 0x8B, 0xBA } },
     { { 0xA2, 0xCD, 0x6C, 0x26, 0x49, 0x3E, 0xF7, 0x4C, 0x92, 0xCF, 0xB8, 0x43, 0xA6, 0x21, 0x75, 0x3C, 0xB7, 0x90, 0xD0, 0xFD, 0xA5, 0xB0, 0xBE, 0x03, 0x26, 0xC0, 0xBD, 0xC1, 0x99, 0xAD, 0xFA, 0xE9 }, { 0xA3, 0x31, 0xD8, 0x56, 0x38, 0x42, 0x08, 0x77, 0x9B, 0xD3, 0xCB, 0x99, 0xB2, 0x6B, 0x77, 0x4B, 0xD2, 0x75, 0x0B, 0xDD, 0x4D, 0x83, 0xEB, 0xFF, 0x93, 0x5A, 0x64, 0x80, 0xA2, 0x69, 0x05, 0x83 } },
     { { 0xCF, 0xDD, 0x88, 0xC7, 0xD8, 0x25, 0xA7, 0xA4, 0x49, 0x3A, 0xCA, 0x20, 0x95, 0xF3, 0xA2, 0x80, 0x0B, 0x6E, 0x35, 0x65, 0x78, 0x54, 0x33, 0x8D, 0x6B, 0xAC, 0x05, 0x23, 0x96, 0x3B, 0x8B, 0xE0 }, { 0x2C, 0x4F, 0x76, 0x91, 0x45, 0x8E, 0x3D, 0x6C, 0x74, 0x9C, 0xD1, 0x13, 0xA9, 0x74, 0x69, 0xB8, 0x3E, 0x92, 0xEE, 0x5F, 0xA0, 0x71, 0x78, 0x6C, 0xBF, 0x04, 0xAE, 0x53, 0xCE, 0x1C, 0x2B, 0x5C } },
+    { { 0x4C, 0xE1, 0xEC, 0xEC, 0x0C, 0x66, 0xC3, 0xB6, 0x2F, 0x5E, 0x19, 0x5C, 0xE0, 0xB2, 0xFB, 0xD1, 0x16, 0x98, 0x2D, 0x41, 0x0E, 0x6D, 0xD0, 0x02, 0x64, 0x84, 0x1F, 0x80, 0xFC, 0x0A, 0xFA, 0x2F }, { 0xBC, 0x9D, 0x3D, 0x48, 0x98, 0x6D, 0xE9, 0x00, 0x6D, 0x85, 0xCE, 0xA2, 0xA5, 0xCA, 0x38, 0xD8, 0x73, 0x1D, 0x5D, 0x7B, 0x69, 0x5D, 0xF9, 0xC3, 0x71, 0x40, 0xBE, 0xD0, 0x10, 0xBE, 0x18, 0x19 } },
 
 };
 
@@ -1164,7 +1154,7 @@ static uint32_t AWEAuthorizationDigestTag(const uint8_t *bytes) {
 }
 
 static const uint32_t kAWEAuthorizationDigestTags[AWE_AUTHORIZATION_DIGEST_COUNT] = {
-    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u, 0x2C934A14u, 0x7D879147u, 0x52083C3Fu, 0xD22A2870u, 0x155CC3CAu
+    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u, 0x2C934A14u, 0x7D879147u, 0x52083C3Fu, 0xD22A2870u, 0x155CC3CAu, 0x0C57AB18u
 };
 
 static BOOL AWEConstantTimeEqual(const uint8_t *left, const uint8_t *right, size_t length) {
@@ -6455,6 +6445,10 @@ static __weak UIView *gAWEDownloadMenuSourceStack = nil;
    fullscreen tweak after our normal comment recovery has already completed. */
 static CFTimeInterval gAWEProfileFullscreenRightProtectUntil = 0.0;
 static __weak UIView *gAWEProfileFullscreenProtectedRightStack = nil;
+/* AWECommentInputViewController is a delayed helper, not the visible panel.
+   On profile-video feeds it can disappear ~2 s after the panel and must not
+   start a second route/right-action recovery cycle. */
+static CFTimeInterval gAWEProfileCommentInputHelperIgnoreUntil = 0.0;
 
 #pragma mark - Native current-item downloader / quality selection
 
@@ -9130,137 +9124,6 @@ static void AWELayoutBoundHomeActionSlots(UIView *stack) {
     }
     AWELayoutExternalBridgeMenuForStack(stack);
     [CATransaction commit];
-}
-
-/* 1.0.52x right-action recovery rebuilt from the 1.0.52o baseline.
-   Do not keep a stale right stack alive. Let Douyin/fullscreen tweaks replace
-   their native stack normally, then repair our glass from the native buttons
-   that are actually on screen. */
-static BOOL AWEPostCommentNativeRightRepairActive(void) {
-    return CACurrentMediaTime() < gAWEPostCommentNativeRightRepairUntil;
-}
-
-static BOOL AWERepairVisibleNativeRightStack(UIView *stack, NSString *reason) {
-    if (!AWEPluginFeaturesEnabled() || !stack || !stack.window ||
-        stack.hidden || stack.alpha < 0.01 || stack.layer.opacity < 0.01f) {
-        return NO;
-    }
-
-    UIWindow *window = stack.window;
-    CGRect frame = [stack convertRect:stack.bounds toView:window];
-    CGFloat screenW = CGRectGetWidth(window.bounds);
-    CGRect visible = CGRectIntersection(frame, window.bounds);
-    if (screenW < 200.0 || CGRectIsNull(visible) || CGRectIsEmpty(visible) ||
-        CGRectGetHeight(visible) < 80.0 ||
-        CGRectGetMidX(frame) < screenW * 0.70) {
-        return NO;
-    }
-
-    NSArray<UIView *> *nativeButtons = AWESortedVisibleHomeActionButtons(stack);
-    if (nativeButtons.count < 2) return NO;
-
-    /* Multiple native buttons layout in the same frame. One stack repair per
-       run-loop frame is enough and avoids four duplicate hierarchy scans. */
-    CFTimeInterval now = CACurrentMediaTime();
-    NSNumber *lastValue = objc_getAssociatedObject(
-        stack, &kAWEPostCommentNativeRightRepairStampKey);
-    if (lastValue && now - lastValue.doubleValue < 0.012) return YES;
-    objc_setAssociatedObject(stack, &kAWEPostCommentNativeRightRepairStampKey,
-                             @(now), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-    AWERefreshHomeActionStack(stack);
-    AWELayoutBoundHomeActionSlots(stack);
-
-    NSMutableDictionary<NSNumber *, AWEHomeActionSlotView *> *slots =
-        objc_getAssociatedObject(stack, &kAWEHomeActionStackSlotsKey);
-    NSUInteger liveSlots = 0;
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    for (AWEHomeActionSlotView *slot in slots.allValues) {
-        if (!slot.originalView || !slot.sourceImageView ||
-            !AWEViewIsDescendantOfView(slot.originalView, stack)) {
-            continue;
-        }
-        /* A comment/fullscreen transition can interrupt the zero-duration
-           press recognizer while its glass is stretched. Rebinding the real
-           native button is also the correct point to neutralise that stale
-           presentation transform. */
-        slot.transform = CGAffineTransformIdentity;
-        slot.layer.transform = CATransform3DIdentity;
-        slot.systemGlassButton.transform = CGAffineTransformIdentity;
-        slot.systemGlassButton.layer.transform = CATransform3DIdentity;
-        slot.hidden = NO;
-        slot.alpha = 1.0;
-        liveSlots++;
-    }
-    [CATransaction commit];
-
-    AWEInteractionDiagnosticWrite(
-        @"RIGHT_NATIVE_REPAIR reason=%@ stack=%@ native=%lu glass=%lu frame=%@",
-        reason ?: @"unknown", AWEInteractionObjectSummary(stack),
-        (unsigned long)nativeButtons.count, (unsigned long)liveSlots,
-        NSStringFromCGRect(frame));
-    return liveSlots > 0;
-}
-
-static void AWERepairPostCommentRightButtonIfNeeded(UIView *button,
-                                                      NSString *reason) {
-    if (!AWEPostCommentNativeRightRepairActive() || !button || !button.window) return;
-    if (AWEAnyVisibleCommentPanelForRightRecovery()) return;
-    UIView *stack = AWEHomeActionStackForView(button);
-    if (stack) AWERepairVisibleNativeRightStack(stack, reason);
-}
-
-static NSUInteger AWERepairVisibleNativeRightStacksNow(NSString *reason) {
-    NSUInteger repaired = 0;
-    for (UIWindow *window in AWEForegroundNormalWindowsForHomeChrome()) {
-        NSMutableArray<UIView *> *stacks = [NSMutableArray array];
-        AWECollectVisibleHomeActionStacks(window, stacks, 0);
-        for (UIView *stack in stacks) {
-            if (AWERepairVisibleNativeRightStack(stack, reason)) repaired++;
-        }
-    }
-    return repaired;
-}
-
-static void AWEArmPostCommentNativeRightRepair(NSString *reason) {
-    NSUInteger generation = ++gAWEPostCommentNativeRightRepairGeneration;
-    gAWEPostCommentNativeRightRepairUntil = CACurrentMediaTime() + 2.60;
-
-    /* The old 1.0.52o protection kept a captured stack alive even when the
-       video feed wanted to replace it. Explicitly retire that protection. */
-    gAWEProfileFullscreenRightProtectUntil = 0.0;
-    gAWEProfileFullscreenProtectedRightStack = nil;
-
-    AWEInteractionDiagnosticWrite(
-        @"RIGHT_NATIVE_REPAIR_ARM generation=%lu reason=%@ until=%.3f before=%@",
-        (unsigned long)generation, reason ?: @"comment.dismiss",
-        gAWEPostCommentNativeRightRepairUntil,
-        gAWECommentRightHostBefore ?: @"unknown");
-
-    /* These are only fallbacks for a native view that does not emit a useful
-       move/layout callback. Normally the AWEFeedVideoButton hook below repairs
-       on the exact frame in which the new native button becomes available. */
-    NSArray<NSNumber *> *delays =
-        @[@0.0, @0.03, @0.08, @0.16, @0.32, @0.60, @1.00, @1.55, @2.20];
-    for (NSNumber *delay in delays) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-            (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
-            dispatch_get_main_queue(), ^{
-            if (generation != gAWEPostCommentNativeRightRepairGeneration) return;
-            if (AWEAnyVisibleCommentPanelForRightRecovery()) return;
-            NSUInteger count = AWERepairVisibleNativeRightStacksNow(
-                [NSString stringWithFormat:@"fallback.%.2f", delay.doubleValue]);
-            AWEInteractionDiagnosticWrite(
-                @"RIGHT_NATIVE_REPAIR_PASS generation=%lu delay=%.2f repaired=%lu",
-                (unsigned long)generation, delay.doubleValue,
-                (unsigned long)count);
-            if ([delay isEqual:delays.lastObject]) {
-                gAWECommentRightStackBefore = nil;
-                gAWECommentRightHostBefore = nil;
-            }
-        });
-    }
 }
 
 static void AWEScheduleHomeActionStackRefresh(UIView *stack) {
@@ -12915,17 +12778,93 @@ static NSString *AWECurrentRightActionStackSummary(void) {
 
 static void AWESchedulePostCommentRightRebind(NSString *reason) {
     if (!AWEPluginFeaturesEnabled()) return;
+    BOOL profileFullscreenRecovery =
+        AWEShouldSuppressBarForUserDetailRoute() &&
+        AWECurrentRouteHasPlayableFeedController();
     NSUInteger generation = ++gAWECommentRightRebindGeneration;
+    NSString *before = gAWECommentRightHostBefore ?: @"unknown";
+    UIView *captured = gAWECommentRightStackBefore;
+    if (profileFullscreenRecovery) {
+        CFTimeInterval now = CACurrentMediaTime();
+        /* 1.0.52y: the visible comment panel is already gone here. Keep the
+           currently valid profile-video right stack alive through the delayed
+           AWECommentInputViewController teardown. The x log showed that helper
+           exiting about 1.96 s later and starting a destructive second cycle. */
+        gAWEProfileFullscreenRightProtectUntil = now + 4.00;
+        gAWEProfileCommentInputHelperIgnoreUntil = now + 8.00;
+        gAWEProfileFullscreenProtectedRightStack = captured;
+        AWEInteractionDiagnosticWrite(
+            @"RIGHT_FULLSCREEN_COMMENT_PROTECT until=%.2f inputIgnoreUntil=%.2f captured=%@",
+            gAWEProfileFullscreenRightProtectUntil,
+            gAWEProfileCommentInputHelperIgnoreUntil,
+            AWEInteractionObjectSummary(captured));
+    }
     AWEInteractionDiagnosticWrite(
-        @"RIGHT_REBIND_SCHEDULE generation=%lu reason=%@ captured=%@ before=%@ mode=native-button",
+        @"RIGHT_REBIND_SCHEDULE generation=%lu reason=%@ captured=%@ before=%@",
         (unsigned long)generation, reason ?: @"comment.dismiss",
-        AWEInteractionObjectSummary(gAWECommentRightStackBefore),
-        gAWECommentRightHostBefore ?: @"unknown");
+        AWEInteractionObjectSummary(captured), before);
 
-    /* 1.0.52x: no captured-stack pinning and no forced hidden/alpha writes.
-       The native video stack is allowed to die/rebuild. Our short repair
-       window follows the new AWEFeedVideoButton objects instead. */
-    AWEArmPostCommentNativeRightRepair(reason);
+    /* Important: AWECommentInputViewController can remain attached for 4-8 s
+       after the visible panel is gone. 1.0.49c waited for it, so the user saw
+       an empty right column immediately after closing comments and some profile
+       feeds never reached the rebind at all. Rebind as soon as the last visible
+       comment panel disappears. Use a handful of bounded passes rather than a
+       display link/timer, and search every foreground normal-level app window
+       because the key window can temporarily be a transition/input host. */
+    NSArray<NSNumber *> *delays = profileFullscreenRecovery
+        ? @[@0.0, @0.08, @0.20, @0.45, @0.80, @1.20, @1.75, @2.25]
+        : @[@0.0, @0.08, @0.20, @0.45, @0.80, @1.20];
+    for (NSNumber *delay in delays) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+            (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+            if (generation != gAWECommentRightRebindGeneration) return;
+            if (AWEAnyVisibleCommentPanelForRightRecovery() ||
+                AWEAnyBlockingSensitiveDestinationForRightRecovery()) {
+                AWEInteractionDiagnosticWrite(
+                    @"RIGHT_REBIND_PASS generation=%lu delay=%.2f blocked=1",
+                    (unsigned long)generation, delay.doubleValue);
+                return;
+            }
+
+            UIView *target = nil;
+            if (captured && AWEFrameLooksLikeCurrentRightActionStack(captured)) {
+                target = captured;
+            }
+            if (!target) target = AWEFindCurrentRightActionStackAcrossWindows();
+
+            BOOL restored = AWEForceRestoreRightActionStackAfterComment(target);
+            if (profileFullscreenRecovery && restored && target && target.window &&
+                AWEFrameLooksLikeCurrentRightActionStack(target)) {
+                /* Follow the actual on-screen stack if Douyin swapped it during
+                   the comment dismissal. Never let a stale captured pointer
+                   replace the live protection target. */
+                gAWEProfileFullscreenProtectedRightStack = target;
+                gAWEProfileFullscreenRightProtectUntil =
+                    MAX(gAWEProfileFullscreenRightProtectUntil,
+                        CACurrentMediaTime() + 2.20);
+                AWEInteractionDiagnosticWrite(
+                    @"RIGHT_PROFILE_PROTECT_TARGET target=%@ until=%.2f",
+                    AWEInteractionObjectSummary(target),
+                    gAWEProfileFullscreenRightProtectUntil);
+            }
+            NSUInteger stacks = AWECountHomeActionStacksAcrossForegroundWindows();
+            NSString *after = target
+                ? [NSString stringWithFormat:@"%@ alpha=%.2f hidden=%d",
+                    AWEInteractionObjectSummary(target), target.alpha, target.hidden]
+                : @"none";
+            AWEInteractionDiagnosticWrite(
+                @"RIGHT_REBIND_PASS generation=%lu delay=%.2f stacks=%lu target=%@ restored=%d",
+                (unsigned long)generation, delay.doubleValue,
+                (unsigned long)stacks, after, restored);
+
+            if (delay == delays.lastObject &&
+                generation == gAWECommentRightRebindGeneration) {
+                gAWECommentRightStackBefore = nil;
+                gAWECommentRightHostBefore = nil;
+            }
+        });
+    }
 }
 
 @interface AWEHomeChromeRecoveryTicker : NSObject
@@ -14152,7 +14091,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52x";
+    self.title = @"LiquidBar 设置 · 1.0.52y";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15437,7 +15376,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52x image=%@ ==========" ,
+            @"========== START build=1.0.52y image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15504,7 +15443,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52x diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52y diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15519,7 +15458,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52x_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52y_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -15719,37 +15658,29 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     %orig;
     AWEHomeDiagnosticWrite(NO, @"HOOK AWEFeedVideoButton.didMoveToWindow self=%p window=%p", self, ((UIView *)self).window);
     AWEScheduleHomeActionRefreshForButton((UIView *)self);
-    AWERepairPostCommentRightButtonIfNeeded((UIView *)self, @"button.didMoveToWindow");
 }
 
 - (void)didMoveToSuperview {
     %orig;
     AWEScheduleHomeActionRefreshForButton((UIView *)self);
-    AWERepairPostCommentRightButtonIfNeeded((UIView *)self, @"button.didMoveToSuperview");
 }
 
 - (void)layoutSubviews {
     %orig;
-    /* Normal playback keeps the cheap geometry-only stack path. For the short
-       post-comment window, the native button itself is the ground-truth event
-       that tells us the current video stack exists again. */
-    AWERepairPostCommentRightButtonIfNeeded((UIView *)self, @"button.layout");
+    /* The parent AWEElementStackView owns slot geometry. Avoid enqueueing a
+       multi-pass refresh for every child layout frame. */
 }
 
 - (void)setHidden:(BOOL)hidden {
     BOOL changed = ((UIView *)self).hidden != hidden;
     %orig(hidden);
     if (changed) AWEScheduleHomeActionRefreshForButton((UIView *)self);
-    if (changed && !hidden)
-        AWERepairPostCommentRightButtonIfNeeded((UIView *)self, @"button.unhide");
 }
 
 - (void)setAlpha:(CGFloat)alpha {
     BOOL changed = fabs(((UIView *)self).alpha - alpha) > 0.01;
     %orig(alpha);
     if (changed) AWEScheduleHomeActionRefreshForButton((UIView *)self);
-    if (changed && alpha > 0.01)
-        AWERepairPostCommentRightButtonIfNeeded((UIView *)self, @"button.alpha");
 }
 
 - (void)setAccessibilityLabel:(NSString *)label {
@@ -15781,8 +15712,15 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 }
 
 - (void)removeFromSuperview {
-    /* 1.0.52x: never pin an obsolete video action stack. The native feed is
-       free to replace it; the replacement AWEFeedVideoButtons rebind glass. */
+    UIView *stack = (UIView *)self;
+    if (AWEProfileFullscreenRightProtectionActiveForStack(stack)) {
+        AWEForceRestoreRightActionStackAfterComment(stack);
+        AWERefreshExternalBridgeMenu(stack);
+        AWEInteractionDiagnosticWrite(
+            @"RIGHT_FULLSCREEN_BLOCK_REMOVE stack=%@",
+            AWEInteractionObjectSummary(stack));
+        return;
+    }
     %orig;
 }
 
@@ -15801,26 +15739,44 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 
 - (void)setHidden:(BOOL)hidden {
     UIView *stack = (UIView *)self;
+    if (hidden && AWEProfileFullscreenRightProtectionActiveForStack(stack)) {
+        %orig(NO);
+        AWEForceRestoreRightActionStackAfterComment(stack);
+        AWERefreshExternalBridgeMenu(stack);
+        AWEInteractionDiagnosticWrite(
+            @"RIGHT_FULLSCREEN_BLOCK_HIDE stack=%@",
+            AWEInteractionObjectSummary(stack));
+        return;
+    }
     BOOL changed = stack.hidden != hidden;
     %orig(hidden);
     if (!changed) return;
     if (!hidden) {
         AWEScheduleHomeActionStackRefresh(stack);
-        if (AWEPostCommentNativeRightRepairActive())
-            AWERepairVisibleNativeRightStack(stack, @"stack.unhide");
+    } else {
+        AWEScheduleFullscreenStackVisibilityProtection(stack, @"stack.hidden");
     }
 }
 
 - (void)setAlpha:(CGFloat)alpha {
     UIView *stack = (UIView *)self;
+    if (alpha <= 0.01 && AWEProfileFullscreenRightProtectionActiveForStack(stack)) {
+        %orig(1.0);
+        AWEForceRestoreRightActionStackAfterComment(stack);
+        AWERefreshExternalBridgeMenu(stack);
+        AWEInteractionDiagnosticWrite(
+            @"RIGHT_FULLSCREEN_BLOCK_ALPHA stack=%@",
+            AWEInteractionObjectSummary(stack));
+        return;
+    }
     CGFloat before = stack.alpha;
     BOOL changed = fabs(before - alpha) > 0.01;
     %orig(alpha);
     if (!changed) return;
     if (alpha > 0.01) {
         AWEScheduleHomeActionStackRefresh(stack);
-        if (AWEPostCommentNativeRightRepairActive())
-            AWERepairVisibleNativeRightStack(stack, @"stack.alphaVisible");
+    } else {
+        AWEScheduleFullscreenStackVisibilityProtection(stack, @"stack.alpha");
     }
 }
 
@@ -17215,7 +17171,39 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         AWEAlbumMorphProbeWrite(@"ROUTE_WILL_EXIT class=%@",
             departingClassName);
         BOOL commentRoute = [departingClassName.lowercaseString containsString:@"comment"];
-        if (commentRoute) {
+        BOOL inputOnly = commentRoute &&
+            AWEClassNameIsCommentInputOnlyForRightRecovery(departingClassName);
+        BOOL profilePlayableInput = inputOnly &&
+            AWEShouldSuppressBarForUserDetailRoute() &&
+            AWECurrentRouteHasPlayableFeedController();
+        if (commentRoute && inputOnly) {
+            /* An input helper is never a visible comment panel and must never
+               recapture/re-arm the right-action recovery generation. On the
+               profile-video route, renew the existing stack protection right
+               before this helper tears down, because the x log shows the stack
+               being detached between its willDisappear and didDisappear. */
+            if (profilePlayableInput) {
+                UIView *liveStack = gAWEProfileFullscreenProtectedRightStack;
+                if (!liveStack || !AWEFrameLooksLikeCurrentRightActionStack(liveStack)) {
+                    liveStack = AWEFindCurrentRightActionStackAcrossWindows();
+                }
+                if (liveStack && liveStack.window) {
+                    gAWEProfileFullscreenProtectedRightStack = liveStack;
+                    gAWEProfileFullscreenRightProtectUntil =
+                        MAX(gAWEProfileFullscreenRightProtectUntil,
+                            CACurrentMediaTime() + 2.50);
+                }
+                AWEInteractionDiagnosticWrite(
+                    @"RIGHT_PROFILE_INPUT_HELPER_GUARD phase=willDisappear class=%@ stack=%@ until=%.2f",
+                    departingClassName,
+                    AWEInteractionObjectSummary(gAWEProfileFullscreenProtectedRightStack),
+                    gAWEProfileFullscreenRightProtectUntil);
+            } else {
+                AWEInteractionDiagnosticWrite(
+                    @"RIGHT_INPUT_HELPER_IGNORED phase=willDisappear class=%@",
+                    departingClassName);
+            }
+        } else if (commentRoute) {
             gAWECommentRightRebindPending = YES;
             if (!gAWECommentRightStackBefore || !gAWECommentRightStackBefore.window) {
                 gAWECommentRightStackBefore = AWEFindCurrentRightActionStackAcrossWindows();
@@ -17267,22 +17255,38 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         BOOL remainingSensitive = AWEUnregisterSensitiveDestination(self);
         AWEScheduleTransitionRecovery();
         BOOL commentRoute = [className.lowercaseString containsString:@"comment"];
-        if (!commentRoute || !remainingSensitive) {
+        BOOL inputOnly = commentRoute &&
+            AWEClassNameIsCommentInputOnlyForRightRecovery(className);
+        BOOL profilePlayableInput = inputOnly &&
+            AWEShouldSuppressBarForUserDetailRoute() &&
+            AWECurrentRouteHasPlayableFeedController();
+        BOOL ignoreLateProfileInput = inputOnly &&
+            (profilePlayableInput ||
+             CACurrentMediaTime() < gAWEProfileCommentInputHelperIgnoreUntil);
+
+        /* 1.0.52x log proof:
+           visible panel close -> native=4 glass=4 repaired=1;
+           ~1.96 s later AWECommentInputViewController exited -> a second
+           dismiss recovery ran, captured stack.window=0, then repaired=0.
+           That helper is bookkeeping only. On the profile-video route, do not
+           let its late teardown touch either the bar route or the right stack. */
+        if ((!commentRoute || !remainingSensitive) && !ignoreLateProfileInput) {
             AWEForceAlbumMorphRouteRecovery(
                 [NSString stringWithFormat:@"dismiss.%@", className]);
+        } else if (ignoreLateProfileInput) {
+            AWEInteractionDiagnosticWrite(
+                @"RIGHT_PROFILE_INPUT_HELPER_IGNORED phase=didDisappear class=%@ remaining=%d until=%.2f",
+                className, remainingSensitive,
+                gAWEProfileCommentInputHelperIgnoreUntil);
         }
 
-        /* The visible comment panel and AWECommentInputViewController have
-           different lifetimes. On profile-video feeds the input controller can
-           remain registered for several seconds after the sheet is already
-           gone (and may survive until the app resigns active). Restore the
-           right-side action column when the last *visible panel* disappears,
-           not when the input helper finally tears down. */
-        if (commentRoute && gAWECommentRightRebindPending) {
-            BOOL inputOnly = AWEClassNameIsCommentInputOnlyForRightRecovery(className);
+        /* Restore on the last visible panel only. An input-only helper must
+           never create a new generation merely because it became the final
+           sensitive controller. */
+        if (commentRoute && gAWECommentRightRebindPending &&
+            !ignoreLateProfileInput) {
             BOOL panelStillVisible = AWEAnyVisibleCommentPanelForRightRecovery();
-            BOOL shouldRebindNow = (!inputOnly && !panelStillVisible) ||
-                                   !remainingSensitive;
+            BOOL shouldRebindNow = !inputOnly && !panelStillVisible;
             if (shouldRebindNow) {
                 gAWECommentRightRebindPending = NO;
                 AWESchedulePostCommentRightRebind(
@@ -17384,7 +17388,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52x os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52y os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
