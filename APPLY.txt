@@ -1,3 +1,1 @@
-Complete AwemeLiquidBar 1.0.52v project.
-Rebuilt from 1.0.52o stable avatar/menu architecture.
-Do not layer the 1.0.52u context-menu patch on top of this project.
+This is the complete AwemeLiquidBar 1.0.52o project rebuilt from the 1.0.52c stable baseline. Use the complete project archive.

@@ -1,23 +1,10 @@
-AwemeLiquidBar 1.0.52w focused verification
+AwemeLiquidBar 1.0.52o device test
 
-A. Image paging / avatar menu
-1. Stay on Home/Profile with LiquidBar visible.
-2. On image 1, single-tap the liquid avatar and open the normal full menu.
-3. Dismiss it and switch to image 2.
-4. Nickname, caption, right stack and other chrome must not move down by one bottom-bar height.
-5. Avatar glass must remain circular/continuous and must not be clipped by a shifted stack boundary.
-
-B. Profile video comment return
-1. Open another user's profile video while the external fullscreen tweak is enabled.
-2. Open comments, then close comments.
-3. LiquidBar remains visible.
-4. The original right-action icons and our glass bases should remain in their pre-comment vertical region; they must not fall behind the bottom bar or lose the 83-pt layout footprint.
-5. Repeat 3-5 times.
-
-C. Clean screen
-1. Single-tap avatar -> 一键清屏.
-2. Status bar and LiquidBar should disappear; vertical feed swiping must continue.
-3. Tap the vanished avatar position, then use the same single-tap full avatar menu to exit clean screen.
-
-D. Diagnostics if A/B still fails
-Export both logs and search probe.log for BOTTOM_FOOTPRINT_. The important comparison is whether AWEPlayInteractionViewController content changes from ending near y=873 to extending near y=956 while the replacement tab bar still starts near y=873.
+1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
+2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
+3. Return to feed; tap avatar again. Download/copy actions should be in the same menu when “头像菜单显示下载功能” is enabled.
+4. Turn that switch off/on. Avatar position and right-side action positions must not move.
+5. Open and close comments repeatedly, including with the external fullscreen tweak enabled. Right-side actions should recover as in 1.0.52c.
+6. Scroll rapidly through at least 15 items. No independent download button should appear anywhere.
+7. With unread state present, Friends and Messages badges should mirror the original Douyin bottom bar. If slot two is Shop, no Shop promotional dot should be copied to Friends.
+8. Compare badge size with the original: plugin badge should use the native badge path with the final visual scaled to about 90%.
