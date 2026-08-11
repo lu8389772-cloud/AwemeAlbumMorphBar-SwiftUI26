@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.52y — download visibility + return-prewarm throttle + Friends caption reserve + auth34
+ AwemeLiquidBar 1.0.52z — download visibility + return-prewarm throttle + Friends caption reserve + auth34
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -803,7 +803,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52y_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.52z_interaction.log"] copy];
     });
     return path;
 }
@@ -872,7 +872,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.52y_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.52z_probe.log"] copy];
     });
     return path;
 }
@@ -12786,7 +12786,7 @@ static void AWESchedulePostCommentRightRebind(NSString *reason) {
     UIView *captured = gAWECommentRightStackBefore;
     if (profileFullscreenRecovery) {
         CFTimeInterval now = CACurrentMediaTime();
-        /* 1.0.52y: the visible comment panel is already gone here. Keep the
+        /* 1.0.52z: the visible comment panel is already gone here. Keep the
            currently valid profile-video right stack alive through the delayed
            AWECommentInputViewController teardown. The x log showed that helper
            exiting about 1.96 s later and starting a destructive second cycle. */
@@ -14091,7 +14091,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.52y";
+    self.title = @"LiquidBar 设置 · 1.0.52z";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15376,7 +15376,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.52y image=%@ ==========" ,
+            @"========== START build=1.0.52z image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15443,7 +15443,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.52y diagnostic export\n"
+                @"AwemeLiquidBar 1.0.52z diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15458,7 +15458,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.52y_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.52z_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -17147,13 +17147,21 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         gAWEReturnRevealGraceUntil = 0.0;
     }
 
-    AWEScheduleFullscreenRightCompatibilityRecovery(self);
-    AWEScheduleTransitionRecovery();
-    AWEScheduleHomeChromeRecovery(self.view.window ?: AWEActiveMainWindow());
-    if (AWEAlbumMorphStyleEnabled() && !AWECurrentRouteSuppressesBar() &&
-        gAWEBarLastVisibleFraction < 0.999) {
-        AWEForceAlbumMorphRouteRecovery(
-            [NSString stringWithFormat:@"appear.hidden.%@", className]);
+    BOOL inputOnlyLifecycle =
+        AWEClassNameIsCommentInputOnlyForRightRecovery(className);
+    if (!inputOnlyLifecycle) {
+        AWEScheduleFullscreenRightCompatibilityRecovery(self);
+        AWEScheduleTransitionRecovery();
+        AWEScheduleHomeChromeRecovery(self.view.window ?: AWEActiveMainWindow());
+        if (AWEAlbumMorphStyleEnabled() && !AWECurrentRouteSuppressesBar() &&
+            gAWEBarLastVisibleFraction < 0.999) {
+            AWEForceAlbumMorphRouteRecovery(
+                [NSString stringWithFormat:@"appear.hidden.%@", className]);
+        }
+    } else {
+        AWEInteractionDiagnosticWrite(
+            @"RIGHT_INPUT_HELPER_TRANSPARENT phase=didAppear class=%@",
+            className);
     }
 }
 
@@ -17167,6 +17175,8 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         [NSString stringWithFormat:@"willDisappear.%@",
                                    departingClassName],
         self);
+    BOOL departingInputOnlyLifecycle =
+        AWEClassNameIsCommentInputOnlyForRightRecovery(departingClassName);
     if (AWEClassNameIsSensitiveDestination(departingClassName)) {
         AWEAlbumMorphProbeWrite(@"ROUTE_WILL_EXIT class=%@",
             departingClassName);
@@ -17230,9 +17240,13 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
      Prime the already-created bar before UIKit/custom containers snapshot and
      animate the departing page. This is intentionally before %orig.
     */
-    AWEBeginReturnPrewarm(self);
+    if (!departingInputOnlyLifecycle) {
+        AWEBeginReturnPrewarm(self);
+    }
     %orig(animated);
-    AWEStartBarVisibilityDriver();
+    if (!departingInputOnlyLifecycle) {
+        AWEStartBarVisibilityDriver();
+    }
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
@@ -17253,51 +17267,47 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
             gAWEAlbumMorphPublishSourceController = nil;
         }
         BOOL remainingSensitive = AWEUnregisterSensitiveDestination(self);
-        AWEScheduleTransitionRecovery();
         BOOL commentRoute = [className.lowercaseString containsString:@"comment"];
         BOOL inputOnly = commentRoute &&
             AWEClassNameIsCommentInputOnlyForRightRecovery(className);
-        BOOL profilePlayableInput = inputOnly &&
-            AWEShouldSuppressBarForUserDetailRoute() &&
-            AWECurrentRouteHasPlayableFeedController();
-        BOOL ignoreLateProfileInput = inputOnly &&
-            (profilePlayableInput ||
-             CACurrentMediaTime() < gAWEProfileCommentInputHelperIgnoreUntil);
 
-        /* 1.0.52x log proof:
-           visible panel close -> native=4 glass=4 repaired=1;
-           ~1.96 s later AWECommentInputViewController exited -> a second
-           dismiss recovery ran, captured stack.window=0, then repaired=0.
-           That helper is bookkeeping only. On the profile-video route, do not
-           let its late teardown touch either the bar route or the right stack. */
-        if ((!commentRoute || !remainingSensitive) && !ignoreLateProfileInput) {
-            AWEForceAlbumMorphRouteRecovery(
-                [NSString stringWithFormat:@"dismiss.%@", className]);
-        } else if (ignoreLateProfileInput) {
+        /* 1.0.52z: AWECommentInputViewController is a delayed input helper,
+           not a visible route. The 1.0.52z device log proved that its
+           viewWillDisappear was ignored by the right-action path, but its
+           viewDidDisappear still triggered the generic AlbumMorph recovery:
+             RECOVERY_SCHEDULE reason=dismiss.AWECommentInputViewController
+           Treat this controller as layout-transparent across every recovery
+           path. It may unregister from bookkeeping, but it must not prewarm,
+           reschedule AlbumMorph, restart the transition driver, or create a
+           new right-action generation. */
+        if (inputOnly) {
             AWEInteractionDiagnosticWrite(
-                @"RIGHT_PROFILE_INPUT_HELPER_IGNORED phase=didDisappear class=%@ remaining=%d until=%.2f",
-                className, remainingSensitive,
-                gAWEProfileCommentInputHelperIgnoreUntil);
-        }
+                @"RIGHT_INPUT_HELPER_TRANSPARENT phase=didDisappear class=%@ remaining=%d",
+                className, remainingSensitive);
+        } else {
+            AWEScheduleTransitionRecovery();
 
-        /* Restore on the last visible panel only. An input-only helper must
-           never create a new generation merely because it became the final
-           sensitive controller. */
-        if (commentRoute && gAWECommentRightRebindPending &&
-            !ignoreLateProfileInput) {
-            BOOL panelStillVisible = AWEAnyVisibleCommentPanelForRightRecovery();
-            BOOL shouldRebindNow = !inputOnly && !panelStillVisible;
-            if (shouldRebindNow) {
-                gAWECommentRightRebindPending = NO;
-                AWESchedulePostCommentRightRebind(
-                    [NSString stringWithFormat:@"panelDismiss.%@", className]);
+            if (!commentRoute || !remainingSensitive) {
+                AWEForceAlbumMorphRouteRecovery(
+                    [NSString stringWithFormat:@"dismiss.%@", className]);
+            }
+
+            if (commentRoute && gAWECommentRightRebindPending) {
+                BOOL panelStillVisible = AWEAnyVisibleCommentPanelForRightRecovery();
+                if (!panelStillVisible) {
+                    gAWECommentRightRebindPending = NO;
+                    AWESchedulePostCommentRightRebind(
+                        [NSString stringWithFormat:@"panelDismiss.%@", className]);
+                }
             }
         }
     }
 
     AWELogBarSnapshot(@"vc.viewDidDisappear", self, YES);
     AWEProbeLogExpandedSnapshot(@"vc.viewDidDisappear", self, YES);
-    AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
+    if (!AWEClassNameIsCommentInputOnlyForRightRecovery(className)) {
+        AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
+    }
 }
 
 %end
@@ -17388,7 +17398,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52y os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.52z os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

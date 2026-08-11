@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52y'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52y-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52y'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52y'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52y_interaction.log'),
+    ('control', control, 'Version: 1.0.52z'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52z-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52z'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52z'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52z_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,7 +36,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52y', 'LiquidBar 设置 · 1.0.52y',
+    'AwemeLiquidBar 1.0.52z', 'LiquidBar 设置 · 1.0.52z',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -51,7 +51,7 @@ required_objc = [
     'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_PROTECT',
     'RIGHT_FULLSCREEN_BLOCK_HIDE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA',
     'RIGHT_FULLSCREEN_BLOCK_REMOVE', 'AWECurrentRouteHasPlayableFeedController',
-    'RIGHT_PROFILE_INPUT_HELPER_IGNORED', 'RIGHT_PROFILE_PROTECT_TARGET',
+    'RIGHT_INPUT_HELPER_TRANSPARENT', 'RIGHT_PROFILE_PROTECT_TARGET',
     '%hook AWENormalModeTabBarBadgeContainerView',
     'AWEPrimeFriendsNativeLayoutFootprint', 'AWEApplyFriendsCaptionBottomReserve',
 ]
@@ -104,5 +104,11 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52y delayed-input right-action recovery preflight passed')
+print('AwemeLiquidBar 1.0.52z delayed-input right-action recovery preflight passed')
 PY2
+
+POSTINST="layout/DEBIAN/postinst"
+if [ -f "$POSTINST" ] && [ ! -x "$POSTINST" ]; then
+  echo "[preflight] ERROR: layout/DEBIAN/postinst is not executable (need chmod 755)" >&2
+  exit 1
+fi

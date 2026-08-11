@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52y
+Version: 1.0.52z
 Architecture: iphoneos-arm
 Description: Rebuilt from 1.0.52o auth34; fixes delayed profile-video comment input-helper teardown from destroying the recovered right-action stack.
 Maintainer: xyy

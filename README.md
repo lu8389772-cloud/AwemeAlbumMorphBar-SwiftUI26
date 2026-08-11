@@ -1,19 +1,13 @@
-# AwemeLiquidBar 1.0.52y
+# AwemeLiquidBar 1.0.52z
 
-Rebuilt directly from **1.0.52o auth34**. No p–x experimental UI/layout changes are inherited.
+Built from the clean 1.0.52o auth34 line through the minimal 1.0.52y right-action fix.
 
-## Scope
+1.0.52z changes only the delayed `AWECommentInputViewController` lifecycle handling:
 
-This release changes only profile-video post-comment right-action recovery.
+- the helper is treated as a bookkeeping-only controller, not a visible route;
+- its `viewDidAppear` does not schedule fullscreen/right/bar recovery;
+- its `viewWillDisappear` does not prewarm or restart the bar visibility driver;
+- its `viewDidDisappear` may unregister sensitive-route bookkeeping, but cannot schedule AlbumMorph route recovery, transition recovery, home-chrome recovery, or a new right-action rebind generation;
+- visible comment-panel dismissal remains the only comment-close event that can schedule right-action rebind.
 
-The 1.0.52x interaction log proved that visible comment-panel dismissal restored the
-right action stack (`native=4`, `glass=4`), then roughly two seconds later
-`AWECommentInputViewController` exited and incorrectly started a second recovery
-cycle with the captured stack already detached (`window=0`, all repair passes 0).
-
-1.0.52y:
-- never lets the delayed input-only helper create a second right-action generation;
-- skips its late profile-route recovery during the bounded ignore window;
-- keeps the valid on-screen profile-video right stack protected through that teardown;
-- updates protection to the actually restored on-screen stack if Douyin swaps it;
-- preserves auth34 and all 1.0.52o UI/layout behavior.
+Auth table remains auth34. No clean-screen, footprint-guard, Context Menu, or later experimental layout code is included.

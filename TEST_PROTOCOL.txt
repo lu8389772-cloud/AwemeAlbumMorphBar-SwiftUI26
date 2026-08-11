@@ -1,13 +1,19 @@
-AwemeLiquidBar 1.0.52y device test
+AwemeLiquidBar 1.0.52z device test
 
 Primary test only:
-1. Open another user's profile video while the external fullscreen tweak is enabled.
+1. Open another user's profile video in fullscreen playback.
 2. Open comments, then close comments.
-3. Wait at least 4 seconds after closing; the right-side liquid buttons must remain.
-4. Repeat 5 times on video works.
+3. Stay on the video for at least 5 seconds.
+4. Repeat 3-5 times.
 
-If diagnostics are enabled, successful behavior should show:
+Expected interaction log:
+- RIGHT_REBIND_SCHEDULE reason=panelDismiss.AWECommentContainerViewController
 - RIGHT_REBIND_PASS ... restored=1
-- RIGHT_PROFILE_PROTECT_TARGET ...
-- later RIGHT_PROFILE_INPUT_HELPER_IGNORED for AWECommentInputViewController
-and there must be no second RIGHT_REBIND_SCHEDULE caused by AWECommentInputViewController.
+- RIGHT_INPUT_HELPER_TRANSPARENT phase=didAppear/willDisappear/didDisappear
+
+Must NOT appear in probe log:
+- RECOVERY_SCHEDULE ... dismiss.AWECommentInputViewController
+- RECOVERY_ONCE ... dismiss.AWECommentInputViewController
+
+Must NOT appear in interaction log:
+- RIGHT_REBIND_SCHEDULE ... AWECommentInputViewController

@@ -1,1 +1,1 @@
-Complete AwemeLiquidBar 1.0.52y project. Rebuilt from 1.0.52o auth34; only delayed profile-video comment input-helper recovery is changed.
+Complete AwemeLiquidBar 1.0.52z project. Minimal follow-up to 1.0.52y: make delayed AWECommentInputViewController fully transparent to UI recovery lifecycle. Auth34 preserved.
