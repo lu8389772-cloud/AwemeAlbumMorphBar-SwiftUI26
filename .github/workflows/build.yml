@@ -44,8 +44,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod 755 scripts/preflight.sh build_no_install.sh 2>/dev/null || true
-          chmod 755 layout/DEBIAN/postinst 2>/dev/null || true
+          chmod 755 layout/DEBIAN/postinst scripts/preflight.sh build_no_install.sh 2>/dev/null || true
+          ls -l layout/DEBIAN/postinst scripts/preflight.sh build_no_install.sh
 
       - name: Preflight Swift native tab controller
         shell: bash
@@ -76,7 +76,7 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: AwemeLiquidBar-1.0.54c-Xcode27-rootless
+          name: AwemeLiquidBar-1.0.55a-Xcode27-rootless
           path: packages/*.deb
           if-no-files-found: error
           retention-days: 14

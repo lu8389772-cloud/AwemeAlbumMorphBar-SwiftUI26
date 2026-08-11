@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.54c'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.54c-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.54c'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.54c'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.54c_interaction.log'),
+    ('control', control, 'Version: 1.0.55a'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.55a-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.55a'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.55a'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.55a_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,23 +36,22 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.54c', 'LiquidBar 设置 · 1.0.54c',
+    'AwemeLiquidBar 1.0.55a', 'LiquidBar 设置 · 1.0.55a',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
     'AWEDownloadAudioForAweme', 'AWECopyCompleteTextForAweme',
-    'AWEAvatarBaseMenuForStack', '@"进入主页"',
+    'AWEAvatarBaseMenuForStack', '@"进入主页"', '@"一键清屏"', '@"退出清屏"',
     '@"头像菜单显示下载功能"', 'AWEAvatarMenuDownloadEnabled',
     'slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, pictureHost);',
     'slot.menuButton.showsMenuAsPrimaryAction = YES;',
     'AWEInstallGlassPressFeedback(slot.menuButton, slot.glassButton);',
-    'AWECurrentOriginalSecondBadgeValue', 'BOTTOM_BADGES_NATIVE',
+    'AWEStableEnterCleanScreenFromStack', 'AWEStableExitCleanScreen',
+    'AWEStableApplyCleanScreenGlobal', 'CLEAN_STABLE exit',
+    'AWECurrentOriginalSecondBadgeValue', 'AWECurrentOriginalMessagesBadgeValue',
+    'BOTTOM_BADGES_NATIVE', 'if (![scanner scanInteger:&count] || count <= 0) return nil;',
     '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
-    'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_PROTECT',
-    'RIGHT_FULLSCREEN_BLOCK_HIDE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA',
-    'RIGHT_FULLSCREEN_BLOCK_REMOVE', 'AWECurrentRouteHasPlayableFeedController',
     '%hook AWENormalModeTabBarBadgeContainerView',
-    'AWEPrimeFriendsNativeLayoutFootprint', 'AWEApplyFriendsCaptionBottomReserve',
 ]
 for token in required_objc:
     if token not in objc:
@@ -75,22 +74,13 @@ for forbidden in [
     'AWEExternalBridgeInvokeSelectorName', 'BRIDGE_PLUGIN_FOUND', 'BRIDGE_ACTION',
     'saveCurrentVideo', 'tcShowDownloadOptions', 'NATIVE_DOWNLOAD_READY',
     '上滑收缩底栏（动态高度）',
+    'AWEDYYYFullscreenEnabled', 'DYYY_INTERACTION_GEOMETRY',
+    'RIGHT_FLEX_REPAIR', 'PROFILE_VSYNC_REPAIR', 'BOTTOM_FOOTPRINT_ANOMALY',
+    'AWE53RebindNativeHomeActionsInForegroundWindows', 'AWE53RightGlassLooksHealthy',
+    'AWEStableCleanScreenRecoveryTarget',
 ]:
     if forbidden in objc or forbidden in swift:
         raise SystemExit(f'forbidden regression/bridge remains: {forbidden}')
-
-for token in [
-    'AwemeLiquidBarDYYYFullscreenV1',
-    'DYYY 全屏实验（请关闭其他全屏插件）',
-    '%hook AWEStoryContainerCollectionView',
-    '%hook TTMetalView',
-    '%hook TTMetalViewNew',
-    '%hook AWEAwemeDetailTableView',
-    '%hook AWEMixVideoPanelMoreView',
-    'AWEDYYYFullscreenBottomHeight',
-]:
-    if token not in objc:
-        raise SystemExit(f'missing DYYY fullscreen token: {token}')
 
 if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
@@ -116,5 +106,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.54c DYYY-fullscreen/auth36 preflight passed')
+print('AwemeLiquidBar 1.0.55a stable-no-fullscreen/clean-screen/native-badges preflight passed')
 PY2

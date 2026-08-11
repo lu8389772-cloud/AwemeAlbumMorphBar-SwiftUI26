@@ -11,13 +11,14 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.54c — DYYY-derived fullscreen experiment + auth36
+ AwemeLiquidBar 1.0.55a — stable no-fullscreen baseline + native badges + isolated clean screen + auth36
 
- Experimental fullscreen branch:
- - starts from the 1.0.52o auth36 source baseline;
- - ports only the feed/detail fullscreen geometry core from huami1314/DYYY;
- - deliberately omits DYYY live-title/live-room cosmetic relocation code;
- - requires other fullscreen tweaks to be disabled while testing.
+ Stability consolidation release:
+ - rebuilt directly from 1.0.52o auth36; none of the later fullscreen/right-stack/footprint/DYYY experiments are included;
+ - keeps the native Friends/Messages badge path and 0.90 native-badge scale, while ensuring Messages unread=0 clears the badge instead of leaving an empty dot;
+ - adds an isolated one-tap clean screen that only changes layer opacity / interaction state, never frame, center, safe-area, tab-bar footprint, or superview relationships;
+ - clean screen exits from the same avatar menu hit target, without creating/reparenting/cropping a replacement avatar;
+ - external fullscreen plugins are explicitly outside this build's compatibility scope.
 
  Regression restore release:
  - restores the proven hard-suspend path for publish and share/forward sheets so
@@ -137,6 +138,10 @@ static BOOL AWEFrameLooksLikeCurrentRightActionStack(UIView *stack);
 static BOOL AWEClassNameLooksLikePlayableFeedController(NSString *className);
 static BOOL AWECurrentRouteHasPlayableFeedController(void);
 static BOOL AWEForceRestoreRightActionStackAfterComment(UIView *stack);
+static UIMenu *AWEAvatarBaseMenuForStack(UIView *stack, UIView *profileHost);
+static void AWEStableEnterCleanScreenFromStack(UIView *stack);
+static void AWEStableExitCleanScreen(void);
+static void AWEStableApplyCleanScreenGlobal(void);
 
 static char kAWENativeBarKey;
 static char kAWEDelegateKey;
@@ -163,6 +168,9 @@ static char kAWEChatPlaceholderBaseFrameKey;
 static char kAWEChatPlaceholderAppliedFrameKey;
 static char kAWEVisibilityMaskKey;
 static char kAWEVisibilityCoordinatorRegistrationKey;
+static char kAWEStableCleanMarkerKey;
+static char kAWEStableCleanOriginalOpacityKey;
+static char kAWEStableCleanOriginalInteractionKey;
 static char kAWEHomeActionGlassKey;
 static char kAWEHomeActionProxyKey;
 static char kAWEHomeActionProxyTargetKey;
@@ -371,8 +379,6 @@ static NSString * const kAWEHideBottomTitlesDefaultsKey =
     @"AwemeLiquidBarHideBottomTitlesV1";
 static NSString * const kAWESettingsGestureMineOnlyDefaultsKey =
     @"AwemeLiquidBarSettingsGestureMineOnlyV1";
-static NSString * const kAWEDYYYFullscreenDefaultsKey =
-    @"AwemeLiquidBarDYYYFullscreenV1";
 static NSString * const kAWEMessageBadgeEnabledDefaultsKey =
     @"AwemeLiquidBarMessageBadgeEnabledV1";
 static NSString * const kAWEAvatarMenuDownloadEnabledDefaultsKey =
@@ -431,6 +437,11 @@ static __weak UIView *gAWECommentRightStackBefore = nil;
 static BOOL gAWEFriendsTabLatched = NO;
 static NSString *gAWEDownloadSlotProbeSignature = nil;
 
+/* 1.0.55a clean screen is deliberately display-only. It never owns layout. */
+static BOOL gAWEStableCleanScreenEnabled = NO;
+static __weak UIView *gAWEStableCleanScreenStack = nil;
+static NSHashTable<UIView *> *gAWEStableCleanSuppressedViews = nil;
+
 
 #pragma mark - iOS 26/27 global glass style and adaptive foreground
 
@@ -469,48 +480,6 @@ static BOOL AWESettingsGestureMineOnlyEnabled(void) {
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
 
-static BOOL AWEDYYYFullscreenEnabled(void) {
-    id stored = [NSUserDefaults.standardUserDefaults
-        objectForKey:kAWEDYYYFullscreenDefaultsKey];
-    return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
-}
-
-static CGFloat AWEDYYYFullscreenBottomHeight(void) {
-    CGFloat h = 0.0;
-    UIView *bar = (UIView *)gAWELastTabBar;
-    if (bar && bar.window && bar.bounds.size.height >= 30.0 &&
-        bar.bounds.size.height <= 160.0) {
-        h = bar.bounds.size.height;
-    }
-    if (h <= 0.0) {
-        UIWindow *window = AWEActiveMainWindow();
-        CGFloat bottom = window ? window.safeAreaInsets.bottom : 0.0;
-        h = 49.0 + MAX(0.0, bottom);
-    }
-    return h;
-}
-
-static UIViewController *AWEDYYYFullscreenViewControllerForView(UIView *view) {
-    UIResponder *responder = view;
-    while (responder) {
-        if ([responder isKindOfClass:UIViewController.class]) {
-            return (UIViewController *)responder;
-        }
-        responder = responder.nextResponder;
-    }
-    return nil;
-}
-
-static BOOL AWEDYYYFullscreenVCMatches(UIViewController *vc,
-                                       NSArray<NSString *> *classNames) {
-    if (!vc) return NO;
-    for (NSString *name in classNames) {
-        Class cls = NSClassFromString(name);
-        if (cls && [vc isKindOfClass:cls]) return YES;
-    }
-    return NO;
-}
-
 static BOOL AWEMessageBadgeEnabled(void) {
     return [NSUserDefaults.standardUserDefaults
         boolForKey:kAWEMessageBadgeEnabledDefaultsKey];
@@ -525,7 +494,7 @@ static BOOL AWEAvatarMenuDownloadEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.54c: do not opt fresh installs into continuous player quality
+    /* 1.0.55a: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -853,7 +822,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.54c_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.55a_interaction.log"] copy];
     });
     return path;
 }
@@ -922,7 +891,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.54c_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.55a_probe.log"] copy];
     });
     return path;
 }
@@ -4355,7 +4324,20 @@ static NSString *AWECurrentOriginalBadgeValueForButtonIndex(NSUInteger index) {
 }
 
 static NSString *AWECurrentOriginalMessagesBadgeValue(void) {
-    return AWECurrentOriginalBadgeValueForButtonIndex(3);
+    NSString *value = AWECurrentOriginalBadgeValueForButtonIndex(3);
+    if (!value.length) return nil;
+
+    /* Messages is a numeric unread counter. Douyin can leave its native badge
+       container visible after the count reaches zero; mirroring that empty
+       container as @" " makes UIKit draw an empty red circle. Only mirror a
+       strictly positive numeric value (compact forms such as 99+ still pass). */
+    NSString *trimmed = [value stringByTrimmingCharactersInSet:
+        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!trimmed.length) return nil;
+    NSScanner *scanner = [NSScanner scannerWithString:trimmed];
+    NSInteger count = 0;
+    if (![scanner scanInteger:&count] || count <= 0) return nil;
+    return trimmed;
 }
 
 static NSString *AWECurrentOriginalSecondBadgeValue(void) {
@@ -5966,7 +5948,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.54c: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.55a: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6971,7 +6953,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.54c is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.55a is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8606,7 +8588,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.54c: keep the singleton download control inside the *current feed
+    /* 1.0.55a: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8681,7 +8663,7 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     (void)stack;
-    /* 1.0.54c: independent download button retired. Download now lives only
+    /* 1.0.55a: independent download button retired. Download now lives only
        in the stable avatar-base menu, so no feed/right-stack geometry can
        create, move, hide, or resurrect a floating download control. */
     AWEHideGlobalDownloadMenu();
@@ -8764,6 +8746,198 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
+#pragma mark - 1.0.55a isolated display-only clean screen
+
+static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
+    if (!view) return;
+    if (![objc_getAssociatedObject(view, &kAWEStableCleanMarkerKey) boolValue]) {
+        objc_setAssociatedObject(view, &kAWEStableCleanMarkerKey, @YES,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kAWEStableCleanOriginalOpacityKey,
+                                 @(view.layer.opacity),
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, &kAWEStableCleanOriginalInteractionKey,
+                                 @(view.userInteractionEnabled),
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!gAWEStableCleanSuppressedViews) {
+            gAWEStableCleanSuppressedViews = [NSHashTable weakObjectsHashTable];
+        }
+        [gAWEStableCleanSuppressedViews addObject:view];
+    }
+    view.layer.opacity = 0.0f;
+    if (disableInteraction) view.userInteractionEnabled = NO;
+}
+
+static void AWEStableCleanRestoreView(UIView *view) {
+    if (!view || ![objc_getAssociatedObject(view, &kAWEStableCleanMarkerKey) boolValue]) return;
+    NSNumber *opacity = objc_getAssociatedObject(view, &kAWEStableCleanOriginalOpacityKey);
+    NSNumber *interaction = objc_getAssociatedObject(view, &kAWEStableCleanOriginalInteractionKey);
+    if (opacity) view.layer.opacity = opacity.floatValue;
+    if (interaction) view.userInteractionEnabled = interaction.boolValue;
+    objc_setAssociatedObject(view, &kAWEStableCleanMarkerKey, nil, OBJC_ASSOCIATION_ASSIGN);
+    objc_setAssociatedObject(view, &kAWEStableCleanOriginalOpacityKey, nil, OBJC_ASSOCIATION_ASSIGN);
+    objc_setAssociatedObject(view, &kAWEStableCleanOriginalInteractionKey, nil, OBJC_ASSOCIATION_ASSIGN);
+}
+
+static void AWEStableCleanRestoreAll(void) {
+    NSArray<UIView *> *views = gAWEStableCleanSuppressedViews.allObjects ?: @[];
+    for (UIView *view in views) AWEStableCleanRestoreView(view);
+    [gAWEStableCleanSuppressedViews removeAllObjects];
+}
+
+static BOOL AWEStableCleanClassLooksLikeMedia(UIView *view) {
+    NSString *lower = NSStringFromClass(view.class).lowercaseString;
+    for (NSString *token in @[@"player", @"video", @"render", @"surface", @"metal",
+                               @"samplebuffer", @"pixelbuffer", @"imagecontent", @"photoalbum"]) {
+        if ([lower containsString:token]) return YES;
+    }
+    return NO;
+}
+
+static BOOL AWEStableCleanClassLooksLikeSystemMenu(UIView *view) {
+    NSString *lower = NSStringFromClass(view.class).lowercaseString;
+    return [lower containsString:@"contextmenu"] ||
+           [lower containsString:@"menuplatter"] ||
+           [lower containsString:@"menulist"] ||
+           [lower containsString:@"calloutbar"];
+}
+
+static BOOL AWEStableCleanClassLooksLikeChrome(UIView *view) {
+    NSString *lower = NSStringFromClass(view.class).lowercaseString;
+    for (NSString *token in @[@"caption", @"description", @"nickname", @"author", @"music",
+                               @"tag", @"anchor", @"poi", @"progress", @"seek", @"speed",
+                               @"digg", @"favorite", @"collect", @"share", @"profilepicture",
+                               @"avatar", @"followbutton", @"interactionbutton", @"feedbutton"]) {
+        if ([lower containsString:token]) return YES;
+    }
+    return NO;
+}
+
+static void AWEStableCleanSuppressRightStack(UIView *stack) {
+    if (!gAWEStableCleanScreenEnabled || !stack) return;
+    AWEHomeProfileGlassView *slot = objc_getAssociatedObject(stack, &kAWEProfileGlassSlotKey);
+    UIButton *menuButton = slot.menuButton;
+    for (UIView *child in [stack.subviews copy]) {
+        if (child == menuButton) continue; /* invisible exit/menu hit target */
+        AWEStableCleanSuppressView(child, YES);
+    }
+    if (menuButton) {
+        AWEStableCleanRestoreView(menuButton);
+        menuButton.layer.opacity = 1.0f;
+        menuButton.userInteractionEnabled = YES;
+        menuButton.hidden = NO;
+        menuButton.alpha = 1.0;
+        menuButton.menu = AWEAvatarBaseMenuForStack(stack, slot.profileHost);
+        menuButton.showsMenuAsPrimaryAction = YES;
+        [stack bringSubviewToFront:menuButton];
+    }
+}
+
+static void AWEStableCleanSuppressTree(UIView *root, UIWindow *window, NSUInteger depth) {
+    if (!gAWEStableCleanScreenEnabled || !root || !window || depth > 18) return;
+    if (AWEStableCleanClassLooksLikeSystemMenu(root)) return;
+    NSString *rootClass = NSStringFromClass(root.class);
+    if ([rootClass isEqualToString:@"AWEElementStackView"]) {
+        AWEStableCleanSuppressRightStack(root);
+        return;
+    }
+    for (UIView *view in [root.subviews copy]) {
+        if (!view) continue;
+        NSString *className = NSStringFromClass(view.class);
+        if (AWEStableCleanClassLooksLikeSystemMenu(view)) continue;
+        if ([className isEqualToString:@"AWEFeedTopBarContainer"]) {
+            AWEStableCleanSuppressView(view, YES);
+            continue;
+        }
+        if (AWEStableCleanClassLooksLikeMedia(view)) continue;
+        CGRect frame = view.window ? [view convertRect:view.bounds toView:window] : CGRectZero;
+        CGFloat ww = MAX(CGRectGetWidth(window.bounds), 1.0);
+        CGFloat wh = MAX(CGRectGetHeight(window.bounds), 1.0);
+        CGFloat width = CGRectGetWidth(frame), height = CGRectGetHeight(frame);
+        BOOL huge = width > ww * 0.72 && height > wh * 0.55;
+        BOOL text = [view isKindOfClass:UILabel.class] || [view isKindOfClass:UITextView.class];
+        BOOL smallImage = [view isKindOfClass:UIImageView.class] && width > 2.0 && height > 2.0 &&
+                          width <= 140.0 && height <= 140.0;
+        BOOL smallControl = [view isKindOfClass:UIControl.class] && !huge &&
+                            width <= 280.0 && height <= 280.0;
+        BOOL chrome = !huge && AWEStableCleanClassLooksLikeChrome(view);
+        if (text || smallImage || smallControl || chrome) {
+            AWEStableCleanSuppressView(view, YES);
+            if (chrome) continue;
+        }
+        AWEStableCleanSuppressTree(view, window, depth + 1);
+    }
+}
+
+static void AWEStableCleanSuppressStatusBarViews(UIView *root, NSUInteger depth) {
+    if (!root || depth > 16) return;
+    NSString *lower = NSStringFromClass(root.class).lowercaseString;
+    if ([lower containsString:@"statusbar"] || [lower containsString:@"status_bar"]) {
+        AWEStableCleanSuppressView(root, NO);
+        return;
+    }
+    for (UIView *child in root.subviews) AWEStableCleanSuppressStatusBarViews(child, depth + 1);
+}
+
+static void AWEStableApplyCleanScreenGlobal(void) {
+    if (!gAWEStableCleanScreenEnabled) return;
+    UIApplication *app = UIApplication.sharedApplication;
+    NSArray<UIWindow *> *windows = nil;
+    if (@available(iOS 13.0, *)) {
+        NSMutableArray<UIWindow *> *collected = [NSMutableArray array];
+        for (UIScene *scene in app.connectedScenes) {
+            if (![scene isKindOfClass:UIWindowScene.class]) continue;
+            if (scene.activationState != UISceneActivationStateForegroundActive &&
+                scene.activationState != UISceneActivationStateForegroundInactive) continue;
+            [collected addObjectsFromArray:((UIWindowScene *)scene).windows ?: @[]];
+        }
+        windows = collected;
+    } else {
+        windows = app.windows ?: @[];
+    }
+    for (UIWindow *window in windows) {
+        if (!window || window.hidden || window.alpha <= 0.01) continue;
+        AWEStableCleanSuppressStatusBarViews(window, 0);
+        if (window.windowLevel != UIWindowLevelNormal) continue;
+        if (window == (UIWindow *)gAWEAlbumMorphOverlayWindow ||
+            [NSStringFromClass(window.class) containsString:@"AWEAlbumMorphOverlayWindow"]) continue;
+        AWEStableCleanSuppressTree(window, window, 0);
+    }
+    if (gAWELastTabBar) AWEStableCleanSuppressView((UIView *)gAWELastTabBar, YES);
+    if (gAWEAlbumMorphOverlayWindow) {
+        AWEStableCleanSuppressView((UIView *)gAWEAlbumMorphOverlayWindow, YES);
+    }
+}
+
+static void AWEStableRefreshCurrentCleanMenu(void) {
+    UIView *stack = gAWEStableCleanScreenStack;
+    if (!stack) return;
+    AWEHomeProfileGlassView *slot = objc_getAssociatedObject(stack, &kAWEProfileGlassSlotKey);
+    if (!slot.menuButton) return;
+    slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, slot.profileHost);
+    slot.menuButton.showsMenuAsPrimaryAction = YES;
+}
+
+static void AWEStableEnterCleanScreenFromStack(UIView *stack) {
+    if (gAWEStableCleanScreenEnabled || !stack || !stack.window) return;
+    gAWEStableCleanScreenEnabled = YES;
+    gAWEStableCleanScreenStack = stack;
+    AWEStableRefreshCurrentCleanMenu();
+    AWEStableApplyCleanScreenGlobal();
+    AWEInteractionDiagnosticWrite(@"CLEAN_STABLE enter stack=%@", AWEInteractionObjectSummary(stack));
+}
+
+static void AWEStableExitCleanScreen(void) {
+    if (!gAWEStableCleanScreenEnabled) return;
+    UIView *stack = gAWEStableCleanScreenStack;
+    gAWEStableCleanScreenEnabled = NO;
+    AWEStableCleanRestoreAll();
+    gAWEStableCleanScreenStack = stack;
+    AWEStableRefreshCurrentCleanMenu();
+    gAWEStableCleanScreenStack = nil;
+    AWEInteractionDiagnosticWrite(@"CLEAN_STABLE exit");
+}
+
 static UIMenu *AWEAvatarBaseMenuForStack(UIView *stack, UIView *profileHost) {
     NSMutableArray<UIMenuElement *> *children = [NSMutableArray array];
     __weak UIView *weakProfileHost = profileHost;
@@ -8778,6 +8952,21 @@ static UIMenu *AWEAvatarBaseMenuForStack(UIView *stack, UIView *profileHost) {
                                           result, AWEInteractionObjectSummary(target));
         }];
     [children addObject:profileAction];
+
+    __weak UIView *weakCleanStack = stack;
+    UIAction *cleanAction = [UIAction actionWithTitle:(gAWEStableCleanScreenEnabled ? @"退出清屏" : @"一键清屏")
+        image:[UIImage systemImageNamed:(gAWEStableCleanScreenEnabled ? @"eye" : @"eye.slash")]
+        identifier:nil
+        handler:^(__kindof UIAction * _Nonnull action) {
+            (void)action;
+            if (gAWEStableCleanScreenEnabled) {
+                AWEStableExitCleanScreen();
+            } else {
+                UIView *currentStack = weakCleanStack;
+                if (currentStack.window) AWEStableEnterCleanScreenFromStack(currentStack);
+            }
+        }];
+    [children addObject:cleanAction];
 
     if (AWEAvatarMenuDownloadEnabled()) {
         [children addObject:AWEAvatarLiveAwemeAction(
@@ -13107,211 +13296,6 @@ static void AWEForceAlbumMorphRouteRecovery(NSString *reason) {
     });
 }
 
-#pragma mark - DYYY-derived fullscreen experiment
-
-/*
- Source adaptation: huami1314/DYYY, MIT License.
- Upstream setting: DYYYEnableFullScreen.
- Only the feed/detail geometry path is adapted. Live-room title relocation and
- unrelated DYYY UI behavior are deliberately omitted in this first test.
-*/
-
-%hook UIView
-
-- (void)setBackgroundColor:(UIColor *)backgroundColor {
-    if (AWEDYYYFullscreenEnabled()) {
-        UIViewController *vc = AWEDYYYFullscreenViewControllerForView(self);
-        if (AWEDYYYFullscreenVCMatches(vc, @[
-                @"AWEAwemeDetailTableViewController",
-                @"AWEAwemeDetailCellViewController"
-            ])) {
-            %orig(UIColor.clearColor);
-            return;
-        }
-    }
-    %orig(backgroundColor);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    if (!AWEDYYYFullscreenEnabled()) return;
-    UIViewController *vc = AWEDYYYFullscreenViewControllerForView(self);
-    Class interactionClass = NSClassFromString(@"AWEPlayInteractionViewController");
-    if (interactionClass && [vc isKindOfClass:interactionClass]) {
-        for (UIView *subview in [self.subviews copy]) {
-            UIColor *color = subview.backgroundColor;
-            if (!color) continue;
-            CGColorRef cg = color.CGColor;
-            if (cg && CGColorEqualToColor(cg, UIColor.blackColor.CGColor)) {
-                subview.hidden = YES;
-            }
-        }
-    }
-}
-
-- (void)setFrame:(CGRect)frame {
-    if (!AWEDYYYFullscreenEnabled() || ![NSThread isMainThread]) {
-        %orig(frame);
-        return;
-    }
-    UIViewController *vc = AWEDYYYFullscreenViewControllerForView(self);
-    BOOL isPlayVC = AWEDYYYFullscreenVCMatches(vc, @[
-        @"AWEAwemePlayVideoViewController",
-        @"AWEDPlayerFeedPlayerViewController",
-        @"AWEDPlayerViewController_Merge"
-    ]);
-    if (isPlayVC && self.superview) {
-        if (!(fabs(frame.origin.x) > 0.01 && fabs(frame.origin.y) > 0.01)) {
-            CGFloat superH = CGRectGetHeight(self.superview.frame);
-            CGFloat frameH = CGRectGetHeight(frame);
-            CGFloat bottomH = AWEDYYYFullscreenBottomHeight();
-            if (superH > 0.0 && frameH > 0.0 && frameH < superH && bottomH > 0.0) {
-                CGFloat diff = superH - frameH;
-                if (fabs(diff - bottomH) < 1.5) frame.size.height = superH;
-            }
-        }
-    }
-    %orig(frame);
-}
-
-%end
-
-%hook AWEStoryContainerCollectionView
-- (void)layoutSubviews {
-    %orig;
-    if (!AWEDYYYFullscreenEnabled()) return;
-    UIView *host = (UIView *)(id)self;
-    id enableEnterProfile = nil;
-    @try { enableEnterProfile = [(id)self valueForKey:@"enableEnterProfile"]; }
-    @catch (__unused NSException *e) {}
-    BOOL isHome = [enableEnterProfile respondsToSelector:@selector(boolValue)] &&
-                  [enableEnterProfile boolValue];
-    if (!isHome) return;
-    CGFloat bottomH = AWEDYYYFullscreenBottomHeight();
-    for (UIView *subview in [host.subviews copy]) {
-        UIResponder *next = subview.nextResponder;
-        Class interactionClass = NSClassFromString(@"AWEPlayInteractionViewController");
-        if (!interactionClass || ![next isKindOfClass:interactionClass]) continue;
-        id baseVC = nil;
-        @try { baseVC = [next valueForKey:@"awemeBaseViewController"]; }
-        @catch (__unused NSException *e) {}
-        Class feedCellClass = NSClassFromString(@"AWEFeedCellViewController");
-        if (feedCellClass && baseVC && ![baseVC isKindOfClass:feedCellClass]) continue;
-        if (subview.superview && bottomH > 0.0) {
-            CGRect f = subview.frame;
-            CGFloat target = CGRectGetHeight(subview.superview.frame) - bottomH;
-            if (target > 0.0 && fabs(CGRectGetHeight(f) - target) > 0.5) {
-                f.size.height = target;
-                subview.frame = f;
-            }
-        }
-    }
-}
-%end
-
-static CGPoint AWEDYYYAdjustedMetalCenter(UIView *view, CGPoint center) {
-    if (!AWEDYYYFullscreenEnabled() || !view) return center;
-    CGFloat screenW = UIScreen.mainScreen.bounds.size.width;
-    if (CGRectGetWidth(view.bounds) + 0.5 < screenW) return center;
-    UIViewController *vc = AWEDYYYFullscreenViewControllerForView(view);
-    Class playClass = NSClassFromString(@"AWEPlayVideoViewController");
-    if (!playClass || ![vc isKindOfClass:playClass]) return center;
-    id model = nil;
-    @try { model = [vc valueForKey:@"model"]; }
-    @catch (__unused NSException *e) {}
-    BOOL landscapeEntry = NO;
-    @try {
-        id value = [model valueForKey:@"isShowLandscapeEntryView"];
-        landscapeEntry = [value respondsToSelector:@selector(boolValue)] && [value boolValue];
-    } @catch (__unused NSException *e) {}
-    if (landscapeEntry) {
-        CGFloat bottomH = AWEDYYYFullscreenBottomHeight();
-        if (bottomH > 0.0) center.y -= bottomH * 0.5;
-    }
-    return center;
-}
-
-%hook TTMetalView
-- (void)setCenter:(CGPoint)center {
-    center = AWEDYYYAdjustedMetalCenter((UIView *)(id)self, center);
-    %orig(center);
-}
-%end
-
-%hook TTMetalViewNew
-- (void)setCenter:(CGPoint)center {
-    center = AWEDYYYAdjustedMetalCenter((UIView *)(id)self, center);
-    %orig(center);
-}
-%end
-
-%hook AWEStoryProgressContainerView
-- (void)setCenter:(CGPoint)center {
-    if (AWEDYYYFullscreenEnabled()) {
-        UIViewController *vc = AWEDYYYFullscreenViewControllerForView((UIView *)(id)self);
-        NSString *name = NSStringFromClass(vc.class);
-        if ([name containsString:@"PureModePageCellViewController"]) {
-            center.y -= AWEDYYYFullscreenBottomHeight();
-        }
-    }
-    %orig(center);
-}
-%end
-
-%hook AWEAwemeDetailTableView
-- (void)setFrame:(CGRect)frame {
-    if (AWEDYYYFullscreenEnabled()) {
-        CGFloat screenH = UIScreen.mainScreen.bounds.size.height;
-        if (screenH > 0.0 && frame.size.height > 0.0) {
-            CGFloat remainder = fmod(frame.size.height, screenH);
-            if (remainder > 0.5 && screenH - remainder > 0.5) {
-                frame.size.height += (screenH - remainder);
-            }
-        }
-    }
-    %orig(frame);
-}
-%end
-
-%hook AWEMixVideoPanelMoreView
-- (void)setFrame:(CGRect)frame {
-    if (AWEDYYYFullscreenEnabled()) {
-        CGFloat bottomH = AWEDYYYFullscreenBottomHeight();
-        CGFloat targetY = frame.origin.y - bottomH;
-        CGFloat screenMinusBottom = UIScreen.mainScreen.bounds.size.height - bottomH;
-        if (bottomH > 0.0 && fabs(targetY - screenMinusBottom) <= 10.0) {
-            frame.origin.y = targetY;
-        }
-    }
-    %orig(frame);
-}
-- (void)layoutSubviews {
-    %orig;
-    if (AWEDYYYFullscreenEnabled()) ((UIView *)(id)self).backgroundColor = UIColor.clearColor;
-}
-%end
-
-%hook CommentInputContainerView
-- (void)layoutSubviews {
-    %orig;
-    if (!AWEDYYYFullscreenEnabled()) return;
-    UIView *host = (UIView *)(id)self;
-    UIViewController *vc = AWEDYYYFullscreenViewControllerForView(host);
-    if (!AWEDYYYFullscreenVCMatches(vc, @[
-            @"AWEAwemeDetailTableViewController",
-            @"AWEAwemeDetailCellViewController"
-        ])) return;
-    CGFloat bottomH = AWEDYYYFullscreenBottomHeight();
-    if (bottomH <= 0.0) return;
-    for (UIView *subview in host.subviews) {
-        if ([subview class] == UIView.class) {
-            subview.hidden = fabs(host.frame.size.height - bottomH) < 1.0;
-            break;
-        }
-    }
-}
-%end
-
 #pragma mark - Settings
 
 static void AWEApplyStoredAccentToCurrentBar(void) {
@@ -14309,7 +14293,6 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 @property (nonatomic, retain) UISwitch *chatSeparateLeftSwitch;
 @property (nonatomic, retain) UISwitch *masterSwitch;
 @property (nonatomic, retain) UISwitch *interactionDiagnosticSwitch;
-@property (nonatomic, retain) UISwitch *dyyyFullscreenSwitch;
 @property (nonatomic, retain) UILabel *authorizationFooter;
 @property (nonatomic, retain) NSTimer *systemThemeTimer;
 @property (nonatomic, assign) UIUserInterfaceStyle lastAppliedSystemStyle;
@@ -14324,7 +14307,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.54c";
+    self.title = @"LiquidBar 设置 · 1.0.55a";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14971,30 +14954,6 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     UIButton *iconCenterButton = AWECreateGlassTextButton(@"打开顶部与右侧图标中心", AWEStoredAccentColor(), YES);
     [iconCenterButton addTarget:self action:@selector(openIconCenter:) forControlEvents:UIControlEventTouchUpInside];
 
-    UILabel *dyyyFullscreenLabel = [UILabel new];
-    dyyyFullscreenLabel.text = @"DYYY 全屏实验（请关闭其他全屏插件）";
-    dyyyFullscreenLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
-    dyyyFullscreenLabel.numberOfLines = 0;
-    UISwitch *dyyyFullscreenSwitch = [UISwitch new];
-    dyyyFullscreenSwitch.on = AWEDYYYFullscreenEnabled();
-    dyyyFullscreenSwitch.onTintColor = AWEStoredAccentColor();
-    [dyyyFullscreenSwitch addTarget:self
-                             action:@selector(dyyyFullscreenSwitchChanged:)
-                   forControlEvents:UIControlEventValueChanged];
-    self.dyyyFullscreenSwitch = dyyyFullscreenSwitch;
-    UIStackView *dyyyFullscreenRow = [[UIStackView alloc]
-        initWithArrangedSubviews:@[dyyyFullscreenLabel, dyyyFullscreenSwitch]];
-    dyyyFullscreenRow.axis = UILayoutConstraintAxisHorizontal;
-    dyyyFullscreenRow.alignment = UIStackViewAlignmentCenter;
-    dyyyFullscreenRow.distribution = UIStackViewDistributionEqualSpacing;
-    dyyyFullscreenRow.spacing = 10.0;
-
-    UILabel *dyyyFullscreenHint = [UILabel new];
-    dyyyFullscreenHint.text = @"仅移植 DYYY 的 Feed/详情全屏几何核心；本测试版不移植直播标题上移等直播间附加改动。切换后建议滑到下一条作品触发原生重布局。";
-    dyyyFullscreenHint.font = [UIFont systemFontOfSize:11.5 weight:UIFontWeightRegular];
-    dyyyFullscreenHint.textColor = UIColor.tertiaryLabelColor;
-    dyyyFullscreenHint.numberOfLines = 0;
-
     UILabel *diagnosticLabel = [UILabel new];
     diagnosticLabel.text = @"交互诊断日志（反馈用）";
     diagnosticLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
@@ -15033,8 +14992,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         topRow, hideTopLeftButtonRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
         adaptiveGlassHint, transparentGlassRow,
         pngRow, pngHint, reloadPNG,
-        iconCenterButton, dyyyFullscreenRow, dyyyFullscreenHint,
-        diagnosticRow, diagnosticButtons,
+        iconCenterButton, diagnosticRow, diagnosticButtons,
         exportLogButton
     ]];
     visualStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -15404,21 +15362,6 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
 }
 
-- (void)dyyyFullscreenSwitchChanged:(UISwitch *)sender {
-    [NSUserDefaults.standardUserDefaults setBool:sender.isOn
-        forKey:kAWEDYYYFullscreenDefaultsKey];
-    [NSUserDefaults.standardUserDefaults synchronize];
-    UIWindow *window = AWEActiveMainWindow();
-    if (window) {
-        [window setNeedsLayout];
-        [window layoutIfNeeded];
-    }
-    AWEScheduleTransitionRecovery();
-    AWEAlbumMorphProbeWrite(@"DYYY_FULLSCREEN enabled=%d bottom=%.2f",
-                            sender.isOn,
-                            AWEDYYYFullscreenBottomHeight());
-}
-
 - (void)messageBadgeSwitchChanged:(UISwitch *)sender {
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWEMessageBadgeEnabledDefaultsKey];
@@ -15649,7 +15592,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.54c image=%@ ==========" ,
+            @"========== START build=1.0.55a image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15716,7 +15659,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.54c diagnostic export\n"
+                @"AwemeLiquidBar 1.0.55a diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15731,7 +15674,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.54c_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.55a_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -15977,6 +15920,10 @@ static BOOL AWEGetDoubleTapLocation(id sender,
     AWEHomeDiagnosticWrite(NO, @"HOOK AWEElementStackView.didMoveToWindow self=%p window=%p", self, ((UIView *)self).window);
     if (((UIView *)self).window) AWEScheduleHomeActionStackRefresh((UIView *)self);
     else AWERefreshHomeActionStack((UIView *)self);
+    if (gAWEStableCleanScreenEnabled && ((UIView *)self).window) {
+        gAWEStableCleanScreenStack = (UIView *)self;
+        AWEStableCleanSuppressRightStack((UIView *)self);
+    }
 }
 
 - (void)didMoveToSuperview {
@@ -16003,6 +15950,10 @@ static BOOL AWEGetDoubleTapLocation(id sender,
        together with the stack, so a full hierarchy scan on every video frame
        only causes heat and material flashes. */
     AWELayoutBoundHomeActionSlots((UIView *)self);
+    if (gAWEStableCleanScreenEnabled) {
+        gAWEStableCleanScreenStack = (UIView *)self;
+        AWEStableCleanSuppressRightStack((UIView *)self);
+    }
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -16056,6 +16007,10 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 - (void)didAddSubview:(UIView *)subview {
     %orig(subview);
     AWEScheduleHomeActionStackRefresh((UIView *)self);
+    if (gAWEStableCleanScreenEnabled) {
+        gAWEStableCleanScreenStack = (UIView *)self;
+        AWEStableCleanSuppressRightStack((UIView *)self);
+    }
 }
 
 - (void)setFrame:(CGRect)frame {
@@ -16160,6 +16115,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
         !objc_getAssociatedObject((UIView *)self, &kAWETopLiquidGroupViewKey)) {
         AWEScheduleTopActionContainerRefresh((UIView *)self);
     }
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
 }
 
 - (void)setHidden:(BOOL)hidden {
@@ -16337,6 +16293,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 - (void)viewDidLayoutSubviews {
     %orig;
     AWEScheduleHomeActionStacksInView(self.view);
+    if (gAWEStableCleanScreenEnabled) AWEStableApplyCleanScreenGlobal();
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -16890,6 +16847,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
         }
         AWEClearDirectNativeBarBackground(self);
     }
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
@@ -17613,7 +17571,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.54c os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.55a os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

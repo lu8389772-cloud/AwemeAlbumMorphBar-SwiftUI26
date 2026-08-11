@@ -1,10 +1,7 @@
-AwemeLiquidBar 1.0.54c device test
+AwemeLiquidBar 1.0.55a device test
 
-1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
-2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
-3. Return to feed; tap avatar again. Download/copy actions should be in the same menu when “头像菜单显示下载功能” is enabled.
-4. Turn that switch off/on. Avatar position and right-side action positions must not move.
-5. Open and close comments repeatedly, including with the external fullscreen tweak enabled. Right-side actions should recover as in 1.0.52c.
-6. Scroll rapidly through at least 15 items. No independent download button should appear anywhere.
-7. With unread state present, Friends and Messages badges should mirror the original Douyin bottom bar. If slot two is Shop, no Shop promotional dot should be copied to Friends.
-8. Compare badge size with the original: plugin badge should use the native badge path with the final visual scaled to about 90%.
+1. Baseline: with third-party fullscreen disabled, verify Home/Friends/Messages/Profile and normal scrolling.
+2. Badges: Messages=0 must show no circle; Messages>0 must show numeric badge. Friends badge should mirror only when the second tab is Friends, not Shop. Badge visual remains ~10% smaller.
+3. Avatar menu: single-tap the liquid avatar and verify profile/download/audio/copy entries.
+4. Clean screen: choose 一键清屏. Top/right/text/status/native bar/LiquidBar should visually disappear without changing media geometry. Tap the same avatar location to open the menu and choose 退出清屏. All original views should return; no replacement avatar is used.
+5. This build does not promise compatibility with external fullscreen plugins; profile-video right-action loss or 83pt bottom shifts caused by such plugins are intentionally not repaired here.

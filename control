@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.54c
+Version: 1.0.55a
 Architecture: iphoneos-arm
-Description: Experimental DYYY-derived feed/detail fullscreen port on the 1.0.52o auth36 baseline; live-room relocation is intentionally omitted.
+Description: Stable no-fullscreen build from auth36: native Friends/Messages badges with zero-count cleanup, original avatar menu/download flow, and isolated display-only clean screen.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks
