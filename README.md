@@ -1,8 +1,8 @@
-# AwemeLiquidBar 1.0.54b
+# AwemeLiquidBar 1.0.54c
 
 This build is rebuilt from the **1.0.52c stable baseline**, not from 1.0.52m.
 
-## 1.0.54b scope
+## 1.0.54c scope
 
 - Retains the 1.0.52c profile-fullscreen/comment right-action recovery path.
 - Retires the independent floating download button. No right-action/profile geometry can position a separate download control.
@@ -13,7 +13,7 @@ This build is rebuilt from the **1.0.52c stable baseline**, not from 1.0.52m.
 - Uses a 36-entry local opaque authorization digest table; no plaintext account identifiers are stored.
 
 
-## 1.0.54b DYYY fullscreen experiment
+## 1.0.54c DYYY fullscreen experiment
 
 - Base: 1.0.52o auth36.
 - New setting: `DYYY 全屏实验（请关闭其他全屏插件）`, default ON for this test build.

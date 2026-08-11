@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.54b device test
+AwemeLiquidBar 1.0.54c device test
 
 1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
 2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
