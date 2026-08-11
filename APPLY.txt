@@ -1,1 +1,1 @@
-Complete AwemeLiquidBar 1.0.52z project. Minimal follow-up to 1.0.52y: make delayed AWECommentInputViewController fully transparent to UI recovery lifecycle. Auth34 preserved.
+This is the complete AwemeLiquidBar 1.0.53a project rebuilt from the 1.0.52o auth34 baseline. Use the complete project archive; do not layer it on any 1.0.52p-1.0.52z experimental project.

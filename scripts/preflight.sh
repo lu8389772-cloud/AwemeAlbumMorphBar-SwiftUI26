@@ -14,11 +14,12 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52z'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52z-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52z'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52z'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52z_interaction.log'),
+    ('control', control, 'Version: 1.0.53a'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.53a-Xcode27-rootless'),
+    ('workflow', workflow, 'chmod 755 layout/DEBIAN/postinst'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.53a'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.53a'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.53a_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,32 +37,52 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52z', 'LiquidBar 设置 · 1.0.52z',
+    'AwemeLiquidBar 1.0.53a', 'LiquidBar 设置 · 1.0.53a',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
     'AWEDownloadAudioForAweme', 'AWECopyCompleteTextForAweme',
-    'AWEAvatarBaseMenuForStack', '@"进入主页"',
+    'AWEAvatarBaseMenuForStack', '@"进入主页"', '@"一键清屏"', '@"退出清屏"',
     '@"头像菜单显示下载功能"', 'AWEAvatarMenuDownloadEnabled',
-    'slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, pictureHost);',
-    'slot.menuButton.showsMenuAsPrimaryAction = YES;',
-    'AWEInstallGlassPressFeedback(slot.menuButton, slot.glassButton);',
-    'AWECurrentOriginalSecondBadgeValue', 'BOTTOM_BADGES_NATIVE',
+    'AwemeLiquidBar.AvatarMenu.WindowAnchor',
+    '[window addSubview:gAWEAvatarMenuOverlayButton];',
+    'button.showsMenuAsPrimaryAction = YES;',
+    'AWE53UpdateAvatarMenuOverlay', 'AWERefreshAvatarMenuOverlayForStack',
+    'CLEAN_SCREEN enter isolated_anchor', 'CLEAN_SCREEN avatar_reveal window_anchor',
+    'if (gAWECleanScreenEnabled) fraction = 0.0;',
+    'RIGHT_NATIVE_LIFECYCLE_ARM', 'RIGHT_NATIVE_LIFECYCLE_RESCAN',
+    'AWE53RebindNativeHomeActionsInForegroundWindows',
+    '%hook AWEFeedVideoButton', 'AWEScheduleHomeActionRefreshForButton',
+    '%hook AWEElementStackView',
+    'RIGHT_INPUT_HELPER_TRANSPARENT',
+    'AWECurrentOriginalMessagesBadgeValue', 'if (![scanner scanInteger:&count] || count <= 0) return nil;',
     '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
-    'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_PROTECT',
-    'RIGHT_FULLSCREEN_BLOCK_HIDE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA',
-    'RIGHT_FULLSCREEN_BLOCK_REMOVE', 'AWECurrentRouteHasPlayableFeedController',
-    'RIGHT_INPUT_HELPER_TRANSPARENT', 'RIGHT_PROFILE_PROTECT_TARGET',
     '%hook AWENormalModeTabBarBadgeContainerView',
-    'AWEPrimeFriendsNativeLayoutFootprint', 'AWEApplyFriendsCaptionBottomReserve',
 ]
 for token in required_objc:
     if token not in objc:
         raise SystemExit(f'missing Objective-C token: {token}')
 
-# The independent floating download control is retired. Its legacy helper may
-# remain for source compatibility, but it must have no callers other than its
-# own definition, and both refresh/layout entry points must hard-hide it.
+# The image-paging fix depends on keeping the primary-action menu source OUT of
+# Douyin's private AWEElementStackView. The only stack child is the visual glass.
+for forbidden in [
+    '[stack addSubview:menuButton]',
+    'slot.menuButton.menu = AWEAvatarBaseMenuForStack',
+    'slot.menuButton.showsMenuAsPrimaryAction = YES',
+    'UIContextMenuInteraction',
+    'RIGHT_FULLSCREEN_COMMENT_PROTECT',
+    'RIGHT_FULLSCREEN_BLOCK_HIDE',
+    'RIGHT_FULLSCREEN_BLOCK_ALPHA',
+    'RIGHT_FULLSCREEN_BLOCK_REMOVE',
+    'gAWEProfileFullscreenRightProtectUntil',
+    'gAWEProfileFullscreenProtectedRightStack',
+    'AWEForceRestoreRightActionStackAfterComment',
+]:
+    if forbidden in objc:
+        raise SystemExit(f'forbidden old profile/menu path remains: {forbidden}')
+
+# Independent floating download button remains retired; downloads live in the
+# avatar menu. Legacy helper may exist only as its own unused definition.
 if objc.count('AWEEnsureExternalBridgeMenuSlot(') != 1:
     raise SystemExit('independent download slot still has a live caller')
 for snippet in [
@@ -104,11 +125,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52z delayed-input right-action recovery preflight passed')
+print('AwemeLiquidBar 1.0.53a right-action/photo-menu/clean-screen rebuild preflight passed')
 PY2
-
-POSTINST="layout/DEBIAN/postinst"
-if [ -f "$POSTINST" ] && [ ! -x "$POSTINST" ]; then
-  echo "[preflight] ERROR: layout/DEBIAN/postinst is not executable (need chmod 755)" >&2
-  exit 1
-fi

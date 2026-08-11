@@ -1,19 +1,28 @@
-AwemeLiquidBar 1.0.52z device test
+AwemeLiquidBar 1.0.53a focused device test
 
-Primary test only:
-1. Open another user's profile video in fullscreen playback.
-2. Open comments, then close comments.
-3. Stay on the video for at least 5 seconds.
-4. Repeat 3-5 times.
+A. Profile-video right action rebuild
+1. Open another user's profile and enter a VIDEO work.
+2. Open comments, close comments, then stay on the same work for at least 5 seconds.
+3. Repeat 5 times. Native right actions and all 46 pt Liquid Glass bases must remain/reappear without stretched residue.
+4. interaction.log should show RIGHT_NATIVE_LIFECYCLE_ARM / RIGHT_NATIVE_LIFECYCLE_RESCAN. It must not contain the old RIGHT_FULLSCREEN_* protection path.
 
-Expected interaction log:
-- RIGHT_REBIND_SCHEDULE reason=panelDismiss.AWECommentContainerViewController
-- RIGHT_REBIND_PASS ... restored=1
-- RIGHT_INPUT_HELPER_TRANSPARENT phase=didAppear/willDisappear/didDisappear
+B. Photo paging after avatar menu
+1. Open a multi-photo work.
+2. Single-tap the Liquid Glass avatar and open the full menu.
+3. Dismiss the menu, then advance from photo 1 to photo 2 (also test 2->3 if available).
+4. Nickname, caption, recommendation/search row, right actions, progress, and bottom relationship must NOT drop toward/behind the bottom bar.
+5. Repeat with the menu opened once before each page advance.
 
-Must NOT appear in probe log:
-- RECOVERY_SCHEDULE ... dismiss.AWECommentInputViewController
-- RECOVERY_ONCE ... dismiss.AWECommentInputViewController
+C. Clean screen
+1. Single-tap the avatar and choose 一键清屏.
+2. Status bar, top/left/right chrome, avatar visual, original bottom bar, and AlbumMorph LiquidBar should disappear; media remains visible and vertical swiping still works.
+3. Tap the original avatar position once. Only the REAL avatar + its original Liquid Glass base should reappear; it must be circular/uncropped and not a rectangular replacement.
+4. Single-tap that restored avatar. The SAME full menu must open and contain 退出清屏 plus the normal profile/download/copy actions.
+5. Choose 退出清屏. All normal UI should restore.
+6. Enter clean screen again and swipe to the next feed item. Avatar recovery anchor should retarget the new item's real avatar position.
 
-Must NOT appear in interaction log:
-- RIGHT_REBIND_SCHEDULE ... AWECommentInputViewController
+D. Regression checks
+1. Messages unread count = 0: no empty red circle remains.
+2. Messages/Friends unread > 0: badge still appears.
+3. No independent floating download button appears.
+4. Avatar menu is single-tap; no long-press-only interaction is introduced.

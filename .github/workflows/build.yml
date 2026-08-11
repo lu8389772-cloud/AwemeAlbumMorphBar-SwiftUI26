@@ -44,18 +44,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          if [ -f scripts/preflight.sh ]; then
-            chmod 755 scripts/preflight.sh
-          fi
-
-          if [ -f layout/DEBIAN/postinst ]; then
-            chmod 755 layout/DEBIAN/postinst
-          fi
-
-          echo "=== permissions ==="
-          [ -f scripts/preflight.sh ] && ls -l scripts/preflight.sh || true
-          [ -f layout/DEBIAN/postinst ] && ls -l layout/DEBIAN/postinst || true
+          chmod 755 scripts/preflight.sh
+          chmod 755 layout/DEBIAN/postinst
+          ls -l scripts/preflight.sh layout/DEBIAN/postinst
 
       - name: Preflight Swift native tab controller
         shell: bash
@@ -86,7 +77,7 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: AwemeLiquidBar-1.0.52z-Xcode27-rootless
+          name: AwemeLiquidBar-1.0.53a-Xcode27-rootless
           path: packages/*.deb
           if-no-files-found: error
           retention-days: 14
