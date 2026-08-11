@@ -1,4 +1,4 @@
-# AwemeLiquidBar 1.0.53c
+# AwemeLiquidBar 1.0.53d
 
 Built from 1.0.53b with three targeted fixes verified from the 1.0.53b logs:
 
