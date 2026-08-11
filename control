@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.52o
+Version: 1.0.54a
 Architecture: iphoneos-arm
-Description: Restores 1.0.52c stable right-action/comment recovery, moves download/copy into the stable avatar glass menu, mirrors native Friends/Messages badges, and preserves auth36.
+Description: Experimental DYYY-derived feed/detail fullscreen port on the 1.0.52o auth36 baseline; live-room relocation is intentionally omitted.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

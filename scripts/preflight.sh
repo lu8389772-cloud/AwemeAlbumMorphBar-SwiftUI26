@@ -14,11 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.52o'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.52o-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.52o'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.52o'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.52o_interaction.log'),
+    ('control', control, 'Version: 1.0.54a'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.54a-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.54a'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.54a'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.54a_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -36,7 +36,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.52o', 'LiquidBar 设置 · 1.0.52o',
+    'AwemeLiquidBar 1.0.54a', 'LiquidBar 设置 · 1.0.54a',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -79,6 +79,19 @@ for forbidden in [
     if forbidden in objc or forbidden in swift:
         raise SystemExit(f'forbidden regression/bridge remains: {forbidden}')
 
+for token in [
+    'AwemeLiquidBarDYYYFullscreenV1',
+    'DYYY 全屏实验（请关闭其他全屏插件）',
+    '%hook AWEStoryContainerCollectionView',
+    '%hook TTMetalView',
+    '%hook TTMetalViewNew',
+    '%hook AWEAwemeDetailTableView',
+    '%hook AWEMixVideoPanelMoreView',
+    'AWEDYYYFullscreenBottomHeight',
+]:
+    if token not in objc:
+        raise SystemExit(f'missing DYYY fullscreen token: {token}')
+
 if objc.count('%hook') != objc.count('%end'):
     raise SystemExit('Logos hook/end count mismatch')
 for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','bracket')]:
@@ -103,5 +116,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.52o avatar-menu/native-badges/comment-stable preflight passed')
+print('AwemeLiquidBar 1.0.54a DYYY-fullscreen/auth36 preflight passed')
 PY2
