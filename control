@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.53d
+Version: 1.0.53e
 Architecture: iphoneos-arm
 Description: Rebuilt from 1.0.52o auth34: profile-video right actions follow live native button lifecycle, avatar menu is isolated from photo-stack layout, and one-tap clean screen restores the real avatar without reparenting.
 Maintainer: xyy

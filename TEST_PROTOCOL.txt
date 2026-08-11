@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.53d focused device test
+AwemeLiquidBar 1.0.53e focused device test
 
 A. Profile-video right actions
 1. Open another user's profile and enter a VIDEO work.

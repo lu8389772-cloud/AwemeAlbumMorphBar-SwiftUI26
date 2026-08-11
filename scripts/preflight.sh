@@ -14,12 +14,12 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.53d'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.53d-Xcode27-rootless'),
+    ('control', control, 'Version: 1.0.53e'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.53e-Xcode27-rootless'),
     ('workflow', workflow, 'chmod 755 layout/DEBIAN/postinst'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.53d'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.53d'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.53d_interaction.log'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.53e'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.53e'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.53e_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -37,7 +37,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.53d', 'LiquidBar 设置 · 1.0.53d',
+    'AwemeLiquidBar 1.0.53e', 'LiquidBar 设置 · 1.0.53e',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -129,5 +129,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.53d flexible-right/nested-menu/paging-safe clean-screen preflight passed')
+print('AwemeLiquidBar 1.0.53e flexible-right/nested-menu/paging-safe clean-screen preflight passed')
 PY2
