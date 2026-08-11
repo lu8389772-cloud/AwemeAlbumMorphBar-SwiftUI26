@@ -1,21 +1,13 @@
-# AwemeLiquidBar 1.0.53f
+# AwemeLiquidBar 1.0.52o
 
-This build is a focused follow-up to 1.0.53d based on the 1.0.53d probe/interaction logs.
+This build is rebuilt from the **1.0.52c stable baseline**, not from 1.0.52m.
 
-1. Clean screen is now a hard global chrome gate.
-   - The real `AWEFeedTopBarContainer` is explicitly suppressed because it lives outside `AWEPlayInteractionViewController`.
-   - Top/right/home-chrome refreshers return immediately while clean screen is active, so `TOP_BIND` / `RIGHT_FLEX_REPAIR` can no longer recreate visible chrome behind the clean-screen state.
-   - Status bar, native tab bar and AlbumMorph overlay remain suppressed until exit.
+## 1.0.52o scope
 
-2. Avatar UIMenu freezes horizontal photo paging while it is presented.
-   - A single tap still opens the normal menu.
-   - Only horizontal scroll views with content wider than their viewport are temporarily disabled.
-   - They are restored when the system context-menu controller disappears.
-   - This deliberately prevents the “menu open -> swipe to next photo -> interaction stack moves down exactly 83 pt” sequence captured in 1.0.53d.
-
-3. Post-comment right glass is sticky only during the bounded repair window.
-   - A transient native-button tree with 0/partial owners no longer hides the last valid four glass slots.
-   - Health checking now requires live local native owner/source bindings and on-screen slot geometry, so stale slots are still re-bound when replacement native buttons appear.
-   - No old `AWEElementStackView` is pinned and no permanent timer is introduced.
-
-Auth34, zero-unread badge behavior, download menu and existing single-tap avatar menu behavior are preserved.
+- Retains the 1.0.52c profile-fullscreen/comment right-action recovery path.
+- Retires the independent floating download button. No right-action/profile geometry can position a separate download control.
+- A single tap on the plugin-owned avatar glass base now opens a native menu. `进入主页` and the current-item download/copy actions are in that menu.
+- Adds `头像菜单显示下载功能`; it only changes menu contents and cannot alter layout.
+- Restores native `badgeValue` rendering for Messages and mirrors the same path to Friends. Shop promotional badges are not mirrored as Friends unread counts.
+- Native badge visuals receive a bounded 0.90 scale after UIKit lays them out.
+- Uses a 36-entry local opaque authorization digest table; no plaintext account identifiers are stored.

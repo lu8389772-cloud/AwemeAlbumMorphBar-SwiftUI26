@@ -1,27 +1,10 @@
-AwemeLiquidBar 1.0.53f focused device test
+AwemeLiquidBar 1.0.52o device test
 
-A. Profile-video right actions
-1. Open another user's profile and enter a VIDEO work.
-2. Open comments, close comments, then remain on the same work for at least 5 seconds.
-3. Repeat 5 times.
-4. The native right controls may rebuild, but the four Liquid Glass bases must attach to the live controls and must not remain stretched.
-5. interaction.log should show RIGHT_FLEX_ARM / RIGHT_FLEX_RESCAN / RIGHT_FLEX_REPAIR. A successful pass reports a live candidate and bound/exact actions.
-
-B. Avatar menu + photo paging
-1. Open a multi-photo work.
-2. Single-tap the Liquid Glass avatar. The full menu must open immediately; long press is not required.
-3. Dismiss the menu and advance photo 1 -> 2 -> 3.
-4. Nickname, caption, search/recommendation row, right actions, progress, and bottom relationship must not jump down by ~83 pt or fall behind the LiquidBar.
-5. Repeat after opening the avatar menu once on the first photo.
-
-C. Clean screen
-1. Single-tap avatar -> 一键清屏.
-2. Status bar, top/left/right chrome, avatar visual, native bottom bar and AlbumMorph LiquidBar disappear while media and vertical swiping remain usable.
-3. Tap the original avatar position once. The REAL avatar and its original Liquid Glass base reappear; no rectangle/fake avatar is allowed.
-4. Single-tap the restored avatar. The same full menu opens and contains 退出清屏 plus normal profile/download/copy actions.
-5. Choose 退出清屏 and confirm the normal UI returns.
-
-D. Regression
-1. Messages unread = 0 -> no empty badge circle.
-2. Auth table remains auth34.
-3. No independent floating download button.
+1. Home feed: tap the avatar glass base. It should open one native menu instead of entering the profile directly.
+2. Choose “进入主页”. It should enter the same profile as the original avatar tap.
+3. Return to feed; tap avatar again. Download/copy actions should be in the same menu when “头像菜单显示下载功能” is enabled.
+4. Turn that switch off/on. Avatar position and right-side action positions must not move.
+5. Open and close comments repeatedly, including with the external fullscreen tweak enabled. Right-side actions should recover as in 1.0.52c.
+6. Scroll rapidly through at least 15 items. No independent download button should appear anywhere.
+7. With unread state present, Friends and Messages badges should mirror the original Douyin bottom bar. If slot two is Shop, no Shop promotional dot should be copied to Friends.
+8. Compare badge size with the original: plugin badge should use the native badge path with the final visual scaled to about 90%.

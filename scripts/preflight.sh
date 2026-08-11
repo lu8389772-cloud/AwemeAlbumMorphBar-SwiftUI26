@@ -14,12 +14,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.53f'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.53f-Xcode27-rootless'),
-    ('workflow', workflow, 'chmod 755 layout/DEBIAN/postinst'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.53f'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.53f'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.53f_interaction.log'),
+    ('control', control, 'Version: 1.0.52o'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.52o-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.52o'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.52o'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.52o_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -37,56 +36,31 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.53f', 'LiquidBar 设置 · 1.0.53f',
+    'AwemeLiquidBar 1.0.52o', 'LiquidBar 设置 · 1.0.52o',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
     'AWEDownloadAudioForAweme', 'AWECopyCompleteTextForAweme',
-    'AWEAvatarBaseMenuForStack', '@"进入主页"', '@"一键清屏"', '@"退出清屏"',
+    'AWEAvatarBaseMenuForStack', '@"进入主页"',
     '@"头像菜单显示下载功能"', 'AWEAvatarMenuDownloadEnabled',
-    'AwemeLiquidBar.HomeAction.ProfileMenu',
-    '[profileHost addSubview:button];',
-    'AWE53ConfigureNestedAvatarMenu', 'AWERefreshAvatarMenuOverlayForStack',
-    'AVATAR_MENU_NESTED',
-    'CLEAN_SCREEN enter nested_menu', 'CLEAN_SCREEN avatar_reveal real_avatar',
-    'if (gAWECleanScreenEnabled) fraction = 0.0;',
-    'RIGHT_FLEX_ARM', 'RIGHT_FLEX_RESCAN', 'RIGHT_FLEX_REPAIR',
-    'AWE53RebindNativeHomeActionsInForegroundWindows',
-    'AWE53BindFallbackActionOwners',
-    'gAWE53PostCommentFlexibleRepairUntil',
-    'NESTED_FEED_BAR_RECOVERY_SKIPPED',
-    '%hook AWEFeedVideoButton', 'AWEScheduleHomeActionRefreshForButton',
-    '%hook AWEElementStackView',
-    'RIGHT_INPUT_HELPER_TRANSPARENT',
-    'AWECurrentOriginalMessagesBadgeValue', 'if (![scanner scanInteger:&count] || count <= 0) return nil;',
+    'slot.menuButton.menu = AWEAvatarBaseMenuForStack(stack, pictureHost);',
+    'slot.menuButton.showsMenuAsPrimaryAction = YES;',
+    'AWEInstallGlassPressFeedback(slot.menuButton, slot.glassButton);',
+    'AWECurrentOriginalSecondBadgeValue', 'BOTTOM_BADGES_NATIVE',
     '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
+    'RIGHT_REBIND_PASS', 'RIGHT_FULLSCREEN_COMMENT_PROTECT',
+    'RIGHT_FULLSCREEN_BLOCK_HIDE', 'RIGHT_FULLSCREEN_BLOCK_ALPHA',
+    'RIGHT_FULLSCREEN_BLOCK_REMOVE', 'AWECurrentRouteHasPlayableFeedController',
     '%hook AWENormalModeTabBarBadgeContainerView',
+    'AWEPrimeFriendsNativeLayoutFootprint', 'AWEApplyFriendsCaptionBottomReserve',
 ]
 for token in required_objc:
     if token not in objc:
         raise SystemExit(f'missing Objective-C token: {token}')
 
-# The menu hit view may live under the native profile host, but never as a
-# direct AWEElementStackView child and never in a separate window-level menu
-# host. The old profile-stack pinning experiments also stay deleted.
-for forbidden in [
-    '[stack addSubview:menuButton]',
-    'AwemeLiquidBar.AvatarMenu.WindowAnchor',
-    '[window addSubview:gAWEAvatarMenuOverlayButton];',
-    'UIContextMenuInteraction',
-    'RIGHT_FULLSCREEN_COMMENT_PROTECT',
-    'RIGHT_FULLSCREEN_BLOCK_HIDE',
-    'RIGHT_FULLSCREEN_BLOCK_ALPHA',
-    'RIGHT_FULLSCREEN_BLOCK_REMOVE',
-    'gAWEProfileFullscreenRightProtectUntil',
-    'gAWEProfileFullscreenProtectedRightStack',
-    'AWEForceRestoreRightActionStackAfterComment',
-]:
-    if forbidden in objc:
-        raise SystemExit(f'forbidden old profile/menu path remains: {forbidden}')
-
-# Independent floating download button remains retired; downloads live in the
-# avatar menu. Legacy helper may exist only as its own unused definition.
+# The independent floating download control is retired. Its legacy helper may
+# remain for source compatibility, but it must have no callers other than its
+# own definition, and both refresh/layout entry points must hard-hide it.
 if objc.count('AWEEnsureExternalBridgeMenuSlot(') != 1:
     raise SystemExit('independent download slot still has a live caller')
 for snippet in [
@@ -111,14 +85,14 @@ for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','br
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[34]' not in objc:
-    raise SystemExit('auth34 digest table declaration missing')
-start = objc.index('kAWEAuthorizationDigests[34]')
+if 'kAWEAuthorizationDigests[36]' not in objc:
+    raise SystemExit('auth36 digest table declaration missing')
+start = objc.index('kAWEAuthorizationDigests[36]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
         if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
-if len(rows) != 34:
-    raise SystemExit(f'auth digest row count is {len(rows)}, expected 34')
+if len(rows) != 36:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 36')
 
 for token in [
     '[PHPhotoLibrary sharedPhotoLibrary] performChanges:',
@@ -129,5 +103,5 @@ for token in [
     if token not in objc:
         raise SystemExit(f'native downloader API token missing: {token}')
 
-print('AwemeLiquidBar 1.0.53f flexible-right/nested-menu/paging-safe clean-screen preflight passed')
+print('AwemeLiquidBar 1.0.52o avatar-menu/native-badges/comment-stable preflight passed')
 PY2
