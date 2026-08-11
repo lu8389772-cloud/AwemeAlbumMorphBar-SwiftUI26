@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.54a — DYYY-derived fullscreen experiment + auth36
+ AwemeLiquidBar 1.0.54b — DYYY-derived fullscreen experiment + auth36
 
  Experimental fullscreen branch:
  - starts from the 1.0.52o auth36 source baseline;
@@ -525,7 +525,7 @@ static BOOL AWEAvatarMenuDownloadEnabled(void) {
 static BOOL AWEPreferHighestPlaybackEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEPreferHighestPlaybackDefaultsKey];
-    /* 1.0.54a: do not opt fresh installs into continuous player quality
+    /* 1.0.54b: do not opt fresh installs into continuous player quality
        intervention. Users who explicitly enabled the switch keep their value. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : NO;
 }
@@ -853,7 +853,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.54a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.54b_interaction.log"] copy];
     });
     return path;
 }
@@ -922,7 +922,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.54a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.54b_probe.log"] copy];
     });
     return path;
 }
@@ -5966,7 +5966,7 @@ static void AWEFinishReturnPrewarm(NSUInteger generation, BOOL cancelled) {
 }
 
 static void AWEBeginReturnPrewarm(UIViewController *controller) {
-    /* 1.0.54a: viewWillDisappear is emitted by many nested feed controllers
+    /* 1.0.54b: viewWillDisappear is emitted by many nested feed controllers
        during ordinary paging and settings teardown. Prewarming on every one
        caused the resident bottom bar to oscillate 0 -> 1 hundreds of times,
        which also exposed a one-frame caption/safe-area drop. Only genuine
@@ -6971,7 +6971,7 @@ static NSString *AWERobustVideoURLForAweme(id aweme) {
 
     /* DYYY's stable path on current Douyin builds starts from h264URL's
        originURLList. Prefer that simple platform-provided stream before any
-       bitrate/DASH heuristics; the goal of 1.0.54a is reliable saving first. */
+       bitrate/DASH heuristics; the goal of 1.0.54b is reliable saving first. */
     id h264 = AWESafeValueForKey(video, @"h264URL");
     NSString *url = AWEFirstRemoteURLString(
         AWESafeValueForKey(h264, @"originURLList") ?: h264, 0);
@@ -8606,7 +8606,7 @@ static BOOL AWEDownloadMenuRouteBlocked(void) {
 static UIView *AWEDownloadMenuOverlayHostView(UIView *stack) {
     if (!stack || !stack.window) return nil;
 
-    /* 1.0.54a: keep the singleton download control inside the *current feed
+    /* 1.0.54b: keep the singleton download control inside the *current feed
        cell's interaction hierarchy instead of the independent bottom-bar
        UIWindow. The latter is intentionally masked/parked during route and
        settings transitions, so a perfectly valid download button could exist
@@ -8681,7 +8681,7 @@ static AWEExternalBridgeMenuSlotView *AWEEnsureExternalBridgeMenuSlot(UIView *st
 
 static void AWELayoutExternalBridgeMenuForStack(UIView *stack) {
     (void)stack;
-    /* 1.0.54a: independent download button retired. Download now lives only
+    /* 1.0.54b: independent download button retired. Download now lives only
        in the stable avatar-base menu, so no feed/right-stack geometry can
        create, move, hide, or resurrect a floating download control. */
     AWEHideGlobalDownloadMenu();
@@ -13231,11 +13231,17 @@ static CGPoint AWEDYYYAdjustedMetalCenter(UIView *view, CGPoint center) {
 }
 
 %hook TTMetalView
-- (void)setCenter:(CGPoint)center { %orig(AWEDYYYAdjustedMetalCenter(self, center)); }
+- (void)setCenter:(CGPoint)center {
+    center = AWEDYYYAdjustedMetalCenter(self, center);
+    %orig(center);
+}
 %end
 
 %hook TTMetalViewNew
-- (void)setCenter:(CGPoint)center { %orig(AWEDYYYAdjustedMetalCenter(self, center)); }
+- (void)setCenter:(CGPoint)center {
+    center = AWEDYYYAdjustedMetalCenter(self, center);
+    %orig(center);
+}
 %end
 
 %hook AWEStoryProgressContainerView
@@ -14316,7 +14322,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.54a";
+    self.title = @"LiquidBar 设置 · 1.0.54b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15641,7 +15647,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.54a image=%@ ==========" ,
+            @"========== START build=1.0.54b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15708,7 +15714,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.54a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.54b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15723,7 +15729,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.54a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.54b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -17605,7 +17611,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 %ctor {
     @autoreleasepool {
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.54a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.54b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

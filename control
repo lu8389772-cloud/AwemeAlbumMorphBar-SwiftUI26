@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.54a
+Version: 1.0.54b
 Architecture: iphoneos-arm
 Description: Experimental DYYY-derived feed/detail fullscreen port on the 1.0.52o auth36 baseline; live-room relocation is intentionally omitted.
 Maintainer: xyy

@@ -1,1 +1,1 @@
-This is the complete AwemeLiquidBar 1.0.54a project rebuilt from the 1.0.52c stable baseline. Use the complete project archive.
+This is the complete AwemeLiquidBar 1.0.54b project rebuilt from the 1.0.52c stable baseline. Use the complete project archive.
