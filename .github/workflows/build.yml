@@ -40,6 +40,23 @@ jobs:
           set -euo pipefail
           git clone --depth 1 --recursive https://github.com/theos/theos.git "$GITHUB_WORKSPACE/.theos"
 
+      - name: Fix executable permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f scripts/preflight.sh ]; then
+            chmod 755 scripts/preflight.sh
+          fi
+
+          if [ -f layout/DEBIAN/postinst ]; then
+            chmod 755 layout/DEBIAN/postinst
+          fi
+
+          echo "=== permissions ==="
+          [ -f scripts/preflight.sh ] && ls -l scripts/preflight.sh || true
+          [ -f layout/DEBIAN/postinst ] && ls -l layout/DEBIAN/postinst || true
+
       - name: Preflight Swift native tab controller
         shell: bash
         run: |
