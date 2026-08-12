@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c1 focused test
+AwemeLiquidBar 1.0.56c2 focused test
 
 1. Cold-launch Douyin and confirm the normal LiquidBar appears as in 1.0.56c.
 2. Tap 消息 and remain on the Messages list page: check that the bottom bar follows the pre-chat-return baseline behavior.

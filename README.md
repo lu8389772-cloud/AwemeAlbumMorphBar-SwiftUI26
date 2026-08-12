@@ -1,19 +1,13 @@
-# AwemeLiquidBar 1.0.56c1
+# AwemeLiquidBar 1.0.56c2
 
-This build is the **1.0.56c feature stage**, with only the later chat-return visibility experiment rolled back to the pre-experiment behavior.
+Performance-cleanup build based directly on the verified 1.0.56c1 chat-return rollback baseline.
 
-## Preserved from 1.0.56c
+Preserved: all 1.0.56c-stage features and the 1.0.56c1 chat-return rollback. Authorization data remains unchanged (36 digest entries).
 
-- Internal fullscreen implementation and validated profile/live geometry.
-- Clean-screen v2, including status-bar hiding and comment-area protection.
-- Highest-bitrate / quality preference work.
-- Centered adaptive Liquid Glass save HUD and media-type save menu wording.
-- Fullscreen setting name `全屏播放` without the third-party compatibility hint.
-- Cold-start top-category suppression improvements.
-- 1.0.56c settings-route handling and all unrelated LiquidBar features.
+Performance changes only:
+- removes the process-wide `%hook UIView` used by fullscreen/clean-screen; player fullscreen correction now runs only from known player-controller layout callbacks and their local view trees;
+- caches native top-category suppression targets, avoiding the old up-to-500-view BFS on every top-bar layout;
+- removes clean-screen whole-window reapply scheduling from generic layout callbacks while retaining bounded rescans on reuse/model/index changes and exact per-control hooks;
+- lowers steady Liquid Glass appearance polling from 4 Hz to 2 Hz and adds an event-driven refresh after feed index changes.
 
-## Rolled back
-
-The chat-return experiment is not kept in this build. The sensitive chat-route classifier, overlay fraction suppression, and transition-completion ordering are restored to the 1.0.56a behavior. This build intentionally makes **no new attempt to repair chat swipe-back animation**.
-
-The purpose is to recover the Messages-page bottom-bar lifecycle without discarding the rest of the 1.0.56c work.
+No authorization, chat-return, route, save-HUD, fullscreen preference, or settings behavior is intentionally changed.
