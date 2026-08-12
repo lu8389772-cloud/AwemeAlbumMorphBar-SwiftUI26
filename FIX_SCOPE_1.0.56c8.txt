@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c9 — playback lifecycle isolation
+AwemeLiquidBar 1.0.56c10 — playback lifecycle isolation
 
 Base: 1.0.56c7.
 

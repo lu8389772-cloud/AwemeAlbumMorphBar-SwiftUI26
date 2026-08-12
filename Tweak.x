@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c9 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36 + visual-only bottom-bar toggle
+ AwemeLiquidBar 1.0.56c10 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36 + visual-only bottom-bar toggle
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -180,6 +180,8 @@ static char kAWENativeBarKey;
 static char kAWEDelegateKey;
 static char kAWEApplyingKey;
 static char kAWEOriginalHiddenKey;
+static char kAWEOriginalChildHiddenStateKey;
+static char kAWEOriginalChildAlphaStateKey;
 static char kAWEControllerKey;
 static char kAWELastFrameKey;
 static char kAWELastVisibleFrameKey;
@@ -251,7 +253,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c9: cache the already-identified native top-category views so the
+/* 1.0.56c10: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -528,9 +530,9 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 static BOOL AWEBottomBarDisplayEnabled(void) {
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEBottomBarDisplayEnabledDefaultsKey];
-    /* Visual-only preference: fresh installs keep the LiquidBar visible.
-       Turning this off must never uninstall the bridge or revive Douyin's
-       native bar; it only removes our bottom chrome and its hit targets. */
+    /* Fresh installs keep LiquidBar visible. In 1.0.56c10 OFF means true
+       ownership release: our bottom overlay is uninstalled and Douyin's native
+       tab-bar host is restored so another bottom-bar tweak may take over. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
 }
 
@@ -895,7 +897,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c9_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c10_interaction.log"] copy];
     });
     return path;
 }
@@ -964,7 +966,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c9_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c10_probe.log"] copy];
     });
     return path;
 }
@@ -3950,8 +3952,24 @@ static void AWEHideOriginalTabBarContents(UIView *tabBar) {
      The native overlay lives in tabBar.superview, not inside tabBar. Therefore
      every direct child here belongs to Douyin. Keep objects alive and enabled
      for programmatic forwarding, but remove only their visual output.
+
+     1.0.56c10 also preserves each child's pre-LiquidBar state so OFF can truly
+     hand the native host back to Douyin/another tweak instead of leaving the
+     original bar visually gutted after our overlay is removed.
     */
     for (UIView *subview in tabBar.subviews) {
+        if (!objc_getAssociatedObject(subview, &kAWEOriginalChildHiddenStateKey)) {
+            objc_setAssociatedObject(subview,
+                                     &kAWEOriginalChildHiddenStateKey,
+                                     @(subview.hidden),
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        if (!objc_getAssociatedObject(subview, &kAWEOriginalChildAlphaStateKey)) {
+            objc_setAssociatedObject(subview,
+                                     &kAWEOriginalChildAlphaStateKey,
+                                     @(subview.alpha),
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         subview.hidden = YES;
         subview.alpha = 0.0;
         /* Do not disable interaction state; some internal handlers inspect it. */
@@ -3962,6 +3980,41 @@ static void AWEHideOriginalTabBarContents(UIView *tabBar) {
     tabBar.layer.backgroundColor = UIColor.clearColor.CGColor;
     objc_setAssociatedObject(tabBar, &kAWEOriginalHiddenKey, @YES,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void AWERestoreOriginalTabBarContents(UIView *tabBar) {
+    if (!tabBar) return;
+
+    for (UIView *subview in tabBar.subviews) {
+        NSNumber *hidden = objc_getAssociatedObject(
+            subview, &kAWEOriginalChildHiddenStateKey);
+        NSNumber *alpha = objc_getAssociatedObject(
+            subview, &kAWEOriginalChildAlphaStateKey);
+        if (hidden) subview.hidden = hidden.boolValue;
+        if (alpha) subview.alpha = alpha.doubleValue;
+        objc_setAssociatedObject(subview,
+                                 &kAWEOriginalChildHiddenStateKey,
+                                 nil,
+                                 OBJC_ASSOCIATION_ASSIGN);
+        objc_setAssociatedObject(subview,
+                                 &kAWEOriginalChildAlphaStateKey,
+                                 nil,
+                                 OBJC_ASSOCIATION_ASSIGN);
+    }
+
+    UITabBar *legacyNativeBar = objc_getAssociatedObject(
+        tabBar, &kAWENativeBarKey);
+    if (legacyNativeBar) {
+        legacyNativeBar.hidden = YES;
+        legacyNativeBar.userInteractionEnabled = NO;
+        legacyNativeBar.layer.opacity = 0.0f;
+        [legacyNativeBar removeFromSuperview];
+    }
+
+    objc_setAssociatedObject(tabBar,
+                             &kAWEOriginalHiddenKey,
+                             nil,
+                             OBJC_ASSOCIATION_ASSIGN);
 }
 
 static void AWESetNativeSelectedIndex(UIView *tabBar, NSInteger index) {
@@ -4490,6 +4543,19 @@ static void AWEAttachNativeBarWithForce(UIView *tabBar, BOOL forceVisible) {
 
     UIView *host = tabBar.superview;
     if (!host) return;
+
+    /* True release mode. This early return is essential: without it the
+       AlbumMorph install would fail while OFF and the function would fall
+       through into LiquidBar's legacy native-bar fallback, still occupying the
+       exact host another tweak needs. */
+    if (!AWEBottomBarDisplayEnabled()) {
+        AWESetApplying(tabBar, YES);
+        AWEUninstallAlbumMorphBar();
+        AWEApplyAlbumMorphOriginalSuppression(tabBar, NO);
+        AWERestoreOriginalTabBarContents(tabBar);
+        AWESetApplying(tabBar, NO);
+        return;
+    }
 
     AWESetApplying(tabBar, YES);
 
@@ -8788,7 +8854,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c9 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c10 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -11543,6 +11609,16 @@ static BOOL AWEEnsureAlbumMorphOverlayWindow(UIWindow *sourceWindow) {
 
 static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
                                              BOOL forceVisible) {
+    /* 1.0.56c10: when the visual bottom bar is disabled, LiquidBar no longer
+       owns the native tab-bar host at all. Fully tear down our resident
+       UITabBar/overlay and restore the original AWENormalModeTabBar so another
+       tweak can attach to the same native host. This is deliberately stronger
+       than alpha/hidden: there is no LiquidBar tab view left in the hierarchy. */
+    if (!AWEBottomBarDisplayEnabled()) {
+        AWEUninstallAlbumMorphBar();
+        return NO;
+    }
+
     if (!AWEAlbumMorphStyleEnabled() ||
         !AWEPluginFeaturesEnabled() ||
         AWEOperatingSystemMajorVersion() < 26) {
@@ -14617,7 +14693,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c9";
+    self.title = @"LiquidBar 设置 · 1.0.56c10";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15080,7 +15156,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     bottomBarDisplayRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *bottomBarDisplayHint = [UILabel new];
-    bottomBarDisplayHint.text = @"关闭后仅隐藏底栏和独立搜索按钮；顶部/右侧液态按钮、头像菜单、设置手势等功能继续工作。隐藏区域不拦截触摸。";
+    bottomBarDisplayHint.text = @"关闭后会直接卸载 LiquidBar 底栏与搜索，并归还抖音原生底栏宿主；顶部/右侧液态按钮、头像菜单、设置手势等功能继续工作。";
     bottomBarDisplayHint.font =
         [UIFont systemFontOfSize:11.5 weight:UIFontWeightRegular];
     bottomBarDisplayHint.textColor = UIColor.tertiaryLabelColor;
@@ -15817,16 +15893,22 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         forKey:kAWEBottomBarDisplayEnabledDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
 
-    /* Re-evaluate only the resident LiquidBar. Do not touch the native tab
-       bridge, player/feed layout, or route stack. This makes the switch purely
-       visual and avoids stealing taps from Douyin/other tweaks when hidden. */
-    if (gAWELastTabBar) {
-        AWEUpdateAlbumMorphVisibility((UIView *)gAWELastTabBar,
-                                      @"settings.bottom-display");
-    } else if (gAWEAlbumMorphController && gAWEAlbumMorphOverlayWindow) {
-        CGFloat fraction = MAX(gAWEBarLastVisibleFraction, 0.0);
-        AWEApplyAlbumMorphVisibleFraction(fraction,
-                                          @"settings.bottom-display", NO);
+    if (!sender.isOn) {
+        /* Release mode: physically remove our UITabBar/overlay and restore the
+           original Douyin tab-bar host. Do not leave a transparent controller
+           or hit region behind. Top/right/avatar/clean/fullscreen features live
+           outside this overlay and continue to work. */
+        AWEUninstallAlbumMorphBar();
+        if (gAWELastTabBar) {
+            AWEApplyAlbumMorphOriginalSuppression((UIView *)gAWELastTabBar, NO);
+            AWERestoreOriginalTabBarContents((UIView *)gAWELastTabBar);
+            [gAWELastTabBar setNeedsLayout];
+            [gAWELastTabBar.superview setNeedsLayout];
+        }
+    } else if (gAWELastTabBar) {
+        /* Recreate LiquidBar from the native host only when the user explicitly
+           enables it again. */
+        AWEAttachNativeBarWithForce((UIView *)gAWELastTabBar, YES);
     }
 
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
@@ -15992,7 +16074,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c9 image=%@ ==========" ,
+            @"========== START build=1.0.56c10 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16059,7 +16141,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c9 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c10 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16074,7 +16156,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c9_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c10_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16385,7 +16467,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c9 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c10 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16528,7 +16610,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c9 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c10 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16759,7 +16841,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c9 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c10 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17540,7 +17622,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
     AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
     entry.identifier = @"AwemeLiquidBar.Settings";
     entry.title = @"LiquidBar";
-    entry.detail = @"1.0.56c9";
+    entry.detail = @"1.0.56c10";
     entry.type = 0;
     entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
     entry.cellType = 26;
@@ -18389,7 +18471,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 - (void)setHidden:(BOOL)hidden {
     BOOL changed = self.hidden != hidden;
 
-    /* 1.0.56c9: never veto Douyin's native hidden transition on Friends.
+    /* 1.0.56c10: never veto Douyin's native hidden transition on Friends.
        Blocking hidden here was an old layout-footprint workaround, but it also
        changes the native tab-bar state exactly while the Friends feed decides
        whether its player is visible/active. The replacement bar already stays
@@ -18953,7 +19035,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c9 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c10 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -18967,7 +19049,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                /* 1.0.56c9 foreground rule: Douyin owns player recovery.
+                /* 1.0.56c10 foreground rule: Douyin owns player recovery.
                    During DidBecomeActive do not reattach the native tab bar,
                    force route recovery, relayout Feed chrome, or steal key
                    window state. Those operations used to run in the same

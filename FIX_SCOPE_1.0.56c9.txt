@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c9 — visual-only bottom-bar visibility toggle
+AwemeLiquidBar 1.0.56c10 — visual-only bottom-bar visibility toggle
 
 Base: 1.0.56c8 playback lifecycle isolation.
 
