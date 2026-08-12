@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56d focused audit
+AwemeLiquidBar 1.0.56e focused audit
 
 Scope:
 1) Messages root bottom-bar visibility

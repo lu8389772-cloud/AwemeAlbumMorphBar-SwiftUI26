@@ -1,0 +1,20 @@
+1.0.56e targeted regression audit
+
+1) Messages root:
+- steady visibility uses AWECurrentMainTabIndex (resident LiquidBar selection), not stale native selectedIndex.
+- broad AWEIM/IESIM + session/input sensitive matching removed.
+- lingering popped conversation views only suppress while >=4% of their window is actually onscreen.
+- unregister path uses the same onscreen rule, so stale offscreen IM views do not keep the route latched.
+- interactive chat-return percentComplete logic itself is unchanged.
+
+2) Profile/detail media progress:
+- removed fullscreen-only AWEStoryProgressContainerView y -= tabBarHeight adjustment.
+- removed fullscreen-only background clearing from AWEPlayInteractionProgressContainerView.
+- removed fullscreen-only dark-subview clearing from AWEDPlayerProgressContainerView.
+- clean-screen mode still explicitly suppresses these progress views while clean screen is active.
+
+3) Douyin Settings side drawer:
+- settings controllers are no longer treated as full sensitive-route suppression.
+- independent LiquidBar mirrors the original hidden native bar's converted horizontal X displacement.
+- overlay window remains fixed; only the resident controller view follows the source page horizontally.
+- interactive chat-return mask remains authoritative and disables this horizontal mirror while interactive.
