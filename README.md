@@ -1,8 +1,8 @@
-# AwemeLiquidBar 1.0.56c
+# AwemeLiquidBar 1.0.56d
 
 Based directly on the verified **1.0.56b** build. The validated fullscreen geometry (profile/detail 0.5 + live-prestream 0.3.1) is intentionally unchanged.
 
-## Changes in 1.0.56c
+## Changes in 1.0.56d
 
 - Clean-screen status-bar hiding is strengthened for current Douyin hosting/controller subclasses: active controller classes receive a reversible runtime `prefersStatusBarHidden` wrapper while clean mode is active, plus a top status-bar-view visual fallback when such views are reachable in-process.
 - The Messages root page is no longer classified as a chat-detail route merely because it uses `AWEIMMessageBaseViewController`/`messagebase`; actual IM input/detail/session controllers still suppress LiquidBar, preserving proportional chat swipe-back reveal.

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56d — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -850,7 +850,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56d_interaction.log"] copy];
     });
     return path;
 }
@@ -919,7 +919,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56d_probe.log"] copy];
     });
     return path;
 }
@@ -4122,6 +4122,27 @@ static void AWEHardSuspendAlbumMorphOverlay(NSString *reason) {
     AWEAlbumMorphProbeWrite(@"HARD_OVERLAY_SUSPEND reason=%@", reason ?: @"unknown");
 }
 
+static BOOL AWEClassNameLooksLikeMessagesRootController(NSString *className) {
+    if (className.length == 0) return NO;
+    NSString *lower = className.lowercaseString;
+
+    /* The Messages tab is itself implemented by IM/session-list controllers in
+       current Douyin builds.  Treat list/home/root/base containers as the tab
+       root, not as a one-to-one conversation merely because their class names
+       contain "session" or begin with AWEIM/IESIM. */
+    if ([className isEqualToString:@"AWEIMMessageBaseViewController"]) return YES;
+    return [lower containsString:@"sessionlist"] ||
+           [lower containsString:@"messagelist"] ||
+           [lower containsString:@"conversationlist"] ||
+           [lower containsString:@"messagecenter"] ||
+           [lower containsString:@"messagehome"] ||
+           [lower containsString:@"messageroot"] ||
+           [lower containsString:@"sessionroot"] ||
+           [lower containsString:@"iminbox"] ||
+           [lower containsString:@"inboxviewcontroller"] ||
+           [lower containsString:@"imlistviewcontroller"];
+}
+
 static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
     if (className.length == 0) return NO;
 
@@ -4135,21 +4156,23 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
     /* Chat detail routes changed class names across Douyin builds.  Keep the
        matcher controller-scoped and require detail/session/input semantics so
        the root Messages tab itself is not mistaken for a conversation. */
+    BOOL messagesRoot = AWEClassNameLooksLikeMessagesRootController(className);
     BOOL directConversation =
-        [className isEqualToString:@"IESIMInputViewController"] ||
-        (controllerLike &&
-         ([lower containsString:@"conversation"] ||
-          [lower containsString:@"chatroom"] ||
-          [lower containsString:@"directmessage"] ||
-          [lower containsString:@"messagedetail"] ||
-          [lower containsString:@"privatechat"] ||
-          [lower containsString:@"singlechat"] ||
-          [lower containsString:@"sessiondetail"] ||
-          (([lower hasPrefix:@"aweim"] || [lower hasPrefix:@"iesim"] ||
-            [lower containsString:@".im"] || [lower containsString:@"_im"])
-           && ([lower containsString:@"chat"] ||
-               [lower containsString:@"session"] ||
-               [lower containsString:@"input"]))));
+        !messagesRoot &&
+        ([className isEqualToString:@"IESIMInputViewController"] ||
+         (controllerLike &&
+          ([lower containsString:@"conversation"] ||
+           [lower containsString:@"chatroom"] ||
+           [lower containsString:@"directmessage"] ||
+           [lower containsString:@"messagedetail"] ||
+           [lower containsString:@"privatechat"] ||
+           [lower containsString:@"singlechat"] ||
+           [lower containsString:@"sessiondetail"] ||
+           (([lower hasPrefix:@"aweim"] || [lower hasPrefix:@"iesim"] ||
+             [lower containsString:@".im"] || [lower containsString:@"_im"])
+            && ([lower containsString:@"chat"] ||
+                [lower containsString:@"session"] ||
+                [lower containsString:@"input"])))));
 
     BOOL commentDestination =
         [className isEqualToString:@"AWECommentContainerViewController"] ||
@@ -4748,12 +4771,19 @@ static BOOL AWEAlbumMorphSteadyWantsVisible(UIView *originalBar) {
     AWEUpdateFriendsTabLatch(currentIndex);
     BOOL friendsRoot = !AWESecondTabIsShop() &&
         (currentIndex == 1 || gAWEFriendsTabLatched);
+    BOOL messagesRoot = (currentIndex == 3);
 
     /* Some Douyin builds detach or hide the native tab bar after the Friends
        batch is exhausted. Treat that as feed content state, not navigation.
        The latch is cleared as soon as Home/Messages/Profile is selected, while
        route suppression still wins for profile/search/comment/share/etc. */
     if (friendsRoot && !AWECurrentRouteSuppressesBar()) return YES;
+
+    /* Current Douyin also hides/detaches its native tab bar on the Messages
+       root.  Our independent LiquidBar must still be visible there.  A real
+       chat/comment/settings/share route continues to suppress it through the
+       same route matcher, so interactive chat-return reveal remains intact. */
+    if (messagesRoot && !AWECurrentRouteSuppressesBar()) return YES;
 
     if (!originalBar.window) return NO;
     return AWEOriginalBarSteadyWantsVisible(originalBar);
@@ -8958,10 +8988,52 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56d clean screen v2 (display-only, persistent across reuse)
+
+static BOOL AWEStableCleanIsDynamicProgressView(UIView *view) {
+    if (!view) return NO;
+    static NSArray<Class> *classes = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSMutableArray<Class> *resolved = [NSMutableArray array];
+        for (NSString *name in @[
+            @"AWEStoryProgressSlideView", @"AWEStoryProgressContainerView",
+            @"AWEDemaciaChapterProgressSlider",
+            @"AWEPlayInteractionProgressContainerView",
+            @"AWEDPlayerProgressContainerView",
+            @"AFDAIbumFolioView", @"AFDAlbumFolioView"
+        ]) {
+            Class cls = NSClassFromString(name);
+            if (cls) [resolved addObject:cls];
+        }
+        classes = [resolved copy];
+    });
+    for (Class cls in classes) if ([view isKindOfClass:cls]) return YES;
+    return NO;
+}
+
+/* Progress/folio views are highly stateful: Douyin may set alpha=0 while an
+   album page is settling, then bring the same instance back to alpha=1. If we
+   snapshot that transient zero as the clean-screen "original", exiting clean
+   leaves the album page indicator permanently invisible. Do not acquire a new
+   suppression marker from an already-invisible dynamic progress view. */
+static BOOL AWEStableCleanShouldDeferDynamicProgressSnapshot(UIView *view) {
+    if (!AWEStableCleanIsDynamicProgressView(view)) return NO;
+    if ([objc_getAssociatedObject(view, &kAWEStableCleanMarkerKey) boolValue]) return NO;
+    return view.hidden || view.alpha <= 0.01 || view.layer.opacity <= 0.01f;
+}
+
+static void AWEStableCleanRecordLatestDynamicProgressAlpha(UIView *view, CGFloat alpha) {
+    if (!view || !AWEStableCleanIsDynamicProgressView(view)) return;
+    if (![objc_getAssociatedObject(view, &kAWEStableCleanMarkerKey) boolValue]) return;
+    objc_setAssociatedObject(view, &kAWEStableCleanOriginalOpacityKey,
+                             @(MIN(MAX(alpha, 0.0), 1.0)),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
+    if (AWEStableCleanShouldDeferDynamicProgressSnapshot(view)) return;
     if (![objc_getAssociatedObject(view, &kAWEStableCleanMarkerKey) boolValue]) {
         objc_setAssociatedObject(view, &kAWEStableCleanMarkerKey, @YES,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -14702,7 +14774,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c";
+    self.title = @"LiquidBar 设置 · 1.0.56d";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16023,7 +16095,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c image=%@ ==========" ,
+            @"========== START build=1.0.56d image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16090,7 +16162,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56d diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16105,7 +16177,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56d_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16345,7 +16417,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56d internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16787,7 +16859,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
 }
 %end
 
@@ -16842,7 +16917,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
 }
 %end
 
@@ -16867,7 +16945,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
 }
 %end
 
@@ -17099,6 +17180,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
     if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
         AWEStableCleanSuppressView((UIView *)self, YES);
     }
 }
@@ -17114,6 +17196,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
     if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
         AWEStableCleanSuppressView((UIView *)self, YES);
     }
 }
@@ -17129,6 +17212,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
     if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
         AWEStableCleanSuppressView((UIView *)self, YES);
     }
 }
@@ -17144,6 +17228,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
     if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanRecordLatestDynamicProgressAlpha((UIView *)self, alpha);
         AWEStableCleanSuppressView((UIView *)self, YES);
     }
 }
@@ -18860,7 +18945,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56d os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

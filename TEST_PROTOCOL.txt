@@ -1,25 +1,25 @@
-AwemeLiquidBar 1.0.56c focused test
+AwemeLiquidBar 1.0.56d focused test
 
-A. Clean status bar
-1. On a normal feed video invoke 一键清屏. Time/signal/Wi-Fi/battery status UI should disappear immediately together with feed chrome.
-2. Open comments while clean: comment UI remains usable; status bar may remain hidden until exiting clean.
-3. Exit clean: status bar and feed UI restore.
+1. Messages root
+- Cold launch Douyin.
+- Tap Messages from Home.
+- LiquidBar must remain fully visible on the Messages list.
 
-B. Messages route
-1. Tap 消息 from Home: LiquidBar must remain visible on the Messages root/list page.
-2. Enter a one-to-one chat: LiquidBar must hide.
-3. Interactive swipe back: reveal follows gesture percent; cancel once and verify it hides again.
-4. Complete the return: Messages root has a fully visible LiquidBar.
+2. Chat route
+- Enter a 1:1/group chat from Messages.
+- LiquidBar must hide while inside the chat.
+- Interactive back: LiquidBar should reveal continuously with gesture progress.
+- Complete return: LiquidBar must remain visible on Messages.
+- Cancel an interactive back gesture: LiquidBar must remain hidden in chat.
 
-C. Save glass HUD
-1. On an image post, avatar menu primary item reads 保存图片.
-2. On a video post it reads 保存视频.
-3. Tap save: centered adaptive Liquid Glass HUD shows loading then success/failure, with text fully enclosed by the material.
+3. Clean-screen album progress restoration
+- On an image/album post with segmented page progress, verify the progress is visible normally.
+- Enter clean screen: segmented progress should hide.
+- Switch one or two images while clean.
+- Exit clean screen: segmented progress should immediately return and continue tracking the current image.
+- Repeat enter/exit once to check no permanent opacity=0 state remains.
 
-D. Fullscreen setting
-1. Settings label reads 全屏播放 and has no third-party fullscreen hint.
-2. Profile/detail video and live-prestream behavior remain identical to 1.0.56b.
-
-E. Top-left cold launch
-1. Enable 左上按钮展开分类菜单（开启时替代顶部分组）.
-2. Kill and cold launch Douyin. Native/plugin category group should not flash before disappearing.
+4. Regression sanity
+- Status bar still hides/restores with clean screen.
+- Comment drawer is not cleared.
+- Profile/detail fullscreen and live preview geometry are unchanged.
