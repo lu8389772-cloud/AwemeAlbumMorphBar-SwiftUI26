@@ -1,13 +1,18 @@
-# AwemeLiquidBar 1.0.56c3
+# AwemeLiquidBar 1.0.56c4
 
-Performance-cleanup build based directly on the verified 1.0.56c1 chat-return rollback baseline.
+Focused stability follow-up based directly on the 1.0.56c2 performance-cleanup build.
 
-Preserved: all 1.0.56c-stage features and the 1.0.56c1 chat-return rollback. Authorization data remains unchanged (36 digest entries).
+Preserved:
+- all 1.0.56c-stage UI/fullscreen/clean-screen/save-HUD behavior;
+- the 1.0.56c1 chat-return rollback scope;
+- the 1.0.56c2 performance cleanup;
+- the existing 36-entry authorization table.
 
-Performance changes only:
-- removes the process-wide `%hook UIView` used by fullscreen/clean-screen; player fullscreen correction now runs only from known player-controller layout callbacks and their local view trees;
-- caches native top-category suppression targets, avoiding the old up-to-500-view BFS on every top-bar layout;
-- removes clean-screen whole-window reapply scheduling from generic layout callbacks while retaining bounded rescans on reuse/model/index changes and exact per-control hooks;
-- lowers steady Liquid Glass appearance polling from 4 Hz to 2 Hz and adds an event-driven refresh after feed index changes.
+New fixes in 1.0.56c4:
+- adds a DYYY-style native Douyin settings shortcut: both current sidebar Settings layout variants are hooked narrowly, a `LiquidBar` button is attached beside the native `设置` entry, and it opens the existing LiquidBar settings sheet without depending on the two-finger gesture or bottom-bar layout;
+- prevents UIKit's broken legacy `More` controller when all six bottom entries are enabled. Search stays a real direct `UISearchTab`; three regular entries stay direct; overflow entries are routed through a plugin-owned working `更多` sheet, so `我`/发布/消息 can never become unreachable;
+- profile-only two-finger settings gesture now fails open when the `我` entry is disabled, preventing a configuration lockout;
+- highest-quality playback no longer replaces Douyin's adaptive bitrate set with one model and no longer rewrites `playURL` / force-switches a live private player. It preserves every native bitrate model, biases higher bitrate first, and gives native playback a 2-second foreground-resume grace window;
+- Friends unread badge now requires a positive numeric unread count, so a stale native empty badge shell at count 0 no longer becomes a permanent red dot.
 
-No authorization, chat-return, route, save-HUD, fullscreen preference, or settings behavior is intentionally changed.
+No settings-drawer/chat-return/progress-bar experiments from 1.0.56d+ are reintroduced.

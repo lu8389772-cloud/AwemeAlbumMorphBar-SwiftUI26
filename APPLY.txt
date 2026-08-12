@@ -1,3 +1,4 @@
-AwemeLiquidBar 1.0.56c2 is a focused follow-up to 1.0.56b.
-It keeps the validated fullscreen geometry and fixes clean-screen status bar ownership, Messages-root bar visibility, centered adaptive-glass save feedback, and cold-start top-category suppression.
+AwemeLiquidBar 1.0.56c4 is a narrow stability follow-up to 1.0.56c2.
+It fixes six-entry bottom-bar overflow/settings lockout, background-resume playback quality interference, and Friends unread badge zero-state.
+All 1.0.56c2 performance/fullscreen/clean-screen behavior is otherwise retained.
 Use the normal Xcode 27 / iOS 27 cloud workflow for the full project.

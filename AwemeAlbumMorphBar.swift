@@ -201,9 +201,6 @@ protocol AWEAlbumMorphActionSink: AnyObject {
 
     @objc(albumMorphDidRequestSearch)
     func albumMorphDidRequestSearch()
-
-    @objc(albumMorphDidRequestOverflow:)
-    func albumMorphDidRequestOverflow(_ identifiers: [String])
 }
 
 @_silgen_name("AWEAlbumMorphProbeLog")
@@ -377,7 +374,6 @@ final class AWEAlbumMorphTabController:
         static let messages = "messages"
         static let profile = "profile"
         static let search = "search"
-        static let more = "more"
 
         static let allowed = [home, second, publish, messages, profile, search]
         static let defaultVisible = [home, second, messages, profile, search]
@@ -400,7 +396,10 @@ final class AWEAlbumMorphTabController:
     private let visibilityMaskView = UIView(frame: .zero)
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
-    private var overflowItemIdentifiers: [String] = []
+    // UIKit falls back to its legacy, non-functional `More` controller when
+    // six tabs are installed. Keep at most five real UITabs and own overflow
+    // routing ourselves so Search/Profile can never become unreachable.
+    private var overflowItemKeys: [String] = []
     private var messageBadgeValue: String?
     private var secondBadgeValue: String?
 
@@ -492,19 +491,87 @@ final class AWEAlbumMorphTabController:
     }
 
     private func makeMoreTab() -> UITab {
-        let image = UIImage(
-            systemName: "ellipsis.circle",
-            withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: 21.0, weight: .regular
-            )
-        )
-        return UITab(
+        let image = UIImage(systemName: "ellipsis.circle")
+        let tab = UITab(
             title: albumMorphHideTitles ? "" : "更多",
             image: image,
             identifier: Identifier.more
         ) { [weak self] _ in
             self?.makeProxy(originalIndex: nil) ?? UIViewController()
         }
+        if #available(iOS 26.1, *) {
+            tab.selectedImage = image
+        }
+        return tab
+    }
+
+    private func itemTitle(for key: String) -> String {
+        switch key {
+        case ItemKey.home: return "首页"
+        case ItemKey.second: return secondTitle
+        case ItemKey.publish: return "发布"
+        case ItemKey.messages: return "消息"
+        case ItemKey.profile: return "我"
+        case ItemKey.search: return "搜索"
+        default: return key
+        }
+    }
+
+    private func itemIcon(for key: String) -> UIImage? {
+        switch key {
+        case ItemKey.home: return UIImage(systemName: "house")
+        case ItemKey.second: return UIImage(systemName: secondImageRole == "shop" ? "storefront" : "person.2")
+        case ItemKey.publish: return UIImage(systemName: "plus.circle")
+        case ItemKey.messages: return UIImage(systemName: "message")
+        case ItemKey.profile: return UIImage(systemName: "person.crop.circle")
+        case ItemKey.search: return UIImage(systemName: "magnifyingglass")
+        default: return UIImage(systemName: "circle")
+        }
+    }
+
+    private func originalIndex(forItemKey key: String) -> Int? {
+        switch key {
+        case ItemKey.home: return 0
+        case ItemKey.second: return 1
+        case ItemKey.publish: return 2
+        case ItemKey.messages: return 3
+        case ItemKey.profile: return 4
+        default: return nil
+        }
+    }
+
+    private func showOverflowMenu() {
+        guard !overflowItemKeys.isEmpty else { return }
+        let menu = UIAlertController(title: "更多", message: nil, preferredStyle: .actionSheet)
+        for key in overflowItemKeys {
+            let action = UIAlertAction(title: itemTitle(for: key), style: .default) { [weak self] _ in
+                guard let self else { return }
+                if key == ItemKey.search {
+                    self.actionSink?.albumMorphDidRequestSearch()
+                    return
+                }
+                guard let index = self.originalIndex(forItemKey: key) else { return }
+                self.cachedOriginalIndex = index
+                self.hasUserDrivenSelection = true
+                self.pendingUserIndex = index
+                self.pendingSelectionUntil = CACurrentMediaTime() + 3.0
+                if let moreTab = self.tab(forIdentifier: Identifier.more) {
+                    self.suppressCallbacks = true
+                    self.selectedTab = moreTab
+                    self.applyExplicitSelectionImages(selectedIdentifier: Identifier.more)
+                    self.suppressCallbacks = false
+                }
+                self.actionSink?.albumMorphDidRequestOriginalIndex(index)
+            }
+            action.setValue(itemIcon(for: key), forKey: "image")
+            menu.addAction(action)
+        }
+        menu.addAction(UIAlertAction(title: "取消", style: .cancel))
+        if let popover = menu.popoverPresentationController {
+            popover.sourceView = tabBar
+            popover.sourceRect = CGRect(x: tabBar.bounds.maxX - 44, y: tabBar.bounds.midY, width: 1, height: 1)
+        }
+        present(menu, animated: true)
     }
 
     private func tabForItemKey(_ key: String) -> UITab? {
@@ -551,8 +618,6 @@ final class AWEAlbumMorphTabController:
             )
         case ItemKey.search:
             return makeSearchTab()
-        case ItemKey.more:
-            return makeMoreTab()
         default:
             return nil
         }
@@ -626,48 +691,22 @@ final class AWEAlbumMorphTabController:
 
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
         var seen = Set<String>()
-        var requested: [String] = []
+        var result: [String] = []
         for identifier in identifiers where ItemKey.allowed.contains(identifier) {
             guard seen.insert(identifier).inserted else { continue }
-            requested.append(identifier)
+            result.append(identifier)
         }
 
-        let selectableCount = requested.filter {
+        let selectableCount = result.filter {
             ItemKey.selectablePages.contains($0)
         }.count
         if selectableCount < 2 {
-            overflowItemIdentifiers = []
             return ItemKey.defaultVisible
         }
 
-        // UIKit creates its own non-functional More controller once the
-        // transplanted UITabBarController receives six tabs. Never let that
-        // happen. With all five regular items + Search enabled, keep three
-        // stable page tabs visible and synthesize one plugin-owned More tab.
-        // The two overflowed native destinations stay fully reachable from
-        // that menu, and Search remains the independent system capsule.
-        let hasSearch = requested.contains(ItemKey.search)
-        let regular = requested.filter { $0 != ItemKey.search }
-        if hasSearch && regular.count > 4 {
-            let preferredDirectOrder = [
-                ItemKey.home, ItemKey.second, ItemKey.messages,
-                ItemKey.profile, ItemKey.publish
-            ]
-            var direct: [String] = []
-            for key in preferredDirectOrder where regular.contains(key) {
-                if direct.count >= 3 { break }
-                direct.append(key)
-            }
-            for key in regular where !direct.contains(key) {
-                if direct.count >= 3 { break }
-                direct.append(key)
-            }
-            overflowItemIdentifiers = regular.filter { !direct.contains($0) }
-            return direct + [ItemKey.more, ItemKey.search]
-        }
-
-        overflowItemIdentifiers = []
-        var result = requested
+        // UISearchTab owns its independent right-side system capsule. Keep it
+        // last regardless of the order of regular items so UIKit never tries
+        // to place regular buttons on both sides of that capsule.
         if let searchIndex = result.firstIndex(of: ItemKey.search) {
             result.remove(at: searchIndex)
             result.append(ItemKey.search)
@@ -679,14 +718,44 @@ final class AWEAlbumMorphTabController:
         proxies.removeAll()
         explicitImagesByIdentifier.removeAll(keepingCapacity: true)
 
-        let rebuilt = visibleItemIdentifiers.compactMap(tabForItemKey)
+        let sourceKeys = visibleItemIdentifiers
+        let displayedKeys: [String]
+        let keepsDirectSearch = sourceKeys.count > 5 && sourceKeys.contains(ItemKey.search)
+        if sourceKeys.count > 5 {
+            // Never let UITabBarController create its legacy More controller:
+            // it cannot forward our private Douyin actions correctly. When
+            // Search is enabled, keep the real UISearchTab direct and reserve
+            // one native slot for our own working More entry.
+            let regularKeys = sourceKeys.filter { $0 != ItemKey.search }
+            let directRegularCount = keepsDirectSearch ? 3 : 4
+            displayedKeys = Array(regularKeys.prefix(directRegularCount))
+            overflowItemKeys = Array(regularKeys.dropFirst(directRegularCount))
+        } else {
+            displayedKeys = sourceKeys
+            overflowItemKeys = []
+        }
+
+        var rebuilt = displayedKeys.compactMap(tabForItemKey)
+        if !overflowItemKeys.isEmpty { rebuilt.append(makeMoreTab()) }
+        if keepsDirectSearch, let search = tabForItemKey(ItemKey.search) { rebuilt.append(search) }
         guard !rebuilt.isEmpty else { return }
 
         let fallback = rebuilt.first { self.originalIndex(for: $0) != nil }
-        let preferred = rebuilt.first {
-            self.originalIndex(for: $0) == originalIndex
-        } ?? fallback
-        let resolvedIndex = self.originalIndex(for: preferred) ?? 0
+        let requestedKey: String? = {
+            switch originalIndex {
+            case 0: return ItemKey.home
+            case 1: return ItemKey.second
+            case 2: return ItemKey.publish
+            case 3: return ItemKey.messages
+            case 4: return ItemKey.profile
+            default: return nil
+            }
+        }()
+        let requestedIsOverflow = requestedKey.map { overflowItemKeys.contains($0) } ?? false
+        let preferred = requestedIsOverflow
+            ? rebuilt.first(where: { $0.identifier == Identifier.more })
+            : (rebuilt.first { self.originalIndex(for: $0) == originalIndex } ?? fallback)
+        let resolvedIndex = requestedIsOverflow ? originalIndex : (self.originalIndex(for: preferred) ?? 0)
 
         suppressCallbacks = true
         UIView.performWithoutAnimation {
@@ -1037,7 +1106,27 @@ final class AWEAlbumMorphTabController:
             }
         }
 
-        guard let target = tabForOriginalIndex(index) else { return }
+        guard let target = tabForOriginalIndex(index) else {
+            let key: String?
+            switch index {
+            case 0: key = ItemKey.home
+            case 1: key = ItemKey.second
+            case 2: key = ItemKey.publish
+            case 3: key = ItemKey.messages
+            case 4: key = ItemKey.profile
+            default: key = nil
+            }
+            if let key, overflowItemKeys.contains(key),
+               let moreTab = tab(forIdentifier: Identifier.more) {
+                cachedOriginalIndex = index
+                guard selectedTab !== moreTab else { return }
+                suppressCallbacks = true
+                selectedTab = moreTab
+                applyExplicitSelectionImages(selectedIdentifier: Identifier.more)
+                suppressCallbacks = false
+            }
+            return
+        }
         cachedOriginalIndex = index
 
         guard selectedTab !== target else { return }
@@ -1058,12 +1147,12 @@ final class AWEAlbumMorphTabController:
     ) -> Bool {
         guard !suppressCallbacks else { return true }
 
-        if tab is UISearchTab {
-            actionSink?.albumMorphDidRequestSearch()
+        if tab.identifier == Identifier.more {
+            showOverflowMenu()
             return false
         }
-        if tab.identifier == Identifier.more {
-            actionSink?.albumMorphDidRequestOverflow(overflowItemIdentifiers)
+        if tab is UISearchTab {
+            actionSink?.albumMorphDidRequestSearch()
             return false
         }
         if originalIndex(for: tab) == 2 {

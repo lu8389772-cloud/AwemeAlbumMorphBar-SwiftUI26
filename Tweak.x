@@ -9,10 +9,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <float.h>
 
 /*
- AwemeLiquidBar 1.0.56c3 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56c4 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -128,7 +127,6 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
  static prototypes here so Clang never creates implicit int declarations.
 */
 static UIWindow *AWEActiveMainWindow(void);
-static UIUserInterfaceStyle AWESystemInterfaceStyle(void);
 static UIView *AWEFindViewByExactRuntimeClass(UIView *root,
                                               NSString *className,
                                               NSUInteger depth);
@@ -204,7 +202,6 @@ static char kAWEExternalBridgeMenuSlotKey;
 static char kAWEExternalBridgeMenuButtonKey;
 static char kAWEExternalBridgeMenuModelIdentityKey;
 static char kAWEExternalBridgeMenuConfigGenerationKey;
-static char kAWEHighestPlaybackScheduledIdentityKey;
 static char kAWETopActionRefreshPendingKey;
 static char kAWEImageAverageColorCacheKey;
 static char kAWEAdaptiveGlassConfigurationSignatureKey;
@@ -228,7 +225,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c3: cache the already-identified native top-category views so the
+/* 1.0.56c4: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -790,7 +787,6 @@ static CFTimeInterval gAWENativeDarkBootstrapBeganAt = 0.0;
 
 static UIViewController *AWETopViewControllerFrom(UIViewController *controller);
 static UIWindow *AWEActiveMainWindow(void);
-static UIUserInterfaceStyle AWESystemInterfaceStyle(void);
 static UIView *AWEFindViewByExactRuntimeClass(UIView *root,
                                               NSString *className,
                                               NSUInteger depth);
@@ -858,7 +854,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c3_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c4_interaction.log"] copy];
     });
     return path;
 }
@@ -927,7 +923,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c3_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c4_probe.log"] copy];
     });
     return path;
 }
@@ -1458,13 +1454,13 @@ static BOOL AWECurrentMainTabAppearsToBeMe(void) {
 static BOOL AWECurrentPageAllowsSettingsGesture(void) {
     if (!AWESettingsGestureMineOnlyEnabled()) return YES;
 
-    /* Six requested bottom actions force our five-slot overflow mode. In that
-       mode Profile may live inside the plugin-owned More menu, so enforcing a
-       profile-only gesture would create a settings lockout. Treat overflow as
-       an explicit fail-safe and allow the gesture from the current main page. */
-    NSArray<NSString *> *visibleBottomItems = AWEAlbumMorphVisibleItemIdentifiers();
-    if (visibleBottomItems.count > 5 ||
-        ![visibleBottomItems containsObject:@"profile"]) return YES;
+    /* Fail open instead of locking the user out. If the Profile entry was
+       disabled in the bottom-bar configurator, a profile-only gesture would
+       otherwise become impossible to trigger. In that configuration the
+       two-finger long press automatically falls back to global availability. */
+    if (![AWEStoredAlbumMorphEnabledItemIdentifiers() containsObject:@"profile"]) {
+        return YES;
+    }
 
     /* Prefer the canonical tab identity exposed by the custom/native bridge.
        On some Douyin builds the underlying AWENormalModeTabBarController no
@@ -4403,9 +4399,23 @@ static NSString *AWECurrentOriginalMessagesBadgeValue(void) {
 }
 
 static NSString *AWECurrentOriginalSecondBadgeValue(void) {
-    /* Only mirror Friends. Never copy the promotional badge of a Shop second tab. */
+    /* Only mirror Friends. Never copy the promotional badge of a Shop second tab.
+       Douyin can keep an empty native badge shell alive after unread reaches 0;
+       do not translate that stale shell into UIKit's blank red dot. */
     if (AWESecondTabIsShop()) return nil;
-    return AWECurrentOriginalBadgeValueForButtonIndex(1);
+    NSString *value = AWECurrentOriginalBadgeValueForButtonIndex(1);
+    NSString *trimmed = [value stringByTrimmingCharactersInSet:
+        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!trimmed.length) return nil;
+
+    NSScanner *scanner = [NSScanner scannerWithString:trimmed];
+    NSInteger count = 0;
+    if ([scanner scanInteger:&count]) {
+        return count > 0 ? trimmed : nil;
+    }
+    /* Friends unread is a count mirror in this plugin. Non-numeric remnants
+       such as a recycled empty badge must not survive as a red dot. */
+    return nil;
 }
 
 static void AWEUpdateAlbumMorphMessageBadge(void) {
@@ -6561,16 +6571,7 @@ static __weak UIView *gAWEProfileFullscreenProtectedRightStack = nil;
 
 static __weak UIView *gAWEDownloadToastView = nil;
 static NSUInteger gAWEDownloadToastGeneration = 0;
-static NSString *gAWELastHighestPlaybackModelKey = nil;
-static CFTimeInterval gAWELastHighestPlaybackAttempt = 0.0;
-/* 1.0.56c3: never mutate player stream/layout state while Douyin is restoring
-   its native playback session after returning from background. */
-static CFTimeInterval gAWEForegroundPlaybackGuardUntil = 0.0;
-static BOOL gAWEApplicationWasBackgrounded = NO;
-
-static BOOL AWEForegroundPlaybackGuardActive(void) {
-    return CACurrentMediaTime() < gAWEForegroundPlaybackGuardUntil;
-}
+static CFTimeInterval gAWEPlaybackPreferenceResumeGraceUntil = 0.0;
 
 static id AWESafeValueForKey(id object, NSString *key) {
     if (!object || key.length == 0) return nil;
@@ -6818,24 +6819,6 @@ static AWEVideoVariant *AWEChooseHighestPlaybackVariant(NSArray<AWEVideoVariant 
         if (area != bestArea) { if (area > bestArea) best = candidate; continue; }
         if (candidate.fps != best.fps) { if (candidate.fps > best.fps) best = candidate; continue; }
         if (candidate.h265 != best.h265 && candidate.h265) best = candidate;
-    }
-    return best;
-}
-
-static id AWEHighestBitrateBSModelFromModels(NSArray *models) {
-    if (![models isKindOfClass:NSArray.class] || models.count == 0) return nil;
-    Class bsClass = NSClassFromString(@"AWEVideoBSModel");
-    if (!bsClass) return nil;
-    id best = nil;
-    long long bestBitrate = 0;
-    for (id model in models) {
-        if (!model || ![model isKindOfClass:bsClass]) continue;
-        long long bitrate = AWEInteger64FromValue(AWESafeValueForKey(model, @"bitrate"));
-        if (bitrate <= 0) continue;
-        if (!best || bitrate > bestBitrate) {
-            best = model;
-            bestBitrate = bitrate;
-        }
     }
     return best;
 }
@@ -7419,204 +7402,10 @@ static UIMenu *AWESelfDownloadMenuForAweme(id aweme) {
     return [UIMenu menuWithTitle:@"下载与复制" children:items];
 }
 
-static id AWEFindObjectRespondingToSelectorInView(UIView *view,
-                                                    SEL selector,
-                                                    NSUInteger depth) {
-    if (!view || !selector || depth > 18) return nil;
-    if ([view respondsToSelector:selector] && view.window &&
-        !view.hidden && view.alpha > 0.01) return view;
-    for (UIView *child in [view.subviews reverseObjectEnumerator]) {
-        id found = AWEFindObjectRespondingToSelectorInView(child, selector, depth + 1);
-        if (found) return found;
-    }
-    return nil;
-}
-
-static id AWEFindObjectRespondingToSelectorInController(UIViewController *controller,
-                                                          SEL selector,
-                                                          NSUInteger depth) {
-    if (!controller || !selector || depth > 12) return nil;
-    if ([controller respondsToSelector:selector] && controller.viewIfLoaded.window) return controller;
-    if (controller.presentedViewController && !controller.presentedViewController.isBeingDismissed) {
-        id found = AWEFindObjectRespondingToSelectorInController(
-            controller.presentedViewController, selector, depth + 1);
-        if (found) return found;
-    }
-    if ([controller isKindOfClass:UINavigationController.class]) {
-        id found = AWEFindObjectRespondingToSelectorInController(
-            ((UINavigationController *)controller).visibleViewController, selector, depth + 1);
-        if (found) return found;
-    }
-    if ([controller isKindOfClass:UITabBarController.class]) {
-        id found = AWEFindObjectRespondingToSelectorInController(
-            ((UITabBarController *)controller).selectedViewController, selector, depth + 1);
-        if (found) return found;
-    }
-    id viewFound = AWEFindObjectRespondingToSelectorInView(controller.viewIfLoaded, selector, 0);
-    if (viewFound) return viewFound;
-    for (UIViewController *child in [controller.childViewControllers reverseObjectEnumerator]) {
-        id found = AWEFindObjectRespondingToSelectorInController(child, selector, depth + 1);
-        if (found) return found;
-    }
-    return nil;
-}
-
-static id AWEFindPlaybackTarget(UIView *stack, SEL selector) {
-    for (UIResponder *responder = stack; responder; responder = responder.nextResponder) {
-        if ([responder respondsToSelector:selector]) return responder;
-    }
-    UIWindow *window = stack.window ?: AWEActiveMainWindow();
-    UIViewController *top = window ? AWETopViewControllerFrom(window.rootViewController) : nil;
-    id found = AWEFindObjectRespondingToSelectorInController(top, selector, 0);
-    if (found) return found;
-    if (window) return AWEFindObjectRespondingToSelectorInView(window, selector, 0);
-    return nil;
-}
-
-static BOOL AWETypeEncodingIsObject(const char *type) {
-    while (type && strchr("rnNoORV", *type)) type++;
-    return type && *type == '@';
-}
-
-static BOOL AWETypeEncodingIsInteger(const char *type) {
-    while (type && strchr("rnNoORV", *type)) type++;
-    return type && strchr("BcCsSiIlLqQ", *type) != NULL;
-}
-
-static void AWESetInvocationInteger(NSInvocation *invocation,
-                                    NSUInteger index,
-                                    const char *type,
-                                    long long value) {
-    while (type && strchr("rnNoORV", *type)) type++;
-    if (!type) return;
-    switch (*type) {
-        case 'B': { BOOL v = value != 0; [invocation setArgument:&v atIndex:index]; break; }
-        case 'c': { char v = (char)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'C': { unsigned char v = (unsigned char)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 's': { short v = (short)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'S': { unsigned short v = (unsigned short)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'i': { int v = (int)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'I': { unsigned int v = (unsigned int)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'l': { long v = (long)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'L': { unsigned long v = (unsigned long)value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'q': { long long v = value; [invocation setArgument:&v atIndex:index]; break; }
-        case 'Q': { unsigned long long v = (unsigned long long)value; [invocation setArgument:&v atIndex:index]; break; }
-        default: break;
-    }
-}
-
-static BOOL AWEInvokePlaybackSelector(id target,
-                                      SEL selector,
-                                      AWEVideoVariant *variant) {
-    if (!target || !selector || !variant) return NO;
-    NSMethodSignature *signature = [target methodSignatureForSelector:selector];
-    if (!signature) return NO;
-    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-    invocation.target = target;
-    invocation.selector = selector;
-
-    NSString *name = NSStringFromSelector(selector);
-    if ([name isEqualToString:@"switchStreamBitrate:type:completionHandler:"] &&
-        signature.numberOfArguments == 5) {
-        const char *arg2 = [signature getArgumentTypeAtIndex:2];
-        if (AWETypeEncodingIsObject(arg2)) {
-            id model = variant.sourceModel;
-            [invocation setArgument:&model atIndex:2];
-        } else if (AWETypeEncodingIsInteger(arg2)) {
-            AWESetInvocationInteger(invocation, 2, arg2, variant.sourceIndex);
-        } else return NO;
-        const char *arg3 = [signature getArgumentTypeAtIndex:3];
-        if (AWETypeEncodingIsInteger(arg3)) AWESetInvocationInteger(invocation, 3, arg3, 0);
-        else if (AWETypeEncodingIsObject(arg3)) { id nilObject = nil; [invocation setArgument:&nilObject atIndex:3]; }
-        else return NO;
-        const char *arg4 = [signature getArgumentTypeAtIndex:4];
-        if (AWETypeEncodingIsObject(arg4)) { id nilBlock = nil; [invocation setArgument:&nilBlock atIndex:4]; }
-        else return NO;
-    } else if ([name isEqualToString:@"setResolutionWithIndex:isManual:beginChange:completion:"] &&
-               signature.numberOfArguments == 6) {
-        const char *arg2 = [signature getArgumentTypeAtIndex:2];
-        const char *arg3 = [signature getArgumentTypeAtIndex:3];
-        const char *arg4 = [signature getArgumentTypeAtIndex:4];
-        const char *arg5 = [signature getArgumentTypeAtIndex:5];
-        if (!AWETypeEncodingIsInteger(arg2) || !AWETypeEncodingIsInteger(arg3) ||
-            !AWETypeEncodingIsInteger(arg4) || !AWETypeEncodingIsObject(arg5)) return NO;
-        AWESetInvocationInteger(invocation, 2, arg2, variant.sourceIndex);
-        AWESetInvocationInteger(invocation, 3, arg3, 1);
-        AWESetInvocationInteger(invocation, 4, arg4, 1);
-        id nilBlock = nil;
-        [invocation setArgument:&nilBlock atIndex:5];
-    } else {
-        return NO;
-    }
-
-    @try {
-        [invocation retainArguments];
-        [invocation invoke];
-        return YES;
-    } @catch (__unused NSException *exception) {
-        return NO;
-    }
-}
-
-static void AWETryPreferHighestPlaybackForStack(UIView *stack) {
-    if (!AWEPreferHighestPlaybackEnabled() || !stack.window) return;
-    id aweme = AWECurrentAwemeModelForStack(stack);
-    if (!aweme) return;
-    NSString *identity = AWEAwemeIdentity(aweme);
-    CFTimeInterval now = CACurrentMediaTime();
-    if ([gAWELastHighestPlaybackModelKey isEqualToString:identity] &&
-        now - gAWELastHighestPlaybackAttempt < 8.0) return;
-
-    id video = AWESafeValueForKey(aweme, @"video");
-    NSArray<AWEVideoVariant *> *variants = AWEVideoVariantsForVideo(video, NO);
-    AWEVideoVariant *best = AWEChooseHighestPlaybackVariant(variants);
-    if (!best || best.sourceModel == video) return;
-    gAWELastHighestPlaybackAttempt = now;
-    /* Cache the attempted model before probing private playback selectors.
-       1.0.51a only cached on success, so unsupported Douyin builds retried the
-       same failed selector hundreds of times per minute and caused heat. */
-    gAWELastHighestPlaybackModelKey = [identity copy];
-
-    BOOL success = NO;
-    NSString *path = @"none";
-    SEL bitrateSelector = NSSelectorFromString(@"switchStreamBitrate:type:completionHandler:");
-    id target = AWEFindPlaybackTarget(stack, bitrateSelector);
-    if (target) {
-        success = AWEInvokePlaybackSelector(target, bitrateSelector, best);
-        if (success) path = @"switchStreamBitrate";
-    }
-    if (!success) {
-        SEL resolutionSelector = NSSelectorFromString(@"setResolutionWithIndex:isManual:beginChange:completion:");
-        target = AWEFindPlaybackTarget(stack, resolutionSelector);
-        if (target) {
-            success = AWEInvokePlaybackSelector(target, resolutionSelector, best);
-            if (success) path = @"setResolutionWithIndex";
-        }
-    }
-    if (AWEInteractionDiagnosticsEnabled()) {
-        AWEInteractionDiagnosticWrite(@"PLAYBACK_HIGHEST model=%@ success=%d path=%@ variant=%@ target=%@",
-            identity, success, path, AWEVariantSummary(best), AWEInteractionObjectSummary(target));
-    }
-}
-
-static void AWESchedulePreferHighestPlaybackForStack(UIView *stack) {
-    if (!AWEPreferHighestPlaybackEnabled() || !stack || !stack.window) return;
-    id aweme = AWECurrentAwemeModelForStack(stack);
-    if (!aweme) return;
-    NSString *identity = AWEAwemeIdentity(aweme);
-    NSString *scheduled = objc_getAssociatedObject(
-        stack, &kAWEHighestPlaybackScheduledIdentityKey);
-    if ([scheduled isEqualToString:identity]) return;
-    objc_setAssociatedObject(stack, &kAWEHighestPlaybackScheduledIdentityKey,
-                             identity, OBJC_ASSOCIATION_COPY_NONATOMIC);
-    __weak UIView *weakStack = stack;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-        (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIView *strongStack = weakStack;
-        if (!strongStack || !strongStack.window) return;
-        AWETryPreferHighestPlaybackForStack(strongStack);
-    });
-}
+/* Highest-quality playback deliberately avoids runtime stream switching.
+   Reconfiguring an already-playing private player can race Douyin's own
+   background/foreground pause state. The active implementation below only
+   biases the advertised bitrate list before native selection. */
 
 typedef NS_ENUM(NSInteger, AWEHomeTopActionKind) {
     AWEHomeTopActionKindMenu = 1,
@@ -8949,7 +8738,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c3 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c4 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -11318,86 +11107,6 @@ static void AWEApplyAlbumMorphResolvedAppearance(
                 }
             });
     }
-}
-
-- (void)albumMorphDidRequestOverflow:(NSArray<NSString *> *)identifiers {
-    NSArray<NSString *> *items = [identifiers isKindOfClass:NSArray.class]
-        ? identifiers : @[];
-    UIWindow *window = AWEActiveMainWindow();
-    UIViewController *top = window
-        ? AWETopViewControllerFrom(window.rootViewController) : nil;
-    if (!top || top.presentedViewController) return;
-
-    UIAlertController *sheet = [UIAlertController
-        alertControllerWithTitle:@"更多"
-                         message:nil
-                  preferredStyle:UIAlertControllerStyleActionSheet];
-    __weak typeof(self) weakSelf = self;
-    for (NSString *identifier in items) {
-        NSInteger index = NSNotFound;
-        if ([identifier isEqualToString:@"home"]) index = 0;
-        else if ([identifier isEqualToString:@"second"]) index = 1;
-        else if ([identifier isEqualToString:@"publish"]) index = 2;
-        else if ([identifier isEqualToString:@"messages"]) index = 3;
-        else if ([identifier isEqualToString:@"profile"]) index = 4;
-        if (index == NSNotFound) continue;
-        NSString *title = AWEAlbumMorphItemTitle(identifier);
-        [sheet addAction:[UIAlertAction
-            actionWithTitle:title
-                      style:UIAlertActionStyleDefault
-                    handler:^(__unused UIAlertAction *action) {
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                            (int64_t)(0.06 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                            [weakSelf albumMorphDidRequestOriginalIndex:index];
-                        });
-                    }]];
-    }
-
-    /* A permanent escape hatch: even with “settings gesture only on Me” and
-       Profile moved into overflow, users can never lose access to settings. */
-    [sheet addAction:[UIAlertAction
-        actionWithTitle:@"LiquidBar 设置"
-                  style:UIAlertActionStyleDefault
-                handler:^(__unused UIAlertAction *action) {
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                        (int64_t)(0.10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        Class settingsClass = NSClassFromString(@"AWELiquidSettingsController");
-                        UIViewController *settings = settingsClass ? [settingsClass new] : nil;
-                        if (!settings) return;
-                        UINavigationController *navigation =
-                            [[UINavigationController alloc] initWithRootViewController:settings];
-                        navigation.modalPresentationStyle = UIModalPresentationPageSheet;
-                        UIUserInterfaceStyle style = AWESystemInterfaceStyle();
-                        navigation.overrideUserInterfaceStyle = style;
-                        settings.overrideUserInterfaceStyle = style;
-                        if (@available(iOS 15.0, *)) {
-                            UISheetPresentationController *presentation = navigation.sheetPresentationController;
-                            presentation.detents = @[
-                                [UISheetPresentationControllerDetent mediumDetent],
-                                [UISheetPresentationControllerDetent largeDetent]
-                            ];
-                            presentation.selectedDetentIdentifier =
-                                UISheetPresentationControllerDetentIdentifierMedium;
-                            presentation.prefersGrabberVisible = YES;
-                            presentation.prefersScrollingExpandsWhenScrolledToEdge = NO;
-                        }
-                        UIViewController *presenter = AWETopViewControllerFrom(
-                            AWEActiveMainWindow().rootViewController);
-                        if (presenter && !presenter.presentedViewController) {
-                            [presenter presentViewController:navigation animated:YES completion:nil];
-                        }
-                    });
-                }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                              style:UIAlertActionStyleCancel
-                                            handler:nil]];
-    UIPopoverPresentationController *popover = sheet.popoverPresentationController;
-    if (popover) {
-        popover.sourceView = top.view;
-        popover.sourceRect = CGRectMake(CGRectGetMidX(top.view.bounds),
-                                        CGRectGetMaxY(top.view.bounds) - 1.0, 1.0, 1.0);
-    }
-    [top presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)albumMorphDidRequestSearch {
@@ -14820,7 +14529,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c3";
+    self.title = @"LiquidBar 设置 · 1.0.56c4";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15052,7 +14761,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     self.doubleTapSplitSlider = splitSlider;
 
     UILabel *settingsGestureMineOnlyLabel = [UILabel new];
-    settingsGestureMineOnlyLabel.text = @"双指长按仅在‘我’页面触发";
+    settingsGestureMineOnlyLabel.text = @"双指长按仅在‘我’页面触发（未启用‘我’时自动全局兜底）";
     settingsGestureMineOnlyLabel.font =
         [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
     UISwitch *settingsGestureMineOnlySwitch = [UISwitch new];
@@ -15912,12 +15621,8 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWEPreferHighestPlaybackDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
-    gAWELastHighestPlaybackModelKey = nil;
-    gAWELastHighestPlaybackAttempt = 0.0;
-    if (sender.isOn) {
-        UIWindow *window = AWEActiveMainWindow();
-        if (window) AWEScheduleHomeActionStacksInView(window);
-    }
+    /* The preference is consumed on the next native AWEVideoModel selection.
+       Do not refresh feed UI or touch a live player when toggling it. */
 }
 
 - (void)lowerHalfCommentSwitchChanged:(UISwitch *)sender {
@@ -16141,7 +15846,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c3 image=%@ ==========" ,
+            @"========== START build=1.0.56c4 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16208,7 +15913,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c3 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c4 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16223,7 +15928,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c3_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c4_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16275,6 +15980,178 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
 
 @end
+
+
+#pragma mark - Native Douyin settings shortcut
+
+/*
+ DYYY's current public implementation does not mutate Douyin's settings-table
+ model.  Instead it hooks the two known layouts that host the native "设置"
+ shortcut in the left sidebar, adds a sibling button, and opens its own settings
+ controller from there.  Keep the same narrow strategy here: no global UIView
+ hook, no tab-bar routing changes, and no dependency on the profile-only gesture.
+*/
+static const NSInteger kAWELiquidNativeSettingsShortcutTag = 561564;
+
+static void AWEPresentLiquidSettingsFromNativeEntry(UIViewController *host) {
+    if (gAWESettingsVisible) return;
+
+    UIWindow *window = host.view.window ?: AWEActiveMainWindow();
+    UIViewController *top = host;
+    if (!top && window) top = window.rootViewController;
+    if (top) top = AWETopViewControllerFrom(top);
+    if (!top && window) top = AWETopViewControllerFrom(window.rootViewController);
+    if (!top) return;
+
+    if ([top isKindOfClass:[AWELiquidSettingsController class]] ||
+        [top.navigationController.topViewController
+            isKindOfClass:[AWELiquidSettingsController class]]) {
+        return;
+    }
+
+    UIImpactFeedbackGenerator *feedback =
+        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+    [feedback prepare];
+    [feedback impactOccurred];
+
+    AWELiquidSettingsController *settings = [AWELiquidSettingsController new];
+    UINavigationController *navigation =
+        [[UINavigationController alloc] initWithRootViewController:settings];
+    navigation.modalPresentationStyle = UIModalPresentationPageSheet;
+
+    if (@available(iOS 13.0, *)) {
+        UIUserInterfaceStyle systemStyle = AWESystemInterfaceStyle();
+        navigation.overrideUserInterfaceStyle = systemStyle;
+        settings.overrideUserInterfaceStyle = systemStyle;
+    }
+
+    if (@available(iOS 15.0, *)) {
+        UISheetPresentationController *sheet = navigation.sheetPresentationController;
+        sheet.detents = @[
+            [UISheetPresentationControllerDetent mediumDetent],
+            [UISheetPresentationControllerDetent largeDetent]
+        ];
+        sheet.selectedDetentIdentifier =
+            UISheetPresentationControllerDetentIdentifierMedium;
+        sheet.prefersGrabberVisible = YES;
+        sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
+    }
+
+    AWELogBarSnapshot(@"plugin-settings.native-entry", top, YES);
+    [top presentViewController:navigation animated:YES completion:nil];
+}
+
+@interface AWELiquidNativeSettingsEntryTarget : NSObject
++ (instancetype)sharedTarget;
+- (void)openLiquidBarSettings:(UIButton *)sender;
+@end
+
+@implementation AWELiquidNativeSettingsEntryTarget
+
++ (instancetype)sharedTarget {
+    static AWELiquidNativeSettingsEntryTarget *target = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        target = [AWELiquidNativeSettingsEntryTarget new];
+    });
+    return target;
+}
+
+- (void)openLiquidBarSettings:(UIButton *)sender {
+    UIResponder *responder = sender;
+    UIViewController *host = nil;
+    for (NSUInteger depth = 0; responder && depth < 24; depth++) {
+        if ([responder isKindOfClass:UIViewController.class]) {
+            host = (UIViewController *)responder;
+            break;
+        }
+        responder = responder.nextResponder;
+    }
+    if (!host) {
+        UIWindow *window = sender.window ?: AWEActiveMainWindow();
+        host = window ? AWETopViewControllerFrom(window.rootViewController) : nil;
+    }
+    AWEPresentLiquidSettingsFromNativeEntry(host);
+}
+
+@end
+
+static UIView *AWELiquidNativeSettingsShortcutHost(UIView *settingsView) {
+    if (!settingsView) return nil;
+    UIView *host = settingsView;
+    /* Match DYYY's current hierarchy choice first. */
+    for (NSUInteger i = 0; i < 3 && host.superview; i++) {
+        host = host.superview;
+    }
+    return host ?: settingsView.superview ?: settingsView;
+}
+
+static void AWEInstallLiquidNativeSettingsShortcut(UIView *settingsView) {
+    if (!settingsView || !settingsView.window) return;
+    if (![settingsView.accessibilityLabel isEqualToString:@"设置"]) return;
+
+    UIView *host = AWELiquidNativeSettingsShortcutHost(settingsView);
+    if (!host) return;
+
+    UIButton *button = (UIButton *)[host viewWithTag:kAWELiquidNativeSettingsShortcutTag];
+    if (![button isKindOfClass:UIButton.class]) {
+        button = [UIButton buttonWithType:UIButtonTypeSystem];
+        button.tag = kAWELiquidNativeSettingsShortcutTag;
+        button.accessibilityLabel = @"LiquidBar设置";
+        [button setTitle:@"LiquidBar" forState:UIControlStateNormal];
+        button.titleLabel.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightSemibold];
+        button.layer.cornerRadius = 9.0;
+        button.layer.cornerCurve = kCACornerCurveContinuous;
+        button.clipsToBounds = YES;
+        [button addTarget:[AWELiquidNativeSettingsEntryTarget sharedTarget]
+                   action:@selector(openLiquidBarSettings:)
+         forControlEvents:UIControlEventTouchUpInside];
+        [host addSubview:button];
+    }
+
+    UIColor *textColor = nil;
+    if (@available(iOS 13.0, *)) {
+        textColor = UIColor.labelColor;
+        button.backgroundColor = [UIColor.secondarySystemBackgroundColor colorWithAlphaComponent:0.72];
+    } else {
+        textColor = UIColor.blackColor;
+        button.backgroundColor = [UIColor colorWithWhite:0.92 alpha:0.85];
+    }
+    [button setTitleColor:textColor forState:UIControlStateNormal];
+
+    /* Use the real window-space position of the native Settings host instead of
+       guessing left/right screen halves.  DYYY uses fixed offsets for its two
+       layout variants; converting the live rect keeps the same relationship
+       while tolerating current Douyin spacing changes. */
+    CGRect settingsRect = [settingsView convertRect:settingsView.bounds toView:host];
+    CGFloat width = 72.0;
+    CGFloat height = 32.0;
+    CGFloat gap = 8.0;
+    CGFloat x = CGRectGetMinX(settingsRect) - width - gap;
+    if (x < 8.0) {
+        x = CGRectGetMaxX(settingsRect) + gap;
+    }
+    CGFloat maxX = MAX(8.0, CGRectGetWidth(host.bounds) - width - 8.0);
+    x = MIN(MAX(8.0, x), maxX);
+    CGFloat y = CGRectGetMidY(settingsRect) - height * 0.5;
+    if (!isfinite(y)) y = 8.0;
+    y = MIN(MAX(4.0, y), MAX(4.0, CGRectGetHeight(host.bounds) - height - 4.0));
+    button.frame = CGRectIntegral(CGRectMake(x, y, width, height));
+    button.hidden = NO;
+    button.alpha = 1.0;
+    [host bringSubviewToFront:button];
+}
+
+static void AWEScheduleLiquidNativeSettingsShortcut(UIView *settingsView) {
+    if (!settingsView) return;
+    __weak UIView *weakView = settingsView;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIView *strongView = weakView;
+        if (!strongView) return;
+        AWEInstallLiquidNativeSettingsShortcut(strongView);
+    });
+}
 
 @interface AWESettingsGestureTarget : NSObject <UIGestureRecognizerDelegate>
 @end
@@ -16463,7 +16340,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c3 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c4 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16606,7 +16483,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c3 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c4 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16634,10 +16511,6 @@ static void AWEFSExpandPlayerOwnedViewTree(UIView *root, int depth) {
 
 static void AWEFSLayoutKnownPlayerController(UIViewController *controller) {
     if (!AWEInternalFullscreenActive() || !controller || !controller.view) return;
-    /* Let Douyin restore its AV/player session first. Frame changes during the
-       foreground-active transition can make the native player settle in a
-       paused state. Normal layout hooks resume ownership after this short guard. */
-    if (AWEForegroundPlaybackGuardActive()) return;
     UIView *root = controller.view;
     if (root.superview) {
         CGRect frame = root.frame;
@@ -16828,7 +16701,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c3 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c4 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17050,28 +16923,40 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 %end
 %end
 
-/* Highest-quality early path: constrain AWEVideoModel to the highest advertised
-   bitrate before player selection.  The later private-player switch remains as
-   a fallback/reassertion for already-created playback sessions. */
-%hook AWEVideoModel
-- (id)playURL {
-    /* Keep Douyin's full bitrate ladder intact. Collapsing -bitrateModels to a
-       one-element array breaks native foreground/session restoration on some
-       builds and leaves the resumed/Friends video paused until the user taps.
-       Only prefer the highest initial URL while the app is stably active. */
-    if (!AWEPreferHighestPlaybackEnabled() || AWEForegroundPlaybackGuardActive() ||
-        UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
-        return %orig;
-    }
-    NSArray *models = AWEArrayFromValue(AWESafeValueForKey(self, @"bitrateModels"));
-    id highest = AWEHighestBitrateBSModelFromModels(models);
-    id playAddr = AWESafeValueForKey(highest, @"playAddr");
-    Class urlClass = NSClassFromString(@"AWEURLModel");
-    if (playAddr && (!urlClass || [playAddr isKindOfClass:urlClass])) return playAddr;
-    return %orig;
+static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
+    UIApplication *application = UIApplication.sharedApplication;
+    if (application.applicationState != UIApplicationStateActive) return NO;
+    return CACurrentMediaTime() >= gAWEPlaybackPreferenceResumeGraceUntil;
 }
+
+/* Highest-quality preference is now advisory rather than destructive: preserve
+   Douyin's complete adaptive set, order the best advertised bitrate first, and
+   never rewrite playURL or force-switch a live private player. */
+%hook AWEVideoModel
 - (NSArray *)bitrateModels {
-    return %orig;
+    NSArray *originalModels = %orig;
+    if (!AWEPreferHighestPlaybackEnabled() || !AWEPlaybackPreferenceCanBiasNow() ||
+        originalModels.count < 2) {
+        return originalModels;
+    }
+
+    /* Stability-first highest-quality preference. Older builds replaced the
+       whole adaptive set with a single model (and overrode playURL). After an
+       app background/foreground cycle Douyin may need the previously selected
+       adaptive model to reconcile playback; removing it can produce a second
+       native pause immediately after the user's tap. Preserve every model and
+       only bias native selection by ordering the highest bitrate first. */
+    return [originalModels sortedArrayUsingComparator:^NSComparisonResult(id lhs, id rhs) {
+        long long left = AWEInteger64FromValue(
+            AWEFirstSafeValue(lhs, @[@"bitrate", @"bitRate", @"videoBitrate",
+                                    @"avgBitrate", @"bitrateInBps", @"bitRateInBps"]));
+        long long right = AWEInteger64FromValue(
+            AWEFirstSafeValue(rhs, @[@"bitrate", @"bitRate", @"videoBitrate",
+                                    @"avgBitrate", @"bitrateInBps", @"bitRateInBps"]));
+        if (left > right) return NSOrderedAscending;
+        if (left < right) return NSOrderedDescending;
+        return NSOrderedSame;
+    }];
 }
 %end
 
@@ -17568,6 +17453,51 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
     %orig(transform);
     AWESyncTopSelectionPillToNativeIndicator((UIView *)self);
     AWETrackTopSelectionPresentationIfNeeded((UIView *)self);
+}
+
+%end
+
+
+/* Native Douyin Settings shortcut. DYYY currently supports both of these
+   sidebar layout classes; keep both without touching the settings table model. */
+%hook AWELeftSideBarTopIconHorizontalView
+
+- (void)didMoveToSuperview {
+    %orig;
+    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    if ([((UIView *)self).accessibilityLabel isEqualToString:@"设置"]) {
+        AWEInstallLiquidNativeSettingsShortcut((UIView *)self);
+    }
+}
+
+%end
+
+%hook AWELeftSideBarTopRightLayoutView
+
+- (void)didMoveToSuperview {
+    %orig;
+    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    if ([((UIView *)self).accessibilityLabel isEqualToString:@"设置"]) {
+        AWEInstallLiquidNativeSettingsShortcut((UIView *)self);
+    }
 }
 
 %end
@@ -18983,7 +18913,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c3 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c4 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -18993,35 +18923,13 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
                 AWEScheduleActualNativeBarWarmup();
             }
             [[NSNotificationCenter defaultCenter]
-                addObserverForName:UIApplicationDidEnterBackgroundNotification
-                            object:nil
-                             queue:[NSOperationQueue mainQueue]
-                        usingBlock:^(__unused NSNotification *notification) {
-                gAWEApplicationWasBackgrounded = YES;
-                /* Block plugin stream/layout intervention until native resume. */
-                gAWEForegroundPlaybackGuardUntil = DBL_MAX;
-            }];
-            [[NSNotificationCenter defaultCenter]
                 addObserverForName:UIApplicationDidBecomeActiveNotification
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                if (gAWEApplicationWasBackgrounded) {
-                    gAWEApplicationWasBackgrounded = NO;
-                    gAWEForegroundPlaybackGuardUntil = CACurrentMediaTime() + 1.20;
-                    gAWELastHighestPlaybackModelKey = nil;
-                    gAWELastHighestPlaybackAttempt = 0.0;
-                    /* After native autoplay/session restoration has settled,
-                       request one ordinary layout pass. Do not synthesize play
-                       or a tap; Douyin remains the playback-state owner. */
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                        (int64_t)(1.28 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        UIWindow *window = AWEActiveMainWindow();
-                        UIViewController *top = window
-                            ? AWETopViewControllerFrom(window.rootViewController) : nil;
-                        [top.view setNeedsLayout];
-                    });
-                }
+                /* Give Douyin's native player time to reconcile its own
+                   background pause/resume state before we bias bitrate order. */
+                gAWEPlaybackPreferenceResumeGraceUntil = CACurrentMediaTime() + 2.0;
                 if (AWEPluginFeaturesEnabled()) {
                     if (!AWEAlbumMorphStyleEnabled()) {
                         AWEScheduleActualNativeBarWarmup();
