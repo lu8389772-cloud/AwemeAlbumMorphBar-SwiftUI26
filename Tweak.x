@@ -16673,39 +16673,114 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 
 /* Native elements specifically called out by clean-screen regressions. */
 %hook AWELandscapeFeedEntryView
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)didMoveToWindow { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)didMoveToWindow {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 %hook AWEVideoPlayDanmakuContainerView
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 %hook AWEDanmakuContainerView
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 %hook AWEStoryProgressSlideView
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 %hook AWEDemaciaChapterProgressSlider
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 %hook AFDAIbumFolioView
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 %hook AFDAlbumFolioView
-- (void)layoutSubviews { %orig; if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
-- (void)setAlpha:(CGFloat)alpha { %orig(alpha); if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES); }
+- (void)layoutSubviews {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
+- (void)setAlpha:(CGFloat)alpha {
+    %orig(alpha);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
+    }
+}
 %end
 
 

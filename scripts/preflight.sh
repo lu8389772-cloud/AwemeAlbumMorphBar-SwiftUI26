@@ -123,6 +123,22 @@ dups = [name for name, count in Counter(hooks).items() if count > 1]
 if dups:
     raise SystemExit('duplicate Logos hook classes: ' + ', '.join(dups))
 
+# Logos parses explicit %orig(...) arguments from the remainder of the source
+# line. Never place executable code after %orig / %orig(...) on that same line;
+# this caused the 1.0.56a first cloud build to fail at Tweak.x:16678.
+import re
+bad_orig_lines = []
+for lineno, line in enumerate(objc.splitlines(), 1):
+    # We intentionally allow comments/whitespace after the semicolon only.
+    m = re.search(r'%orig(?:\([^;]*\))?\s*;', line)
+    if m:
+        tail = line[m.end():].strip()
+        if tail and tail != '}':
+            bad_orig_lines.append((lineno, line.strip()))
+if bad_orig_lines:
+    details = '; '.join(f'{n}: {text}' for n, text in bad_orig_lines[:8])
+    raise SystemExit('unsafe same-line Logos %orig tail: ' + details)
+
 # Loose delimiter count is useful here because the pre-existing 1.0.55a source
 # was already balanced; the merge should not change that property.
 for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','bracket')]:

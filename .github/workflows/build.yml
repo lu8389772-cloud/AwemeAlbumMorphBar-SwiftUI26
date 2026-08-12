@@ -28,6 +28,19 @@ jobs:
           echo "iPhoneOS SDK: $SDK_VERSION"
           [[ "$SDK_VERSION" == 27.* ]]
 
+      - name: Fix executable permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 755 layout/DEBIAN/postinst scripts/preflight.sh build_no_install.sh 2>/dev/null || true
+          ls -l layout/DEBIAN/postinst scripts/preflight.sh build_no_install.sh
+
+      - name: Static preflight before dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/preflight.sh
+
       - name: Install packaging dependencies
         shell: bash
         run: |
@@ -39,19 +52,6 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 --recursive https://github.com/theos/theos.git "$GITHUB_WORKSPACE/.theos"
-
-      - name: Fix executable permissions
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod 755 layout/DEBIAN/postinst scripts/preflight.sh build_no_install.sh 2>/dev/null || true
-          ls -l layout/DEBIAN/postinst scripts/preflight.sh build_no_install.sh
-
-      - name: Preflight Swift native tab controller
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/preflight.sh
 
       - name: Preprocess Logos source
         shell: bash
