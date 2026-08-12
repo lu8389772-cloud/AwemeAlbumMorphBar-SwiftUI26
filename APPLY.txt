@@ -1,10 +1,5 @@
-AwemeLiquidBar 1.0.56h is a narrow regression fix over 1.0.56c.
+AwemeLiquidBar 1.0.56r is the complete 1.0.55a stable project plus the validated internal fullscreen module and clean-screen v2 persistence fixes.
 
-Changes only:
-- Messages root is no longer classified as a chat/session detail route.
-- LiquidBar is explicitly allowed on original tab index 3 (Messages) when no real sensitive route is visible.
-- Interactive chat-return reveal is preserved; a real conversation still suppresses the bar.
-- Dynamic album/story/video progress controls no longer snapshot transient alpha=0 as their restore state during clean screen.
-- While clean screen is active, their latest native alpha request is remembered so exiting clean restores the correct current state.
+For fullscreen testing, disable DYYY/AwemeX and any other tweak that also changes Douyin fullscreen/feed geometry.
 
-No fullscreen geometry, status-bar clean logic, comment protection, save HUD, or quality selection changes in this patch.
+Build only; this project does not auto-install or auto-restart Douyin.

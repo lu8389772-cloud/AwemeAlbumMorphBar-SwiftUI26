@@ -392,7 +392,6 @@ final class AWEAlbumMorphTabController:
     private var verticalOffset: CGFloat = 0
     private var fallbackCompactScale: CGFloat = 1
     private var morphVisibleFraction: CGFloat = 1
-    private var horizontalRouteOffset: CGFloat = 0
     private let visibilityMaskView = UIView(frame: .zero)
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
@@ -713,9 +712,7 @@ final class AWEAlbumMorphTabController:
 
     private func applyStableVerticalOffset() {
         guard isViewLoaded else { return }
-        // Compose route-follow X with the user's independent vertical offset.
-        // Never let a Settings drawer overwrite the saved bottom-bar height/Y.
-        let target = CGAffineTransform(translationX: horizontalRouteOffset, y: verticalOffset)
+        let target = CGAffineTransform(translationX: 0, y: verticalOffset)
         guard !view.transform.isApproximatelyEqual(to: target) else { return }
         UIView.performWithoutAnimation {
             self.view.transform = .identity
@@ -753,20 +750,6 @@ final class AWEAlbumMorphTabController:
         } else {
             UIView.performWithoutAnimation(changes)
         }
-    }
-
-
-    @objc(setHorizontalRouteOffset:)
-    func setHorizontalRouteOffset(_ offset: CGFloat) {
-        let width = max(view.bounds.width, UIScreen.main.bounds.width)
-        let limit = max(width * 1.25, 1)
-        let clamped = min(max(offset, -limit), limit)
-        guard abs(horizontalRouteOffset - clamped) > 0.25 ||
-                abs(view.transform.tx - clamped) > 0.5 else {
-            return
-        }
-        horizontalRouteOffset = clamped
-        applyStableVerticalOffset()
     }
 
     @objc(setVerticalOffset:)
