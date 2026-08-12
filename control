@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.55a
+Version: 1.0.56a
 Architecture: iphoneos-arm
-Description: Stable no-fullscreen build from auth36: native Friends/Messages badges with zero-count cleanup, original avatar menu/download flow, and isolated display-only clean screen.
+Description: Stable auth36 build with internal fullscreen playback (validated 0.5.1 geometry), improved clean-screen persistence, native Friends/Messages badges, avatar menu downloads, and Liquid Glass UI.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

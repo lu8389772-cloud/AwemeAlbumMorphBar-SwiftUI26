@@ -1,7 +1,33 @@
-AwemeLiquidBar 1.0.55a device test
+AwemeLiquidBar 1.0.56a device test
+==================================
 
-1. Baseline: with third-party fullscreen disabled, verify Home/Friends/Messages/Profile and normal scrolling.
-2. Badges: Messages=0 must show no circle; Messages>0 must show numeric badge. Friends badge should mirror only when the second tab is Friends, not Shop. Badge visual remains ~10% smaller.
-3. Avatar menu: single-tap the liquid avatar and verify profile/download/audio/copy entries.
-4. Clean screen: choose 一键清屏. Top/right/text/status/native bar/LiquidBar should visually disappear without changing media geometry. Tap the same avatar location to open the menu and choose 退出清屏. All original views should return; no replacement avatar is used.
-5. This build does not promise compatibility with external fullscreen plugins; profile-video right-action loss or 83pt bottom shifts caused by such plugins are intentionally not repaired here.
+Preparation
+-----------
+1. Disable DYYY/AwemeX and other external fullscreen tweaks.
+2. Enable AwemeLiquidBar and leave “内置全屏播放” ON.
+3. Fully kill Douyin, then cold launch it.
+
+A. Internal fullscreen
+---------------------
+1. Home feed: swipe through at least 5 normal videos. Video media should extend to the bottom with no native tab background.
+2. Profile/detail: enter another user's profile and open at least 3 videos. Media should be fullscreen while nickname/caption/right controls remain correctly anchored; no 83pt opaque bottom blocker.
+3. Comments: on a profile/detail video open and close comments twice. Right-side Liquid Glass actions must remain present.
+4. Live pre-stream: swipe through at least 3 live preview cards without entering the room. Each card's “直播中 / 昵称 / 文案” UI must stay at the validated 0.3.1 position; no cumulative upward/downward drift.
+5. Image/story work: open a multi-image work and change pages repeatedly. There must be no cumulative downward displacement.
+6. Landscape-entry video: verify native horizontal-video fullscreen entry remains usable in normal mode.
+
+B. Clean screen v2
+------------------
+1. From the avatar menu choose “一键清屏”.
+2. Verify these visuals disappear: custom/original bottom bar, top chrome, right action visuals, nickname/caption/anchors, danmaku button/container, native landscape fullscreen-entry button, video/chapter progress bars, image/story page/folio indicators.
+3. While still in clean screen, swipe through at least 5 videos. Watch specifically for progress bars, danmaku/fullscreen-entry controls, and bottom bar reappearing during or after reuse.
+4. Still in clean screen, open a multi-image work and switch at least 5 pages. Page/folio indicators must not reappear.
+5. Use the invisible avatar hit target to open the menu and choose “退出清屏”. All suppressed UI must restore and the bottom bar must be interactive.
+6. Repeat enter-clean -> swipe -> exit-clean once more to catch stale generation/reuse issues.
+
+C. Regression checks
+--------------------
+1. Friends/Messages native badges still update and zero-count badges clear.
+2. Avatar menu profile/download actions still work.
+3. Comments open/close does not remove right Liquid Glass buttons.
+4. No unexpected heat/continuous timer behavior while idle.

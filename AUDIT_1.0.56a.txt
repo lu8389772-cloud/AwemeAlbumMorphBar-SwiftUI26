@@ -1,0 +1,51 @@
+AwemeLiquidBar 1.0.56a merge audit
+==================================
+
+Baseline
+--------
+- Fresh copy of AwemeLiquidBar 1.0.55a stable-no-fullscreen project.
+- AwemeAlbumMorphBar.swift is unchanged from 1.0.55a.
+- auth36 table is retained unchanged.
+
+Internal fullscreen
+-------------------
+- Fullscreen preference key: AwemeLiquidBarInternalFullscreenV1 (default ON).
+- Feed table full-parent height.
+- Player content view expansion.
+- Profile/detail keeps interaction-overlay height separated from media expansion.
+- Live pre-stream uses the validated 0.3.1 pattern:
+  AWEElementStackView => tab-height shift;
+  IESLiveStackView => -20 pt shift.
+- Live transforms are restored when the reused stack leaves live-prestream context.
+- Detail comment/background cleanup includes the runtime Swift
+  AWECommentInputViewSwiftImpl.CommentInputContainerView hook.
+- No cumulative author-profile image origin.y += tabHeight compensation.
+
+Clean screen v2
+---------------
+- Keeps the original display-only suppression/restore model.
+- Explicit bottom-bar suppression covers original bar, native bar, custom LiquidBar
+  controller/tab bar and overlay window.
+- Explicit targets include landscape fullscreen entry, danmaku containers,
+  video/chapter progress UI, story/image progress and folio indicators.
+- Feed reuse/index/model/layout events schedule bounded re-suppression passes.
+- No permanent clean-screen polling timer was added.
+- AWEElementStackView stays as an invisible exit-menu host while its visible children
+  remain suppressed.
+
+Static preflight
+----------------
+- Swift frontend parse: PASS.
+- build_no_install.sh bash syntax: PASS.
+- Project scripts/preflight.sh: PASS.
+- Logos structure: 1 expected custom group; no duplicate hook classes; hook/group/end
+  counts balanced; default group and dynamic group both explicitly initialized.
+- Objective-C delimiter counts balanced relative to the stable baseline.
+- auth digest rows: 36.
+- Version/log/workflow/package tokens updated to 1.0.56a.
+
+Build note
+----------
+The sandbox used to assemble this project does not contain the project's Xcode/iOS
+SDK + Theos build environment, so no .deb is claimed here. Use the existing Xcode 27
+GitHub workflow or a local Theos environment with a sufficiently new SDK/toolchain.
