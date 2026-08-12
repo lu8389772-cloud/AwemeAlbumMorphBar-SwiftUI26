@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56b — internal fullscreen + clean screen v2 + native badges + auth36
+ AwemeLiquidBar 1.0.56c — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -804,6 +804,7 @@ static void AWEApplyNativeDarkBootstrap(UITabBar *nativeBar);
 static void AWEScheduleNativeDarkBootstrapRelease(UITabBar *nativeBar);
 static void AWEApplyHomeOnlyGlassStyleToNativeBar(UITabBar *nativeBar);
 static void AWEApplyHomeOnlyGlassStyleToExistingSurfaces(void);
+static UIVisualEffect *AWECreateHomeAdaptiveGlassEffect(void);
 static void AWERefreshAllConfiguredIcons(void);
 static AWENormalModeTabBar *AWEPrepareBarForController(id controller,
                                                        BOOL forceVisible);
@@ -849,7 +850,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56b_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c_interaction.log"] copy];
     });
     return path;
 }
@@ -918,7 +919,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56b_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c_probe.log"] copy];
     });
     return path;
 }
@@ -4135,14 +4136,12 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
        matcher controller-scoped and require detail/session/input semantics so
        the root Messages tab itself is not mistaken for a conversation. */
     BOOL directConversation =
-        [className isEqualToString:@"AWEIMMessageBaseViewController"] ||
         [className isEqualToString:@"IESIMInputViewController"] ||
         (controllerLike &&
          ([lower containsString:@"conversation"] ||
           [lower containsString:@"chatroom"] ||
           [lower containsString:@"directmessage"] ||
           [lower containsString:@"messagedetail"] ||
-          [lower containsString:@"messagebase"] ||
           [lower containsString:@"privatechat"] ||
           [lower containsString:@"singlechat"] ||
           [lower containsString:@"sessiondetail"] ||
@@ -6577,7 +6576,8 @@ static __weak UIView *gAWEProfileFullscreenProtectedRightStack = nil;
 @implementation AWEVideoVariant
 @end
 
-static __weak UILabel *gAWEDownloadToastLabel = nil;
+static __weak UIView *gAWEDownloadToastView = nil;
+static NSUInteger gAWEDownloadToastGeneration = 0;
 static NSString *gAWELastHighestPlaybackModelKey = nil;
 static CFTimeInterval gAWELastHighestPlaybackAttempt = 0.0;
 
@@ -6941,41 +6941,148 @@ static NSString *AWEAwemeIdentity(id aweme) {
     return [NSString stringWithFormat:@"%p", aweme];
 }
 
+static BOOL AWEToastTextIndicatesLoading(NSString *text) {
+    return [text containsString:@"正在"] || [text containsString:@"下载中"] ||
+           [text containsString:@"准备中"];
+}
+
+static BOOL AWEToastTextIndicatesFailure(NSString *text) {
+    NSArray<NSString *> *tokens = @[@"失败", @"未找到", @"没有解析", @"无效",
+        @"无法", @"请允许", @"未识别", @"没有可复制"];
+    for (NSString *token in tokens) if ([text containsString:token]) return YES;
+    return NO;
+}
+
+static BOOL AWEToastTextIndicatesSuccess(NSString *text) {
+    if (AWEToastTextIndicatesFailure(text) || AWEToastTextIndicatesLoading(text)) return NO;
+    return [text containsString:@"已保存"] || [text containsString:@"保存完成"] ||
+           [text containsString:@"已复制"] || [text containsString:@"完成"];
+}
+
 static void AWEShowDownloadToast(NSString *text) {
     if (text.length == 0) return;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = AWEActiveMainWindow();
         if (!window) return;
-        UILabel *old = gAWEDownloadToastLabel;
+
+        NSUInteger generation = ++gAWEDownloadToastGeneration;
+        UIView *old = gAWEDownloadToastView;
         [old removeFromSuperview];
+
+        BOOL loading = AWEToastTextIndicatesLoading(text);
+        BOOL failure = AWEToastTextIndicatesFailure(text);
+        BOOL success = AWEToastTextIndicatesSuccess(text);
+
+        UIView *host = [UIView new];
+        host.translatesAutoresizingMaskIntoConstraints = NO;
+        host.backgroundColor = UIColor.clearColor;
+        host.userInteractionEnabled = NO;
+        host.alpha = 0.0;
+        host.transform = CGAffineTransformMakeScale(0.92, 0.92);
+        host.layer.shadowColor = UIColor.blackColor.CGColor;
+        host.layer.shadowOpacity = 0.12;
+        host.layer.shadowRadius = 18.0;
+        host.layer.shadowOffset = CGSizeMake(0.0, 7.0);
+
+        UIVisualEffectView *glass = [[UIVisualEffectView alloc]
+            initWithEffect:AWECreateHomeAdaptiveGlassEffect()];
+        glass.translatesAutoresizingMaskIntoConstraints = NO;
+        glass.userInteractionEnabled = NO;
+        glass.clipsToBounds = YES;
+        glass.layer.cornerRadius = 28.0;
+        glass.layer.cornerCurve = kCACornerCurveContinuous;
+        glass.layer.borderWidth = 0.5;
+        glass.layer.borderColor = [UIColor.separatorColor colorWithAlphaComponent:0.22].CGColor;
+        [host addSubview:glass];
+
+        UIView *content = glass.contentView;
+        UIStackView *row = [UIStackView new];
+        row.translatesAutoresizingMaskIntoConstraints = NO;
+        row.axis = UILayoutConstraintAxisHorizontal;
+        row.alignment = UIStackViewAlignmentCenter;
+        row.spacing = 10.0;
+        [content addSubview:row];
+
+        if (loading) {
+            UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc]
+                initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+            spinner.color = UIColor.labelColor;
+            [spinner startAnimating];
+            [row addArrangedSubview:spinner];
+        } else {
+            NSString *symbol = failure ? @"exclamationmark.triangle.fill" :
+                (success ? @"checkmark.circle.fill" : @"arrow.down.circle.fill");
+            UIImageView *icon = [[UIImageView alloc]
+                initWithImage:[UIImage systemImageNamed:symbol]];
+            icon.translatesAutoresizingMaskIntoConstraints = NO;
+            icon.contentMode = UIViewContentModeScaleAspectFit;
+            icon.tintColor = failure ? UIColor.systemOrangeColor :
+                (success ? UIColor.systemGreenColor : UIColor.labelColor);
+            [NSLayoutConstraint activateConstraints:@[
+                [icon.widthAnchor constraintEqualToConstant:22.0],
+                [icon.heightAnchor constraintEqualToConstant:22.0]
+            ]];
+            [row addArrangedSubview:icon];
+        }
+
         UILabel *label = [UILabel new];
-        label.translatesAutoresizingMaskIntoConstraints = NO;
         label.text = text;
-        label.textColor = UIColor.whiteColor;
-        label.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.88];
-        label.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
+        label.textColor = UIColor.labelColor;
+        label.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
         label.textAlignment = NSTextAlignmentCenter;
-        label.numberOfLines = 0;
-        label.layer.cornerRadius = 14.0;
-        label.layer.cornerCurve = kCACornerCurveContinuous;
-        label.clipsToBounds = YES;
-        label.alpha = 0.0;
-        [window addSubview:label];
+        label.numberOfLines = 2;
+        label.adjustsFontSizeToFitWidth = YES;
+        label.minimumScaleFactor = 0.86;
+        [row addArrangedSubview:label];
+
         [NSLayoutConstraint activateConstraints:@[
-            [label.centerXAnchor constraintEqualToAnchor:window.centerXAnchor],
-            [label.bottomAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.bottomAnchor constant:-112.0],
-            [label.widthAnchor constraintLessThanOrEqualToAnchor:window.widthAnchor multiplier:0.78],
-            [label.heightAnchor constraintGreaterThanOrEqualToConstant:42.0]
+            [glass.leadingAnchor constraintEqualToAnchor:host.leadingAnchor],
+            [glass.trailingAnchor constraintEqualToAnchor:host.trailingAnchor],
+            [glass.topAnchor constraintEqualToAnchor:host.topAnchor],
+            [glass.bottomAnchor constraintEqualToAnchor:host.bottomAnchor],
+            [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:18.0],
+            [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-18.0],
+            [row.topAnchor constraintEqualToAnchor:content.topAnchor constant:13.0],
+            [row.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-13.0]
         ]];
-        [label setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-        label.layoutMargins = UIEdgeInsetsMake(8, 14, 8, 14);
-        gAWEDownloadToastLabel = label;
-        [UIView animateWithDuration:0.16 animations:^{ label.alpha = 1.0; }];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.9 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            if (gAWEDownloadToastLabel != label) return;
-            [UIView animateWithDuration:0.20 animations:^{ label.alpha = 0.0; }
-                             completion:^(__unused BOOL finished) { [label removeFromSuperview]; }];
+
+        [window addSubview:host];
+        NSLayoutConstraint *maxWidth = [host.widthAnchor
+            constraintLessThanOrEqualToAnchor:window.widthAnchor multiplier:0.78];
+        maxWidth.priority = UILayoutPriorityRequired;
+        [NSLayoutConstraint activateConstraints:@[
+            [host.centerXAnchor constraintEqualToAnchor:window.centerXAnchor],
+            [host.centerYAnchor constraintEqualToAnchor:window.centerYAnchor constant:4.0],
+            [host.heightAnchor constraintGreaterThanOrEqualToConstant:56.0],
+            [host.widthAnchor constraintGreaterThanOrEqualToConstant:150.0],
+            maxWidth
+        ]];
+
+        gAWEDownloadToastView = host;
+        [window layoutIfNeeded];
+        [UIView animateWithDuration:0.28
+                              delay:0.0
+             usingSpringWithDamping:0.78
+              initialSpringVelocity:0.35
+                            options:UIViewAnimationOptionAllowUserInteraction |
+                                    UIViewAnimationOptionBeginFromCurrentState
+                         animations:^{
+            host.alpha = 1.0;
+            host.transform = CGAffineTransformIdentity;
+        } completion:nil];
+
+        NSTimeInterval lifetime = loading ? 12.0 : 1.65;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+            (int64_t)(lifetime * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (generation != gAWEDownloadToastGeneration ||
+                gAWEDownloadToastView != host) return;
+            [UIView animateWithDuration:0.20 animations:^{
+                host.alpha = 0.0;
+                host.transform = CGAffineTransformMakeScale(0.96, 0.96);
+            } completion:^(__unused BOOL finished) {
+                if (gAWEDownloadToastView == host) gAWEDownloadToastView = nil;
+                [host removeFromSuperview];
+            }];
         });
     });
 }
@@ -7086,7 +7193,7 @@ static void AWEDownloadSmartVideoForAweme(id aweme) {
         AWEAwemeIdentity(aweme), urlString);
     NSMutableURLRequest *request = AWEMediaRequest(urlString);
     if (!request) { AWEShowDownloadToast(@"视频地址无效"); return; }
-    AWEShowDownloadToast(@"正在下载视频");
+    AWEShowDownloadToast(@"正在保存视频");
     NSURLSessionDownloadTask *task = [NSURLSession.sharedSession
         downloadTaskWithRequest:request
         completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
@@ -7105,7 +7212,7 @@ static void AWEDownloadSmartVideoForAweme(id aweme) {
             if (!fileURL) { AWEShowDownloadToast(@"视频临时文件保存失败"); return; }
             AWESaveVideoFileToPhotos(fileURL, ^(BOOL success) {
                 [NSFileManager.defaultManager removeItemAtURL:fileURL error:nil];
-                AWEShowDownloadToast(success ? @"视频已保存到相册" : @"无法写入相册，请检查照片权限");
+                AWEShowDownloadToast(success ? @"视频已保存" : @"无法写入相册，请检查照片权限");
             });
         }];
     [task resume];
@@ -7150,7 +7257,7 @@ static void AWEDownloadCurrentImageForAweme(id aweme) {
     if (!urlString.length) { AWEShowDownloadToast(@"没有解析到当前图片"); return; }
     AWERequestPhotoAddPermission(^(BOOL granted) {
         if (!granted) { AWEShowDownloadToast(@"请允许添加照片后重试"); return; }
-        AWEShowDownloadToast(@"正在保存当前图片");
+        AWEShowDownloadToast(@"正在保存图片");
         NSMutableURLRequest *request = AWEMediaRequest(urlString);
         if (!request) { AWEShowDownloadToast(@"图片地址无效"); return; }
         NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:request
@@ -7163,7 +7270,7 @@ static void AWEDownloadCurrentImageForAweme(id aweme) {
                     ? [UIImage imageWithData:data] : nil;
                 if (!image) { AWEShowDownloadToast(@"当前图片下载失败"); return; }
                 AWESaveImageToPhotos(image, ^(BOOL success) {
-                    AWEShowDownloadToast(success ? @"当前图片已保存" : @"图片写入相册失败");
+                    AWEShowDownloadToast(success ? @"图片已保存" : @"图片写入相册失败");
                 });
             }];
         [task resume];
@@ -7204,7 +7311,7 @@ static void AWEDownloadAllImagesForAweme(id aweme) {
             return;
         }
         dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-            AWEShowDownloadToast([NSString stringWithFormat:@"图片保存完成 %ld/%ld",
+            AWEShowDownloadToast([NSString stringWithFormat:@"已保存 %ld/%ld 张图片",
                 (long)successCount, (long)attemptedCount]);
         });
     });
@@ -8851,7 +8958,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56b clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -9009,9 +9116,72 @@ static void AWEStableCleanSuppressExactTargetsInTree(UIView *root,
     }
 }
 
+static char kAWEStableStatusBarClassHookedKey;
+
+static BOOL AWEClassOwnsInstanceSelector(Class cls, SEL selector) {
+    if (!cls || !selector) return NO;
+    unsigned int count = 0;
+    Method *methods = class_copyMethodList(cls, &count);
+    BOOL owns = NO;
+    for (unsigned int index = 0; index < count; index++) {
+        if (method_getName(methods[index]) == selector) { owns = YES; break; }
+    }
+    free(methods);
+    return owns;
+}
+
+/* Current Douyin often inserts private hosting/container subclasses above the
+   six historical DYYY roots. Install a permanent per-class wrapper on every
+   active controller class. The wrapper only changes behavior while our clean
+   state is active and otherwise delegates to that class's original IMP. */
+static void AWEStableEnsureStatusBarHookForClass(Class cls) {
+    if (!cls || [objc_getAssociatedObject((id)cls,
+            &kAWEStableStatusBarClassHookedKey) boolValue]) return;
+    SEL selector = @selector(prefersStatusBarHidden);
+    Method resolved = class_getInstanceMethod(cls, selector);
+    if (!resolved) return;
+    IMP original = method_getImplementation(resolved);
+    const char *types = method_getTypeEncoding(resolved);
+    if (!original || !types) return;
+
+    BOOL (^replacementBlock)(id) = ^BOOL(id receiver) {
+        if (gAWEStableCleanScreenEnabled) return YES;
+        return ((BOOL (*)(id, SEL))original)(receiver, selector);
+    };
+    IMP replacement = imp_implementationWithBlock(replacementBlock);
+    if (!replacement) return;
+
+    if (AWEClassOwnsInstanceSelector(cls, selector)) {
+        Method ownMethod = class_getInstanceMethod(cls, selector);
+        method_setImplementation(ownMethod, replacement);
+    } else {
+        class_addMethod(cls, selector, replacement, types);
+    }
+    objc_setAssociatedObject((id)cls, &kAWEStableStatusBarClassHookedKey,
+        @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static void AWEStableCleanSuppressStatusBarViewsInTree(UIView *root,
+                                                        NSUInteger depth) {
+    if (!gAWEStableCleanScreenEnabled || !root || depth > 16) return;
+    NSString *lower = NSStringFromClass(root.class).lowercaseString;
+    CGRect screenFrame = [root convertRect:root.bounds toView:nil];
+    BOOL nearTop = CGRectGetMinY(screenFrame) < 110.0 &&
+                   CGRectGetHeight(screenFrame) <= 110.0;
+    if (nearTop && [lower containsString:@"statusbar"]) {
+        AWEStableCleanSuppressView(root, NO);
+        return;
+    }
+    for (UIView *child in [root.subviews copy]) {
+        AWEStableCleanSuppressStatusBarViewsInTree(child, depth + 1);
+    }
+}
+
 static void AWEStableCleanRequestStatusBarRefreshController(UIViewController *controller,
                                                              NSUInteger depth) {
     if (!controller || depth > 18) return;
+    if (gAWEStableCleanScreenEnabled)
+        AWEStableEnsureStatusBarHookForClass(controller.class);
     [controller setNeedsStatusBarAppearanceUpdate];
     if (controller.presentedViewController) {
         AWEStableCleanRequestStatusBarRefreshController(controller.presentedViewController,
@@ -9068,6 +9238,7 @@ static void AWEStableApplyCleanScreenGlobal(void) {
     }
     for (UIWindow *window in windows) {
         if (!window || window.hidden || window.alpha <= 0.01) continue;
+        AWEStableCleanSuppressStatusBarViewsInTree(window, 0);
         if (window.windowLevel != UIWindowLevelNormal) continue;
         if (window == (UIWindow *)gAWEAlbumMorphOverlayWindow ||
             [NSStringFromClass(window.class) containsString:@"AWEAlbumMorphOverlayWindow"]) continue;
@@ -9179,8 +9350,12 @@ static UIMenu *AWEAvatarBaseMenuForStack(UIView *stack, UIView *profileHost) {
     [children addObject:cleanAction];
 
     if (AWEAvatarMenuDownloadEnabled()) {
+        id snapshot = AWECurrentAwemeModelForStack(stack);
+        BOOL snapshotIsAlbum = snapshot && AWEAlbumImagesForAweme(snapshot).count > 0;
+        NSString *saveTitle = snapshotIsAlbum ? @"保存图片" : @"保存视频";
+        NSString *saveSymbol = snapshotIsAlbum ? @"photo" : @"video";
         [children addObject:AWEAvatarLiveAwemeAction(
-            @"保存当前作品", @"arrow.down.circle", stack, ^(id aweme) {
+            saveTitle, saveSymbol, stack, ^(id aweme) {
                 if (AWEAlbumImagesForAweme(aweme).count > 0) {
                     AWEDownloadCurrentImageForAweme(aweme);
                 } else {
@@ -9188,7 +9363,6 @@ static UIMenu *AWEAvatarBaseMenuForStack(UIView *stack, UIView *profileHost) {
                 }
             })];
 
-        id snapshot = AWECurrentAwemeModelForStack(stack);
         if (snapshot && AWEAlbumImagesForAweme(snapshot).count > 1) {
             [children addObject:AWEAvatarLiveAwemeAction(
                 @"保存全部图片", @"photo.on.rectangle.angled", stack,
@@ -12012,8 +12186,7 @@ static BOOL AWEViewIsInsideActiveSuppressedTopBar(UIView *view) {
                 cursor, &kAWETopMenuSlotKey);
             UIView *group = objc_getAssociatedObject(
                 cursor, &kAWETopLiquidGroupViewKey);
-            BOOL menuActive = AWETopMenuMorphEnabled() && slot && !slot.hidden &&
-                slot.hitButton.menu.children.count > 0;
+            BOOL menuActive = AWETopMenuMorphEnabled();
             BOOL groupActive = group && !group.hidden &&
                 group.alpha > 0.01;
             return menuActive || groupActive;
@@ -12297,6 +12470,14 @@ static AWETopLiquidGroupView *AWEEnsureTopLiquidGroup(UIView *container) {
     if (!container) return nil;
     AWETopLiquidGroupView *group = objc_getAssociatedObject(
         container, &kAWETopLiquidGroupViewKey);
+    if (AWETopMenuMorphEnabled()) {
+        if (group) {
+            group.hidden = YES;
+            group.alpha = 0.0;
+            group.userInteractionEnabled = NO;
+        }
+        return nil;
+    }
     if (!group) {
         group = [[AWETopLiquidGroupView alloc] initWithFrame:CGRectZero];
         group.backgroundColor = UIColor.clearColor;
@@ -14521,7 +14702,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56b";
+    self.title = @"LiquidBar 设置 · 1.0.56c";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14946,7 +15127,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                      forControlEvents:UIControlEventTouchUpInside];
 
     UILabel *internalFullscreenLabel = [UILabel new];
-    internalFullscreenLabel.text = @"内置全屏播放";
+    internalFullscreenLabel.text = @"全屏播放";
     internalFullscreenLabel.font =
         [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
     UISwitch *internalFullscreenSwitch = [UISwitch new];
@@ -14961,13 +15142,6 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     internalFullscreenRow.axis = UILayoutConstraintAxisHorizontal;
     internalFullscreenRow.alignment = UIStackViewAlignmentCenter;
     internalFullscreenRow.distribution = UIStackViewDistributionEqualSpacing;
-
-    UILabel *internalFullscreenHint = [UILabel new];
-    internalFullscreenHint.text = @"使用插件自身已验证的全屏布局；请关闭 DYYY/AwemeX 等第三方全屏。若关闭此开关，建议冷启动抖音以完整恢复原生底栏背景与布局。";
-    internalFullscreenHint.font =
-        [UIFont systemFontOfSize:11.5 weight:UIFontWeightRegular];
-    internalFullscreenHint.textColor = UIColor.tertiaryLabelColor;
-    internalFullscreenHint.numberOfLines = 0;
 
     UILabel *hideTitlesLabel = [UILabel new];
     hideTitlesLabel.text = @"隐藏底栏标题";
@@ -15226,7 +15400,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
     UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         albumStyleRow, newBarIconCenterButton,
-        internalFullscreenRow, internalFullscreenHint,
+        internalFullscreenRow,
         hideTitlesRow, messageBadgeRow, avatarMenuDownloadRow, preferHighestPlaybackRow, forceDarkBottomBarRow,
         topRow, hideTopLeftButtonRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
         adaptiveGlassHint, transparentGlassRow,
@@ -15849,7 +16023,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56b image=%@ ==========" ,
+            @"========== START build=1.0.56c image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15916,7 +16090,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56b diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15931,7 +16105,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56b_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16171,7 +16345,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56b internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -17178,17 +17352,23 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 
 - (void)didMoveToWindow {
     %orig;
+    if (AWETopMenuMorphEnabled())
+        AWEApplyTopCategoryVisualSuppression((UIView *)self, YES);
     AWEHomeDiagnosticWrite(NO, @"HOOK AWEFeedTopBarContainer.didMoveToWindow self=%p window=%p", self, ((UIView *)self).window);
     AWEScheduleTopActionContainerRefresh((UIView *)self);
 }
 
 - (void)didMoveToSuperview {
     %orig;
+    if (AWETopMenuMorphEnabled())
+        AWEApplyTopCategoryVisualSuppression((UIView *)self, YES);
     AWEScheduleTopActionContainerRefresh((UIView *)self);
 }
 
 - (void)layoutSubviews {
     %orig;
+    if (AWETopMenuMorphEnabled())
+        AWEApplyTopCategoryVisualSuppression((UIView *)self, YES);
     AWELayoutExistingTopChrome((UIView *)self);
     if (!objc_getAssociatedObject((UIView *)self, &kAWETopMenuSlotKey) &&
         !objc_getAssociatedObject((UIView *)self, &kAWETopSearchSlotKey) &&
@@ -18362,6 +18542,10 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
 
 - (void)viewWillAppear:(BOOL)animated {
     NSString *className = NSStringFromClass(self.class);
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableEnsureStatusBarHookForClass(self.class);
+        [self setNeedsStatusBarAppearanceUpdate];
+    }
     BOOL friendsRootController = AWEClassNameLooksLikeFriendsRootController(className);
     if (friendsRootController) {
         gAWEFriendsTabLatched = YES;
@@ -18676,7 +18860,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56b os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

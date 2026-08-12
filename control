@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.56b
+Version: 1.0.56c
 Architecture: iphoneos-arm
-Description: Stable auth36 build with validated internal fullscreen, exact-target clean screen with status-bar hiding, max-bitrate playback preference, route-aware LiquidBar visibility, native badges, avatar menu downloads, and Liquid Glass UI.
+Description: Stable auth36 build with validated fullscreen, robust clean-screen status-bar hiding, max-bitrate playback preference, route-aware LiquidBar visibility, centered adaptive-glass save HUD, native badges, and Liquid Glass UI.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

@@ -1,27 +1,25 @@
-AwemeLiquidBar 1.0.56b focused test
+AwemeLiquidBar 1.0.56c focused test
 
-A. Fullscreen regression (must remain unchanged)
-1. Feed normal video.
-2. Profile/detail video.
-3. Swipe through at least 3 live pre-stream cards.
+A. Clean status bar
+1. On a normal feed video invoke 一键清屏. Time/signal/Wi-Fi/battery status UI should disappear immediately together with feed chrome.
+2. Open comments while clean: comment UI remains usable; status bar may remain hidden until exiting clean.
+3. Exit clean: status bar and feed UI restore.
 
-B. Clean screen
-1. On a currently visible normal video, invoke 一键清屏. Nickname/caption/right actions/top UI/bottom bar/status bar should disappear immediately without swiping.
-2. Swipe 5 videos; progress UI must not resurrect.
-3. On an image post, switch 5 images; story/page indicator must not resurrect.
-4. While clean screen is active, open comments. Comment header/list/reply/input/image/@/emoji controls must remain visible and usable. Close comments: underlying feed remains clean.
-5. Exit clean screen from avatar menu; status bar and suppressed feed elements restore.
+B. Messages route
+1. Tap 消息 from Home: LiquidBar must remain visible on the Messages root/list page.
+2. Enter a one-to-one chat: LiquidBar must hide.
+3. Interactive swipe back: reveal follows gesture percent; cancel once and verify it hides again.
+4. Complete the return: Messages root has a fully visible LiquidBar.
 
-C. Highest quality
-1. Enable 优先最高画质播放（最高码率）.
-2. Cold-start and swipe several videos. Check playback stability/heat/network usage.
+C. Save glass HUD
+1. On an image post, avatar menu primary item reads 保存图片.
+2. On a video post it reads 保存视频.
+3. Tap save: centered adaptive Liquid Glass HUD shows loading then success/failure, with text fully enclosed by the material.
 
-D. LiquidBar route following
-1. Open Douyin Settings and nested settings/plugin settings: LiquidBar must be hidden.
-2. Interactive swipe back from Settings: bar reveal should follow gesture progress.
-3. Enter a one-to-one chat, then interactive swipe back: bar reveal should again follow gesture progress; cancel the gesture once and verify it hides again.
-4. Verify ordinary non-chat pages that already had proportional return still behave the same.
+D. Fullscreen setting
+1. Settings label reads 全屏播放 and has no third-party fullscreen hint.
+2. Profile/detail video and live-prestream behavior remain identical to 1.0.56b.
 
-E. Top-left menu cold launch
+E. Top-left cold launch
 1. Enable 左上按钮展开分类菜单（开启时替代顶部分组）.
-2. Kill Douyin and cold launch. The top category group must not flash before disappearing.
+2. Kill and cold launch Douyin. Native/plugin category group should not flash before disappearing.

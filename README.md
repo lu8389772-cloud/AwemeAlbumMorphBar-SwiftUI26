@@ -1,21 +1,16 @@
-# AwemeLiquidBar 1.0.56b
+# AwemeLiquidBar 1.0.56c
 
-Based directly on the verified **1.0.56a compilefix1** build. The validated internal-fullscreen geometry is intentionally unchanged.
+Based directly on the verified **1.0.56b** build. The validated fullscreen geometry (profile/detail 0.5 + live-prestream 0.3.1) is intentionally unchanged.
 
-## Changes in 1.0.56b
+## Changes in 1.0.56c
 
-- Clean screen now uses exact feed/UI runtime classes instead of broad UILabel/UIImageView/UIControl heuristics. This clears the current item immediately while protecting comment-panel UI.
-- Clean screen requests real status-bar hiding on feed, detail, full-page/image, hot-spot, pure-mode and live roots, and restores the original status-bar decision on exit.
-- Progress containers and story/page progress controls re-hide themselves when late layout/alpha updates recreate them.
-- Highest-quality playback now constrains AWEVideoModel to the highest advertised AWEVideoBSModel bitrate early, while retaining the existing player-side switch as a fallback.
-- Settings/privacy/account-security routes suppress the independent LiquidBar window. Chat detail detection now includes IESIMInputViewController and additional conversation-detail names so interactive swipe-back can use the existing percent-complete reveal path again.
-- When left-top menu morph is enabled, the top category group is suppressed from the first layout pass, removing the cold-launch flash.
-
-## Preserved
-
-- Internal fullscreen uses the already validated profile/detail 0.5 behavior and live-prestream 0.3.1 behavior.
-- Existing proportional interactive return masking is not rewritten; route detection is expanded so the same mechanism can activate on chat/settings routes.
-- No permanent clean-screen polling timer is added.
+- Clean-screen status-bar hiding is strengthened for current Douyin hosting/controller subclasses: active controller classes receive a reversible runtime `prefersStatusBarHidden` wrapper while clean mode is active, plus a top status-bar-view visual fallback when such views are reachable in-process.
+- The Messages root page is no longer classified as a chat-detail route merely because it uses `AWEIMMessageBaseViewController`/`messagebase`; actual IM input/detail/session controllers still suppress LiquidBar, preserving proportional chat swipe-back reveal.
+- Save feedback is rebuilt as a centered native adaptive glass HUD. Loading uses a spinner, success/failure use SF Symbols, dynamic label colors and system glass/blur material, with spring entrance and compact fade-out.
+- The avatar quick menu now labels the primary save action by media type: `保存图片` for image posts and `保存视频` for videos.
+- Fullscreen setting is renamed to `全屏播放`; the third-party fullscreen explanatory hint is removed.
+- Top-left menu morph now suppresses both native category visuals and the plugin category group during the same first layout pass, reducing cold-launch category flash.
+- Highest-bitrate playback logic from 1.0.56b is preserved. Comment clean-screen protection is preserved.
 
 ## Build
 

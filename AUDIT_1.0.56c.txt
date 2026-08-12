@@ -1,0 +1,16 @@
+AwemeLiquidBar 1.0.56c audit intent
+
+Baseline: 1.0.56b. Fullscreen geometry intentionally unchanged.
+
+Focused changes:
+- robust clean-screen status-bar ownership via runtime controller-class wrappers + visual fallback;
+- Messages root no longer false-positive matched as chat detail;
+- centered adaptive native-glass save HUD and media-specific save action label;
+- visible fullscreen setting renamed to 全屏播放 and hint removed;
+- first-layout top-category suppression strengthened for left-menu morph.
+
+Safety constraints:
+- no new permanent polling timer;
+- comment UI remains an explicit clean-screen scan boundary;
+- profile/detail fullscreen 0.5 and live-prestream 0.3.1 geometry are untouched;
+- existing percent-complete bottom-bar return mask is preserved.
