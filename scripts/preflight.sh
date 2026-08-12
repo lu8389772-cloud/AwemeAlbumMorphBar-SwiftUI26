@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56r'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56r-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56r'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56r'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56r_interaction.log'),
+    ('control', control, 'Version: 1.0.56c1'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c1-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56c1'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56c1'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56c1_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -38,7 +38,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56r', 'LiquidBar 设置 · 1.0.56r',
+    'AwemeLiquidBar 1.0.56c1', 'LiquidBar 设置 · 1.0.56c1',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -52,6 +52,14 @@ required_objc = [
     'AWEStableApplyCleanScreenGlobal', 'AWEStableCleanEnforceBottomBarSuppression',
     'AWEStableCleanClassIsExplicitTarget', 'AWEScheduleCleanScreenReapply',
     'CLEAN_STABLE exit',
+    'AWEStableCleanSuppressExactTargetsInTree', 'AWEStableCleanViewIsInsideCommentUI',
+    'AWEStableCleanRequestStatusBarRefresh', '%hook AWEVideoModel',
+    'AWEHighestBitrateBSModelFromModels', '@"AWEVideoBSModel"',
+    '@"优先最高画质播放（最高码率，可能增加流量）"', '%hook AWEFeedRootViewController',
+    'AWEIMMessageBaseViewController', 'settingsDestination',
+    'if (fraction > 0.0 && AWECurrentRouteSuppressesBar()) fraction = 0.0;',
+    'AWEStableCleanShouldSuppressElementStack', 'isKindOfClass:cls',
+    'BOOL menuOwnsCategorySwitching = AWETopMenuMorphEnabled();',
     'AWECurrentOriginalSecondBadgeValue', 'AWECurrentOriginalMessagesBadgeValue',
     'BOTTOM_BADGES_NATIVE', 'if (![scanner scanInteger:&count] || count <= 0) return nil;',
     '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
@@ -67,7 +75,9 @@ required_objc = [
     # clean-v2 explicit controls and transition guards
     '%hook AWELandscapeFeedEntryView', '%hook AWEVideoPlayDanmakuContainerView',
     '%hook AWEDanmakuContainerView', '%hook AWEStoryProgressSlideView',
-    '%hook AWEDemaciaChapterProgressSlider', '%hook AFDAIbumFolioView',
+    '%hook AWEDemaciaChapterProgressSlider', '%hook AWEPlayInteractionProgressContainerView',
+    '%hook AWEDPlayerProgressContainerView', '%hook AWEStoryProgressContainerView',
+    '%hook AFDAIbumFolioView',
     '%hook AFDAlbumFolioView', '%hook AWEFeedTableViewCell',
     '%hook AWEFeedViewCell', '%hook AWEFeedContainerViewController',
 ]
@@ -88,6 +98,7 @@ for forbidden in [
     'AWE53RebindNativeHomeActionsInForegroundWindows', 'AWE53RightGlassLooksHealthy',
     'AWEStableCleanScreenRecoveryTarget',
     'origin.y += AWEFSTabBarHeight()',
+    'BOOL interactiveReveal =',
 ]:
     if forbidden in objc or forbidden in swift:
         raise SystemExit(f'forbidden regression/bridge remains: {forbidden}')
@@ -102,7 +113,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56r intentionally has one custom group for the
+# Logos structural audit. 1.0.56c1 intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -125,7 +136,7 @@ if dups:
 
 # Logos parses explicit %orig(...) arguments from the remainder of the source
 # line. Never place executable code after %orig / %orig(...) on that same line;
-# this caused the 1.0.56r first cloud build to fail at Tweak.x:16678.
+# this caused the first 1.0.56a cloud build to fail at Tweak.x:16678.
 import re
 bad_orig_lines = []
 for lineno, line in enumerate(objc.splitlines(), 1):
@@ -165,11 +176,14 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56r clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56c1 clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
     raise SystemExit('clean-screen v2 unexpectedly contains a permanent timer')
+for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isKindOfClass:UILabel.class]', 'AWEStableCleanSuppressTree(']:
+    if forbidden_clean in clean_chunk:
+        raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-print('AwemeLiquidBar 1.0.56r internal-fullscreen/clean-v2/native-badges preflight passed')
+print('AwemeLiquidBar 1.0.56c1 internal-fullscreen/clean-v2/native-badges preflight passed')
 PY2
