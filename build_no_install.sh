@@ -2,13 +2,13 @@
 set -e
 
 EXPECTED_PACKAGE='com.xyy.awemeliquidbar'
-EXPECTED_VERSION='1.0.56a'
+EXPECTED_VERSION='1.0.56b'
 
 rm -rf .theos packages
 grep -q "^Package: ${EXPECTED_PACKAGE}$" control
 grep -q "^Version: ${EXPECTED_VERSION}$" control
-grep -q 'LiquidBar 设置 · 1.0.56a' Tweak.x
-grep -q 'AwemeLiquidBar_1.0.56a_interaction.log' Tweak.x
+grep -q 'LiquidBar 设置 · 1.0.56b' Tweak.x
+grep -q 'AwemeLiquidBar_1.0.56b_interaction.log' Tweak.x
 grep -q 'AwemeLiquidBarInternalFullscreenV1' Tweak.x
 grep -q 'AWEInternalFSLayoutInteractionController' Tweak.x
 grep -q 'AWECommentInputViewSwiftImpl.CommentInputContainerView' Tweak.x
@@ -29,6 +29,10 @@ grep -q 'button.showsMenuAsPrimaryAction = YES;' Tweak.x
 grep -q '#import <Photos/Photos.h>' Tweak.x
 grep -q 'AWEChooseSmartDownloadVariant' Tweak.x
 grep -q 'PLAYBACK_HIGHEST' Tweak.x
+grep -q '%hook AWEVideoModel' Tweak.x
+grep -q 'AWEStableCleanSuppressExactTargetsInTree' Tweak.x
+grep -q 'AWEStableCleanRequestStatusBarRefresh' Tweak.x
+grep -q 'IESIMInputViewController' Tweak.x
 grep -q 'independent download button retired' Tweak.x
 ! grep -q 'AWEExternalBridgePluginImageLoaded' Tweak.x
 ! grep -q 'UIDeferredMenuElement' Tweak.x
@@ -45,7 +49,7 @@ ACTUAL_VERSION="$(dpkg-deb -f "$DEB" Version)"
 [ "$ACTUAL_PACKAGE" = "$EXPECTED_PACKAGE" ]
 [ "$ACTUAL_VERSION" = "$EXPECTED_VERSION" ]
 
-echo 'AwemeLiquidBar 1.0.56a BUILD COMPLETE'
+echo 'AwemeLiquidBar 1.0.56b BUILD COMPLETE'
 echo "Package: $ACTUAL_PACKAGE"
 echo "Version: $ACTUAL_VERSION"
 echo "DEB: $DEB"

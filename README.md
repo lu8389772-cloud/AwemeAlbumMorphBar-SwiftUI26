@@ -1,37 +1,22 @@
-# AwemeLiquidBar 1.0.56a
+# AwemeLiquidBar 1.0.56b
 
-This project is based directly on the verified **1.0.55a stable baseline** and adds two focused changes.
+Based directly on the verified **1.0.56a compilefix1** build. The validated internal-fullscreen geometry is intentionally unchanged.
 
-## 1. Internal fullscreen playback
+## Changes in 1.0.56b
 
-- Fullscreen is now owned by AwemeLiquidBar itself; disable DYYY/AwemeX or other external fullscreen tweaks while testing.
-- The internal fullscreen switch defaults to **ON** and is available in LiquidBar settings.
-- Feed/player media expands behind the bottom area without forcing profile/detail interaction overlays to the bottom.
-- Profile/detail video geometry follows the validated standalone 0.5 behavior.
-- Live pre-stream layout follows the validated 0.3.1 behavior, including the AWEElementStackView tab-bar compensation and IESLiveStackView -20 pt compensation.
-- Bottom tab backgrounds used by Douyin are cleared while fullscreen is active.
-- No cumulative author-profile image offset is included.
+- Clean screen now uses exact feed/UI runtime classes instead of broad UILabel/UIImageView/UIControl heuristics. This clears the current item immediately while protecting comment-panel UI.
+- Clean screen requests real status-bar hiding on feed, detail, full-page/image, hot-spot, pure-mode and live roots, and restores the original status-bar decision on exit.
+- Progress containers and story/page progress controls re-hide themselves when late layout/alpha updates recreate them.
+- Highest-quality playback now constrains AWEVideoModel to the highest advertised AWEVideoBSModel bitrate early, while retaining the existing player-side switch as a fallback.
+- Settings/privacy/account-security routes suppress the independent LiquidBar window. Chat detail detection now includes IESIMInputViewController and additional conversation-detail names so interactive swipe-back can use the existing percent-complete reveal path again.
+- When left-top menu morph is enabled, the top category group is suppressed from the first layout pass, removing the cold-launch flash.
 
-## 2. Clean screen v2
+## Preserved
 
-The avatar menu still provides **一键清屏 / 退出清屏**. The implementation remains display-only (no feed geometry ownership), but persistence is stronger:
-
-- hides the original/custom bottom bars;
-- hides top chrome, right-side action visuals, captions/anchors/tags;
-- explicitly hides the native landscape fullscreen-entry control, danmaku containers/buttons, video/chapter progress UI, story/image page indicators and related folio controls;
-- reapplies suppression when feed cells are reused, aweme index/model changes, or layouts rebuild after a swipe;
-- uses short event-driven reapply passes instead of a permanent polling timer;
-- keeps the invisible avatar hit target available so clean screen can be exited from the same menu.
+- Internal fullscreen uses the already validated profile/detail 0.5 behavior and live-prestream 0.3.1 behavior.
+- Existing proportional interactive return masking is not rewritten; route detection is expanded so the same mechanism can activate on chat/settings routes.
+- No permanent clean-screen polling timer is added.
 
 ## Build
 
-The full project contains SwiftUI/iOS 26+ Liquid Glass code. Use the same modern SDK/Xcode environment that successfully builds the existing AwemeLiquidBar project. The included GitHub workflow targets Xcode 27/iOS 27.
-
-Local Theos packaging is still available when the local SDK/toolchain is sufficiently new:
-
-```sh
-make clean
-make package -j1
-```
-
-The build scripts do **not** install or restart Douyin.
+Use the existing Xcode 27 / iOS 27 cloud workflow for the full project. The scripts do not install or restart Douyin.

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56a — internal fullscreen + clean screen v2 + native badges + auth36
+ AwemeLiquidBar 1.0.56b — internal fullscreen + clean screen v2 + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -849,7 +849,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56a_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56b_interaction.log"] copy];
     });
     return path;
 }
@@ -918,7 +918,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56a_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56b_probe.log"] copy];
     });
     return path;
 }
@@ -4131,10 +4131,26 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
         [lower containsString:@"panel"] ||
         [lower containsString:@"sheet"];
 
+    /* Chat detail routes changed class names across Douyin builds.  Keep the
+       matcher controller-scoped and require detail/session/input semantics so
+       the root Messages tab itself is not mistaken for a conversation. */
     BOOL directConversation =
         [className isEqualToString:@"AWEIMMessageBaseViewController"] ||
-        ([lower containsString:@"conversation"] && controllerLike) ||
-        ([lower containsString:@"chatroom"] && controllerLike);
+        [className isEqualToString:@"IESIMInputViewController"] ||
+        (controllerLike &&
+         ([lower containsString:@"conversation"] ||
+          [lower containsString:@"chatroom"] ||
+          [lower containsString:@"directmessage"] ||
+          [lower containsString:@"messagedetail"] ||
+          [lower containsString:@"messagebase"] ||
+          [lower containsString:@"privatechat"] ||
+          [lower containsString:@"singlechat"] ||
+          [lower containsString:@"sessiondetail"] ||
+          (([lower hasPrefix:@"aweim"] || [lower hasPrefix:@"iesim"] ||
+            [lower containsString:@".im"] || [lower containsString:@"_im"])
+           && ([lower containsString:@"chat"] ||
+               [lower containsString:@"session"] ||
+               [lower containsString:@"input"]))));
 
     BOOL commentDestination =
         [className isEqualToString:@"AWECommentContainerViewController"] ||
@@ -4184,9 +4200,24 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
     BOOL transientCommerceDestination =
         AWEClassNameLooksLikeTransientCommerceDestination(className);
 
+    /* The replacement bar lives in its own window, so pushed settings pages do
+       not automatically clip it with Douyin's native hierarchy.  Treat real
+       settings/privacy/account-security controllers as ordinary suppressed
+       destinations (not hard-suspended sheets), which also preserves the
+       existing interactive return-mask path. */
+    BOOL settingsDestination = controllerLike &&
+        ([lower containsString:@"setting"] ||
+         [lower containsString:@"settings"] ||
+         [lower containsString:@"accountsecurity"] ||
+         [lower containsString:@"accountandsecurity"] ||
+         [lower containsString:@"privacycenter"] ||
+         [lower containsString:@"privacysetting"] ||
+         [lower containsString:@"generalsetting"]);
+
     return directConversation || commentDestination || forwardDestination ||
            systemActivityDestination || systemDocumentDestination ||
-           publishDestination || transientCommerceDestination;
+           publishDestination || transientCommerceDestination ||
+           settingsDestination;
 }
 
 static void AWERegisterSensitiveDestination(UIViewController *controller) {
@@ -4734,10 +4765,19 @@ static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
                                                BOOL animated) {
     if (!gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
     fraction = MIN(MAX(fraction, 0.0), 1.0);
-    /* No recovery caller may resurrect the bottom overlay on top of a modal
-       share/publish/commerce route.  This guards against late coordinator and
-       lifecycle callbacks that arrive after route registration. */
-    if (fraction > 0.0 && AWECurrentRouteSuppressesBar()) fraction = 0.0;
+    /* Steady-state recovery must never resurrect the overlay on a suppressed
+       route.  During an interactive RETURN, however, the departing chat /
+       settings controller remains registered until completion.  Allow only
+       the already-registered reveal coordinator to expose the exact
+       percentComplete fraction; cancellation settles it back to zero. */
+    BOOL interactiveReveal =
+        (gAWEBarTransitionMaskMode == AWEBarTransitionMaskModeReveal &&
+         gAWEBarVisibilityCoordinator &&
+         gAWEBarVisibilityCoordinator.isInteractive) ||
+        AWEReturnRevealGraceIsActive();
+    if (fraction > 0.0 && AWECurrentRouteSuppressesBar() && !interactiveReveal) {
+        fraction = 0.0;
+    }
     BOOL changed = fabs(gAWEBarLastVisibleFraction - fraction) > 0.002;
     gAWEBarLastVisibleFraction = fraction;
 
@@ -4790,12 +4830,25 @@ static void AWEFinishAlbumMorphTransition(
 
     gAWEBarStableStateInitialized = YES;
     gAWEBarStableVisible = targetVisible;
-    gAWEBarTransitionMaskMode = AWEBarTransitionMaskModeNone;
-    gAWEBarVisibilityCoordinator = nil;
+    if (!context.isCancelled && mode == AWEBarTransitionMaskModeReveal) {
+        /* The departing chat/settings controller may remain in the weak route
+           registry for one more lifecycle callback after the coordinator hits
+           100%. Keep only a very short reveal grace so that stale registration
+           cannot snap a fully revealed LiquidBar back to zero. */
+        gAWEReturnRevealGraceUntil = CACurrentMediaTime() + 0.20;
+    } else if (context.isCancelled) {
+        gAWEReturnRevealGraceUntil = 0.0;
+    }
+    /* Apply the final reveal while the interactive coordinator/mode are still
+       registered. Sensitive chat/settings routes are not unregistered until
+       their disappearance callback, so clearing these first would clamp the
+       final 100% reveal back to zero for one hand-off frame. */
     AWEApplyAlbumMorphVisibleFraction(
         targetVisible ? 1.0 : 0.0,
         context.isCancelled ? @"transition.cancelled" : @"transition.completed",
         NO);
+    gAWEBarTransitionMaskMode = AWEBarTransitionMaskModeNone;
+    gAWEBarVisibilityCoordinator = nil;
     AWEScheduleTransitionRecovery();
 }
 
@@ -6762,12 +6815,36 @@ static AWEVideoVariant *AWEChooseHighestPlaybackVariant(NSArray<AWEVideoVariant 
     AWEVideoVariant *best = nil;
     for (AWEVideoVariant *candidate in variants) {
         if (!best) { best = candidate; continue; }
+        /* Keep this consistent with the early AWEVideoModel path below: the
+           stream with the greatest advertised bitrate is the primary choice.
+           Resolution/FPS/codec are only tie-breakers. */
+        if (candidate.bitrate != best.bitrate) {
+            if (candidate.bitrate > best.bitrate) best = candidate;
+            continue;
+        }
         long long area = AWEVariantArea(candidate);
         long long bestArea = AWEVariantArea(best);
         if (area != bestArea) { if (area > bestArea) best = candidate; continue; }
         if (candidate.fps != best.fps) { if (candidate.fps > best.fps) best = candidate; continue; }
-        if (candidate.bitrate != best.bitrate) { if (candidate.bitrate > best.bitrate) best = candidate; continue; }
         if (candidate.h265 != best.h265 && candidate.h265) best = candidate;
+    }
+    return best;
+}
+
+static id AWEHighestBitrateBSModelFromModels(NSArray *models) {
+    if (![models isKindOfClass:NSArray.class] || models.count == 0) return nil;
+    Class bsClass = NSClassFromString(@"AWEVideoBSModel");
+    if (!bsClass) return nil;
+    id best = nil;
+    long long bestBitrate = 0;
+    for (id model in models) {
+        if (!model || ![model isKindOfClass:bsClass]) continue;
+        long long bitrate = AWEInteger64FromValue(AWESafeValueForKey(model, @"bitrate"));
+        if (bitrate <= 0) continue;
+        if (!best || bitrate > bestBitrate) {
+            best = model;
+            bestBitrate = bitrate;
+        }
     }
     return best;
 }
@@ -8774,7 +8851,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56a clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56b clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -8813,15 +8890,6 @@ static void AWEStableCleanRestoreAll(void) {
     [gAWEStableCleanSuppressedViews removeAllObjects];
 }
 
-static BOOL AWEStableCleanClassLooksLikeMedia(UIView *view) {
-    NSString *lower = NSStringFromClass(view.class).lowercaseString;
-    for (NSString *token in @[@"player", @"video", @"render", @"surface", @"metal",
-                               @"samplebuffer", @"pixelbuffer", @"imagecontent", @"photoalbum"]) {
-        if ([lower containsString:token]) return YES;
-    }
-    return NO;
-}
-
 static BOOL AWEStableCleanClassLooksLikeSystemMenu(UIView *view) {
     NSString *lower = NSStringFromClass(view.class).lowercaseString;
     return [lower containsString:@"contextmenu"] ||
@@ -8830,26 +8898,19 @@ static BOOL AWEStableCleanClassLooksLikeSystemMenu(UIView *view) {
            [lower containsString:@"calloutbar"];
 }
 
-static BOOL AWEStableCleanClassLooksLikeChrome(UIView *view) {
-    NSString *lower = NSStringFromClass(view.class).lowercaseString;
-    for (NSString *token in @[@"caption", @"description", @"nickname", @"author", @"music",
-                               @"tag", @"anchor", @"poi", @"progress", @"seek", @"speed",
-                               @"digg", @"favorite", @"collect", @"share", @"profilepicture",
-                               @"avatar", @"followbutton", @"interactionbutton", @"feedbutton"]) {
-        if ([lower containsString:token]) return YES;
-    }
-    return NO;
-}
-
 static BOOL AWEStableCleanClassIsExplicitTarget(UIView *view) {
     if (!view) return NO;
-    NSString *name = NSStringFromClass(view.class);
-    static NSSet<NSString *> *exact = nil;
+    /* Runtime builds frequently insert private subclasses around these views.
+       Comparing NSStringFromClass() alone misses an already-visible CURRENT
+       cell even though the next reused cell later hits the base-class hook.
+       Cache the real Class objects and accept subclasses via isKindOfClass:. */
+    static NSSet<NSString *> *exactNames = nil;
+    static NSArray<Class> *targetClasses = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        exact = [NSSet setWithArray:@[
+        NSArray<NSString *> *names = @[
             @"AWEHPTopBarCTAContainer", @"AWEHPDiscoverFeedEntranceView",
-            @"AWELeftSideBarEntranceView", @"DUXBadge",
+            @"AWELeftSideBarEntranceView", @"DUXBadge", @"AWEBaseElementView",
             @"AWEPlayInteractionDescriptionLabel", @"AWEUserNameLabel",
             @"ACCEditTagStickerView", @"AWEFeedTemplateAnchorView",
             @"AWESearchFeedTagView", @"AWEPlayInteractionSearchAnchorView",
@@ -8861,9 +8922,46 @@ static BOOL AWEStableCleanClassIsExplicitTarget(UIView *view) {
             @"AWEStoryProgressSlideView", @"AWEStoryProgressContainerView",
             @"AWEDemaciaChapterProgressSlider",
             @"AWEPlayInteractionProgressContainerView", @"AWEDPlayerProgressContainerView"
-        ]];
+        ];
+        exactNames = [NSSet setWithArray:names];
+        NSMutableArray<Class> *classes = [NSMutableArray arrayWithCapacity:names.count];
+        for (NSString *name in names) {
+            Class cls = NSClassFromString(name);
+            if (cls) [classes addObject:cls];
+        }
+        targetClasses = [classes copy];
     });
-    return [exact containsObject:name];
+    if ([exactNames containsObject:NSStringFromClass(view.class)]) return YES;
+    for (Class cls in targetClasses) {
+        if ([view isKindOfClass:cls]) return YES;
+    }
+    return NO;
+}
+
+static BOOL AWEStableCleanViewIsInsideCommentUI(UIView *view) {
+    if (!view) return NO;
+    UIResponder *responder = view;
+    for (NSUInteger depth = 0; responder && depth < 32; depth++) {
+        if ([responder isKindOfClass:UIViewController.class]) {
+            NSString *lower = NSStringFromClass(((UIViewController *)responder).class).lowercaseString;
+            if ([lower containsString:@"comment"]) return YES;
+        }
+        responder = responder.nextResponder;
+    }
+    for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
+        NSString *lower = NSStringFromClass(ancestor.class).lowercaseString;
+        if ([lower containsString:@"comment"] &&
+            ([lower containsString:@"panel"] || [lower containsString:@"container"] ||
+             [lower containsString:@"list"] || [lower containsString:@"input"])) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL AWEStableCleanShouldSuppressElementStack(UIView *stack) {
+    return gAWEStableCleanScreenEnabled && stack &&
+           !AWEStableCleanViewIsInsideCommentUI(stack);
 }
 
 static void AWEStableCleanSuppressRightStack(UIView *stack) {
@@ -8886,51 +8984,70 @@ static void AWEStableCleanSuppressRightStack(UIView *stack) {
     }
 }
 
-static void AWEStableCleanSuppressTree(UIView *root, UIWindow *window, NSUInteger depth) {
-    if (!gAWEStableCleanScreenEnabled || !root || !window || depth > 18) return;
+/* DYYY's stable clear-screen idea is class-targeted, not a global UILabel /
+   UIImageView heuristic.  Scan every visible feed hierarchy so the CURRENT
+   item is cleared immediately, but stop at comment UI roots to keep the
+   comment drawer fully interactive and readable. */
+static void AWEStableCleanSuppressExactTargetsInTree(UIView *root,
+                                                       NSUInteger depth) {
+    if (!gAWEStableCleanScreenEnabled || !root || depth > 28) return;
     if (AWEStableCleanClassLooksLikeSystemMenu(root)) return;
-    NSString *rootClass = NSStringFromClass(root.class);
-    if ([rootClass isEqualToString:@"AWEElementStackView"]) {
+    if (AWEStableCleanViewIsInsideCommentUI(root)) return;
+
+    NSString *className = NSStringFromClass(root.class);
+    if ([className isEqualToString:@"AWEElementStackView"]) {
         AWEStableCleanSuppressRightStack(root);
         return;
     }
-    for (UIView *view in [root.subviews copy]) {
-        if (!view) continue;
-        NSString *className = NSStringFromClass(view.class);
-        if (AWEStableCleanClassLooksLikeSystemMenu(view)) continue;
-        if ([className isEqualToString:@"AWEFeedTopBarContainer"] ||
-            AWEStableCleanClassIsExplicitTarget(view)) {
-            AWEStableCleanSuppressView(view, YES);
-            continue;
-        }
-        if (AWEStableCleanClassLooksLikeMedia(view)) continue;
-        CGRect frame = view.window ? [view convertRect:view.bounds toView:window] : CGRectZero;
-        CGFloat ww = MAX(CGRectGetWidth(window.bounds), 1.0);
-        CGFloat wh = MAX(CGRectGetHeight(window.bounds), 1.0);
-        CGFloat width = CGRectGetWidth(frame), height = CGRectGetHeight(frame);
-        BOOL huge = width > ww * 0.72 && height > wh * 0.55;
-        BOOL text = [view isKindOfClass:UILabel.class] || [view isKindOfClass:UITextView.class];
-        BOOL smallImage = [view isKindOfClass:UIImageView.class] && width > 2.0 && height > 2.0 &&
-                          width <= 140.0 && height <= 140.0;
-        BOOL smallControl = [view isKindOfClass:UIControl.class] && !huge &&
-                            width <= 280.0 && height <= 280.0;
-        BOOL chrome = !huge && AWEStableCleanClassLooksLikeChrome(view);
-        if (text || smallImage || smallControl || chrome) {
-            AWEStableCleanSuppressView(view, YES);
-            if (chrome) continue;
-        }
-        AWEStableCleanSuppressTree(view, window, depth + 1);
+    if ([className isEqualToString:@"AWEFeedTopBarContainer"] ||
+        AWEStableCleanClassIsExplicitTarget(root)) {
+        AWEStableCleanSuppressView(root, YES);
+        return;
+    }
+    for (UIView *child in [root.subviews copy]) {
+        AWEStableCleanSuppressExactTargetsInTree(child, depth + 1);
     }
 }
 
-static void AWEStableCleanSuppressStatusBarViews(UIView *root, NSUInteger depth) {
-    if (!root || depth > 16) return;
-    NSString *lower = NSStringFromClass(root.class).lowercaseString;
-    if ([lower containsString:@"statusbar"] || [lower containsString:@"status_bar"]) {
-        AWEStableCleanSuppressView(root, NO);
-        return;
+static void AWEStableCleanRequestStatusBarRefreshController(UIViewController *controller,
+                                                             NSUInteger depth) {
+    if (!controller || depth > 18) return;
+    [controller setNeedsStatusBarAppearanceUpdate];
+    if (controller.presentedViewController) {
+        AWEStableCleanRequestStatusBarRefreshController(controller.presentedViewController,
+                                                        depth + 1);
     }
-    for (UIView *child in root.subviews) AWEStableCleanSuppressStatusBarViews(child, depth + 1);
+    if ([controller isKindOfClass:UINavigationController.class]) {
+        AWEStableCleanRequestStatusBarRefreshController(
+            ((UINavigationController *)controller).topViewController, depth + 1);
+    }
+    if ([controller isKindOfClass:UITabBarController.class]) {
+        AWEStableCleanRequestStatusBarRefreshController(
+            ((UITabBarController *)controller).selectedViewController, depth + 1);
+    }
+    for (UIViewController *child in controller.childViewControllers) {
+        AWEStableCleanRequestStatusBarRefreshController(child, depth + 1);
+    }
+}
+
+static void AWEStableCleanRequestStatusBarRefresh(void) {
+    UIApplication *app = UIApplication.sharedApplication;
+    NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in app.connectedScenes) {
+            if (![scene isKindOfClass:UIWindowScene.class]) continue;
+            if (scene.activationState != UISceneActivationStateForegroundActive &&
+                scene.activationState != UISceneActivationStateForegroundInactive) continue;
+            [windows addObjectsFromArray:((UIWindowScene *)scene).windows ?: @[]];
+        }
+    } else {
+        [windows addObjectsFromArray:app.windows ?: @[]];
+    }
+    for (UIWindow *window in windows) {
+        if (!window.hidden && window.alpha > 0.01 && window.rootViewController) {
+            AWEStableCleanRequestStatusBarRefreshController(window.rootViewController, 0);
+        }
+    }
 }
 
 static void AWEStableApplyCleanScreenGlobal(void) {
@@ -8951,11 +9068,10 @@ static void AWEStableApplyCleanScreenGlobal(void) {
     }
     for (UIWindow *window in windows) {
         if (!window || window.hidden || window.alpha <= 0.01) continue;
-        AWEStableCleanSuppressStatusBarViews(window, 0);
         if (window.windowLevel != UIWindowLevelNormal) continue;
         if (window == (UIWindow *)gAWEAlbumMorphOverlayWindow ||
             [NSStringFromClass(window.class) containsString:@"AWEAlbumMorphOverlayWindow"]) continue;
-        AWEStableCleanSuppressTree(window, window, 0);
+        AWEStableCleanSuppressExactTargetsInTree(window, 0);
     }
     AWEStableCleanEnforceBottomBarSuppression();
 }
@@ -9012,6 +9128,7 @@ static void AWEStableEnterCleanScreenFromStack(UIView *stack) {
     if (gAWEStableCleanScreenEnabled || !stack || !stack.window) return;
     gAWEStableCleanScreenEnabled = YES;
     gAWEStableCleanScreenStack = stack;
+    AWEStableCleanRequestStatusBarRefresh();
     AWEStableRefreshCurrentCleanMenu();
     AWEStableApplyCleanScreenGlobal();
     AWEScheduleCleanScreenReapply(@"enter");
@@ -9024,6 +9141,7 @@ static void AWEStableExitCleanScreen(void) {
     gAWEStableCleanScreenEnabled = NO;
     ++gAWEStableCleanReapplyGeneration;
     AWEStableCleanRestoreAll();
+    AWEStableCleanRequestStatusBarRefresh();
     gAWEStableCleanScreenStack = stack;
     AWEStableRefreshCurrentCleanMenu();
     gAWEStableCleanScreenStack = nil;
@@ -12470,15 +12588,16 @@ static void AWEUpdateTopLiquidGroup(UIView *container,
         return;
     }
 
-    AWEHomeTopSlotView *menuSlot = objc_getAssociatedObject(
-        container, &kAWETopMenuSlotKey);
-    BOOL menuActive = AWETopMenuMorphEnabled() && menuSlot && !menuSlot.hidden &&
-        menuSlot.hitButton.menu && menuSlot.hitButton.showsMenuAsPrimaryAction &&
-        menuSlot.hitButton.menu.children.count > 0;
-    if (menuActive) {
+    /* The menu-morph setting means this slot belongs to the left menu from
+       the first frame.  Do not wait for UIMenu children to populate, otherwise
+       a cold launch briefly creates the category group and hides it later. */
+    if (AWETopMenuMorphEnabled()) {
         AWEHideTopLiquidGroup(container);
         return;
     }
+
+    AWEHomeTopSlotView *menuSlot = objc_getAssociatedObject(
+        container, &kAWETopMenuSlotKey);
 
     NSArray<NSDictionary<NSString *, id> *> *definitions = menuSlot
         ? AWEDynamicTopQuickMenuDefinitions(menuSlot)
@@ -12694,10 +12813,10 @@ static void AWERefreshTopActionContainer(UIView *container) {
     AWEHomeTopSlotView *searchSlot = objc_getAssociatedObject(
         container, &kAWETopSearchSlotKey);
     AWEUpdateTopLiquidGroup(container, bottomSearchVisible);
-    BOOL menuOwnsCategorySwitching = AWETopMenuMorphEnabled() &&
-        menuSlot && !menuSlot.hidden && menuSlot.hitButton.menu &&
-        menuSlot.hitButton.showsMenuAsPrimaryAction &&
-        menuSlot.hitButton.menu.children.count > 0;
+    /* When menu morph is enabled, native/category chrome must be suppressed
+       from frame zero. Waiting for the UIMenu children to finish populating
+       is exactly what caused the cold-start category flash. */
+    BOOL menuOwnsCategorySwitching = AWETopMenuMorphEnabled();
     AWETopLiquidGroupView *activeGroup = objc_getAssociatedObject(
         container, &kAWETopLiquidGroupViewKey);
     BOOL groupOwnsCategorySwitching = activeGroup && !activeGroup.hidden &&
@@ -14402,7 +14521,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56a";
+    self.title = @"LiquidBar 设置 · 1.0.56b";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -14899,7 +15018,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     avatarMenuDownloadRow.distribution = UIStackViewDistributionEqualSpacing;
 
     UILabel *preferHighestPlaybackLabel = [UILabel new];
-    preferHighestPlaybackLabel.text = @"优先最高画质播放（可能增加流量）";
+    preferHighestPlaybackLabel.text = @"优先最高画质播放（最高码率，可能增加流量）";
     preferHighestPlaybackLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
     UISwitch *preferHighestPlaybackSwitch = [UISwitch new];
     preferHighestPlaybackSwitch.on = AWEPreferHighestPlaybackEnabled();
@@ -15730,7 +15849,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56a image=%@ ==========" ,
+            @"========== START build=1.0.56b image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15797,7 +15916,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56a diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56b diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15812,7 +15931,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56a_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56b_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16052,7 +16171,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56a internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56b internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16488,6 +16607,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
     %orig;
     if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
 }
+- (void)didMoveToWindow {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+}
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
     if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
@@ -16539,6 +16662,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
     }
     if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
 }
+- (void)didMoveToWindow {
+    %orig;
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+}
 - (void)setAlpha:(CGFloat)alpha {
     %orig(alpha);
     if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
@@ -16558,6 +16685,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
             }
         }
     }
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+}
+- (void)didMoveToWindow {
+    %orig;
     if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
 }
 - (void)setAlpha:(CGFloat)alpha {
@@ -16630,6 +16761,67 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
     AWEFSClearBarLikePlainSubviews(container, width, tabHeight, 0);
 }
 %end
+%end
+
+/* Highest-quality early path: constrain AWEVideoModel to the highest advertised
+   bitrate before player selection.  The later private-player switch remains as
+   a fallback/reassertion for already-created playback sessions. */
+%hook AWEVideoModel
+- (id)playURL {
+    if (!AWEPreferHighestPlaybackEnabled()) return %orig;
+    NSArray *models = AWEArrayFromValue(AWESafeValueForKey(self, @"bitrateModels"));
+    id highest = AWEHighestBitrateBSModelFromModels(models);
+    id playAddr = AWESafeValueForKey(highest, @"playAddr");
+    Class urlClass = NSClassFromString(@"AWEURLModel");
+    if (playAddr && (!urlClass || [playAddr isKindOfClass:urlClass])) return playAddr;
+    return %orig;
+}
+- (NSArray *)bitrateModels {
+    NSArray *originalModels = %orig;
+    if (!AWEPreferHighestPlaybackEnabled()) return originalModels;
+    id highest = AWEHighestBitrateBSModelFromModels(originalModels);
+    return highest ? @[highest] : originalModels;
+}
+%end
+
+/* Clean-screen status-bar ownership follows the same feed/detail/live roots
+   used by Douyin/DYYY.  Outside clean mode every controller returns its exact
+   original status-bar decision. */
+%hook AWEFeedRootViewController
+- (BOOL)prefersStatusBarHidden {
+    if (gAWEStableCleanScreenEnabled) return YES;
+    return %orig;
+}
+%end
+%hook IESLiveAudienceViewController
+- (BOOL)prefersStatusBarHidden {
+    if (gAWEStableCleanScreenEnabled) return YES;
+    return %orig;
+}
+%end
+%hook AWEAwemeDetailTableViewController
+- (BOOL)prefersStatusBarHidden {
+    if (gAWEStableCleanScreenEnabled) return YES;
+    return %orig;
+}
+%end
+%hook AWEAwemeHotSpotTableViewController
+- (BOOL)prefersStatusBarHidden {
+    if (gAWEStableCleanScreenEnabled) return YES;
+    return %orig;
+}
+%end
+%hook AWEFullPageFeedNewContainerViewController
+- (BOOL)prefersStatusBarHidden {
+    if (gAWEStableCleanScreenEnabled) return YES;
+    return %orig;
+}
+%end
+%hook AFDPureModePageContainerViewController
+- (BOOL)prefersStatusBarHidden {
+    if (gAWEStableCleanScreenEnabled) return YES;
+    return %orig;
+}
 %end
 
 /* Clean-screen transition guards: newly reused cells and new aweme models get
@@ -16791,7 +16983,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
     AWEHomeDiagnosticWrite(NO, @"HOOK AWEElementStackView.didMoveToWindow self=%p window=%p", self, ((UIView *)self).window);
     if (((UIView *)self).window) AWEScheduleHomeActionStackRefresh((UIView *)self);
     else AWERefreshHomeActionStack((UIView *)self);
-    if (gAWEStableCleanScreenEnabled && ((UIView *)self).window) {
+    if (((UIView *)self).window && AWEStableCleanShouldSuppressElementStack((UIView *)self)) {
         gAWEStableCleanScreenStack = (UIView *)self;
         AWEStableCleanSuppressRightStack((UIView *)self);
     }
@@ -16800,7 +16992,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)didMoveToSuperview {
     %orig;
     AWEScheduleHomeActionStackRefresh((UIView *)self);
-    if (gAWEStableCleanScreenEnabled && ((UIView *)self).superview) {
+    if (((UIView *)self).superview && AWEStableCleanShouldSuppressElementStack((UIView *)self)) {
         gAWEStableCleanScreenStack = (UIView *)self;
         AWEStableCleanSuppressRightStack((UIView *)self);
     }
@@ -16826,7 +17018,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
        together with the stack, so a full hierarchy scan on every video frame
        only causes heat and material flashes. */
     AWELayoutBoundHomeActionSlots((UIView *)self);
-    if (gAWEStableCleanScreenEnabled) {
+    if (AWEStableCleanShouldSuppressElementStack((UIView *)self)) {
         gAWEStableCleanScreenStack = (UIView *)self;
         AWEStableCleanSuppressRightStack((UIView *)self);
     }
@@ -16839,7 +17031,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 
 - (void)setHidden:(BOOL)hidden {
     UIView *stack = (UIView *)self;
-    if (gAWEStableCleanScreenEnabled) {
+    if (AWEStableCleanShouldSuppressElementStack((UIView *)self)) {
         %orig(NO);
         gAWEStableCleanScreenStack = stack;
         AWEStableCleanSuppressRightStack(stack);
@@ -16866,7 +17058,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 
 - (void)setAlpha:(CGFloat)alpha {
     UIView *stack = (UIView *)self;
-    if (gAWEStableCleanScreenEnabled) {
+    if (AWEStableCleanShouldSuppressElementStack((UIView *)self)) {
         %orig(1.0);
         gAWEStableCleanScreenStack = stack;
         AWEStableCleanSuppressRightStack(stack);
@@ -16895,7 +17087,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)didAddSubview:(UIView *)subview {
     %orig(subview);
     AWEScheduleHomeActionStackRefresh((UIView *)self);
-    if (gAWEStableCleanScreenEnabled) {
+    if (AWEStableCleanShouldSuppressElementStack((UIView *)self)) {
         gAWEStableCleanScreenStack = (UIView *)self;
         AWEStableCleanSuppressRightStack((UIView *)self);
     }
@@ -18484,7 +18676,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56a os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56b os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

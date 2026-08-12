@@ -1,0 +1,13 @@
+AwemeLiquidBar 1.0.56b audit intent
+
+- Source baseline: 1.0.56a compilefix1.
+- Internal fullscreen main hook blocks are byte-identical to compilefix1 for FeedTable, interaction/player, live, detail and MixVideoPanelMore geometry.
+- Clean-screen broad UILabel/UIImageView/UIControl heuristics removed.
+- Clean targets use runtime base classes plus isKindOfClass: so already-visible subclassed CURRENT-cell chrome is cleared immediately.
+- Comment UI is an explicit scan boundary; comment panel/list/input subtrees are not recursively suppressed.
+- Real status-bar preference hooks added and refreshed across active UIWindowScene roots on clean enter/exit.
+- AWEVideoModel max-bitrate early selection added; existing late player switch retained.
+- Settings route and chat-detail classifiers expanded without replacing the percentComplete transition engine.
+- Interactive return may bypass route suppression only while a real reveal coordinator (or 0.20 s completion grace) is active.
+- Top category suppression is owned by the menu-morph preference from frame zero; it no longer waits for UIMenu children.
+- Logos groups/end counts, duplicate hooks, same-line %orig hazards and clean-screen timer/broad-heuristic guards are checked by scripts/preflight.sh.

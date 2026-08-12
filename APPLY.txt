@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56a is the complete 1.0.55a stable project plus the validated internal fullscreen module and clean-screen v2 persistence fixes.
+AwemeLiquidBar 1.0.56b is the complete 1.0.55a stable project plus the validated internal fullscreen module and clean-screen v2 persistence fixes.
 
 For fullscreen testing, disable DYYY/AwemeX and any other tweak that also changes Douyin fullscreen/feed geometry.
 
