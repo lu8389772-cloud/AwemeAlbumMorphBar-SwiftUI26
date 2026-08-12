@@ -1,4 +1,4 @@
-# AwemeLiquidBar 1.0.56c2
+# AwemeLiquidBar 1.0.56c3
 
 Performance-cleanup build based directly on the verified 1.0.56c1 chat-return rollback baseline.
 

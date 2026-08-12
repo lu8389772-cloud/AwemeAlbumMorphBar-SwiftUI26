@@ -201,6 +201,9 @@ protocol AWEAlbumMorphActionSink: AnyObject {
 
     @objc(albumMorphDidRequestSearch)
     func albumMorphDidRequestSearch()
+
+    @objc(albumMorphDidRequestOverflow:)
+    func albumMorphDidRequestOverflow(_ identifiers: [String])
 }
 
 @_silgen_name("AWEAlbumMorphProbeLog")
@@ -364,6 +367,7 @@ final class AWEAlbumMorphTabController:
         static let publish = "com.xyy.awemeliquidbar.album.publish"
         static let messages = "com.xyy.awemeliquidbar.album.messages"
         static let profile = "com.xyy.awemeliquidbar.album.profile"
+        static let more = "com.xyy.awemeliquidbar.album.more"
     }
 
     private enum ItemKey {
@@ -373,6 +377,7 @@ final class AWEAlbumMorphTabController:
         static let messages = "messages"
         static let profile = "profile"
         static let search = "search"
+        static let more = "more"
 
         static let allowed = [home, second, publish, messages, profile, search]
         static let defaultVisible = [home, second, messages, profile, search]
@@ -395,6 +400,7 @@ final class AWEAlbumMorphTabController:
     private let visibilityMaskView = UIView(frame: .zero)
     private var hasUserDrivenSelection = false
     private var visibleItemIdentifiers = ItemKey.defaultVisible
+    private var overflowItemIdentifiers: [String] = []
     private var messageBadgeValue: String?
     private var secondBadgeValue: String?
 
@@ -485,6 +491,22 @@ final class AWEAlbumMorphTabController:
         return search
     }
 
+    private func makeMoreTab() -> UITab {
+        let image = UIImage(
+            systemName: "ellipsis.circle",
+            withConfiguration: UIImage.SymbolConfiguration(
+                pointSize: 21.0, weight: .regular
+            )
+        )
+        return UITab(
+            title: albumMorphHideTitles ? "" : "更多",
+            image: image,
+            identifier: Identifier.more
+        ) { [weak self] _ in
+            self?.makeProxy(originalIndex: nil) ?? UIViewController()
+        }
+    }
+
     private func tabForItemKey(_ key: String) -> UITab? {
         switch key {
         case ItemKey.home:
@@ -529,6 +551,8 @@ final class AWEAlbumMorphTabController:
             )
         case ItemKey.search:
             return makeSearchTab()
+        case ItemKey.more:
+            return makeMoreTab()
         default:
             return nil
         }
@@ -602,22 +626,48 @@ final class AWEAlbumMorphTabController:
 
     private func sanitizedVisibleItems(_ identifiers: [String]) -> [String] {
         var seen = Set<String>()
-        var result: [String] = []
+        var requested: [String] = []
         for identifier in identifiers where ItemKey.allowed.contains(identifier) {
             guard seen.insert(identifier).inserted else { continue }
-            result.append(identifier)
+            requested.append(identifier)
         }
 
-        let selectableCount = result.filter {
+        let selectableCount = requested.filter {
             ItemKey.selectablePages.contains($0)
         }.count
         if selectableCount < 2 {
+            overflowItemIdentifiers = []
             return ItemKey.defaultVisible
         }
 
-        // UISearchTab owns its independent right-side system capsule. Keep it
-        // last regardless of the order of regular items so UIKit never tries
-        // to place regular buttons on both sides of that capsule.
+        // UIKit creates its own non-functional More controller once the
+        // transplanted UITabBarController receives six tabs. Never let that
+        // happen. With all five regular items + Search enabled, keep three
+        // stable page tabs visible and synthesize one plugin-owned More tab.
+        // The two overflowed native destinations stay fully reachable from
+        // that menu, and Search remains the independent system capsule.
+        let hasSearch = requested.contains(ItemKey.search)
+        let regular = requested.filter { $0 != ItemKey.search }
+        if hasSearch && regular.count > 4 {
+            let preferredDirectOrder = [
+                ItemKey.home, ItemKey.second, ItemKey.messages,
+                ItemKey.profile, ItemKey.publish
+            ]
+            var direct: [String] = []
+            for key in preferredDirectOrder where regular.contains(key) {
+                if direct.count >= 3 { break }
+                direct.append(key)
+            }
+            for key in regular where !direct.contains(key) {
+                if direct.count >= 3 { break }
+                direct.append(key)
+            }
+            overflowItemIdentifiers = regular.filter { !direct.contains($0) }
+            return direct + [ItemKey.more, ItemKey.search]
+        }
+
+        overflowItemIdentifiers = []
+        var result = requested
         if let searchIndex = result.firstIndex(of: ItemKey.search) {
             result.remove(at: searchIndex)
             result.append(ItemKey.search)
@@ -1010,6 +1060,10 @@ final class AWEAlbumMorphTabController:
 
         if tab is UISearchTab {
             actionSink?.albumMorphDidRequestSearch()
+            return false
+        }
+        if tab.identifier == Identifier.more {
+            actionSink?.albumMorphDidRequestOverflow(overflowItemIdentifiers)
             return false
         }
         if originalIndex(for: tab) == 2 {

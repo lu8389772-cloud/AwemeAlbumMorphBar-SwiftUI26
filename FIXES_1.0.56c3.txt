@@ -1,0 +1,24 @@
+AwemeLiquidBar 1.0.56c3 — overflow + foreground playback stabilization
+
+Scope: incremental from 1.0.56c2 only. No changes to the validated fullscreen geometry,
+clean-screen/status-bar behavior, save HUD, route/chat rollback baseline, badges, or
+performance cache work except the foreground player guard described below.
+
+1) Six bottom actions / dead UIKit More
+- UIKit is never given six tabs.
+- When all five regular actions + Search are enabled, Swift builds exactly five tabs:
+  Home / Second / Messages / plugin-owned More / Search.
+- More contains the two overflowed native actions (normally Publish + Profile) plus a
+  permanent LiquidBar Settings escape hatch.
+- Search remains the native independent UISearchTab capsule.
+- The "settings gesture only on Me" guard automatically relaxes if Profile is hidden or
+  overflow mode is active, so a configuration can never lock the user out of settings.
+
+2) Background -> foreground playback pause
+- Removed the dangerous one-element bitrateModels override. Douyin always keeps its full
+  adaptive bitrate ladder for session restoration/fallback.
+- Highest-quality mode may still prefer the highest initial playURL, but only while the
+  app is stably active.
+- Backgrounding starts a playback guard; for 1.2 s after DidBecomeActive the plugin does
+  not rewrite highest-quality playback URLs or fullscreen player frames.
+- The plugin does NOT synthesize play/pause/tap. Douyin remains playback-state owner.

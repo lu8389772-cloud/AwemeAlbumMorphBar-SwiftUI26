@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56c2'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c2-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56c2'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56c2'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56c2_interaction.log'),
+    ('control', control, 'Version: 1.0.56c3'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c3-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56c3'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56c3'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56c3_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -33,12 +33,14 @@ for token in [
     'applyUnreadBadges()', 'applyCompactUnreadBadgeScale(in: tabBar)',
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
+    'static let more = "more"', 'overflowItemIdentifiers',
+    'albumMorphDidRequestOverflow(overflowItemIdentifiers)',
 ]:
     if token not in swift:
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56c2', 'LiquidBar 设置 · 1.0.56c2',
+    'AwemeLiquidBar 1.0.56c3', 'LiquidBar 设置 · 1.0.56c3',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -64,6 +66,8 @@ required_objc = [
     'BOTTOM_BADGES_NATIVE', 'if (![scanner scanInteger:&count] || count <= 0) return nil;',
     '[gAWEAlbumMorphController updateSecondBadgeValue:secondValue];',
     '%hook AWENormalModeTabBarBadgeContainerView',
+    'albumMorphDidRequestOverflow:', 'LiquidBar 设置',
+    'gAWEForegroundPlaybackGuardUntil', 'UIApplicationDidEnterBackgroundNotification',
     # internal fullscreen, using validated 0.5.1 media/overlay separation
     'AwemeLiquidBarInternalFullscreenV1', 'AWEInternalFullscreenEnabled',
     'AWEInternalFSLayoutInteractionController', 'AWEInternalFSHandleElementStackLayout',
@@ -113,7 +117,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56c2 intentionally has one custom group for the
+# Logos structural audit. 1.0.56c3 intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -176,7 +180,7 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56c2 clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56c3 clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
@@ -185,7 +189,7 @@ for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isK
     if forbidden_clean in clean_chunk:
         raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-# 1.0.56c2 performance invariants. These are intentionally narrow so future
+# 1.0.56c3 performance invariants. These are intentionally narrow so future
 # feature work cannot silently reintroduce the hottest process-wide paths.
 if re.search(r'^%hook\s+UIView\s*$', objc, re.M):
     raise SystemExit('process-wide %hook UIView was reintroduced')
@@ -200,6 +204,13 @@ for token in [
 ]:
     if token not in objc:
         raise SystemExit('performance invariant missing: ' + token)
+# 1.0.56c3 navigation/playback invariants: never hand six tabs to UIKit and
+# never collapse Douyin's adaptive bitrate ladder, which can break foreground resume.
+if 'return highest ? @[highest] : originalModels;' in objc:
+    raise SystemExit('highest-quality path still collapses native bitrateModels')
+if 'regular.count > 4' not in swift or 'ItemKey.more, ItemKey.search' not in swift:
+    raise SystemExit('six-item overflow guard missing')
+
 for forbidden_reason in [
     'AWEScheduleCleanScreenReapply(@"feedTable.layout")',
     'AWEScheduleCleanScreenReapply(@"cell.layout")',
@@ -209,5 +220,5 @@ for forbidden_reason in [
     if forbidden_reason in objc:
         raise SystemExit('high-frequency clean reapply trigger remains: ' + forbidden_reason)
 
-print('AwemeLiquidBar 1.0.56c2 internal-fullscreen/clean-v2/native-badges preflight passed')
+print('AwemeLiquidBar 1.0.56c3 internal-fullscreen/clean-v2/native-badges preflight passed')
 PY2
