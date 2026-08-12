@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c6 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56c8 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -251,7 +251,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c6: cache the already-identified native top-category views so the
+/* 1.0.56c8: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -303,6 +303,7 @@ static AWEHomeDiagnosticForegroundMode gAWEHomeDiagnosticForegroundMode =
     AWEHomeDiagnosticForegroundModeAutomatic;
 
 static BOOL gAWESettingsVisible = NO;
+static char kAWELiquidSettingsNativePushKey;
 static BOOL gAWESecondTabRoleLoaded = NO;
 static BOOL gAWESecondTabIsShop = NO;
 
@@ -883,7 +884,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c6_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c8_interaction.log"] copy];
     });
     return path;
 }
@@ -952,7 +953,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c6_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c8_probe.log"] copy];
     });
     return path;
 }
@@ -8767,7 +8768,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c6 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c8 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -11166,6 +11167,14 @@ static void AWEApplyAlbumMorphResolvedAppearance(
 @end
 
 @implementation AWEAlbumMorphOverlayWindow
+
+/* The resident LiquidBar window is visual/touch chrome only. It must never
+   become the app key window; allowing a higher-level overlay window to own key
+   status can make Douyin's feed lifecycle treat the real player window as
+   inactive, especially after foreground restore. */
+- (BOOL)canBecomeKeyWindow {
+    return NO;
+}
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     if (gAWEStableCleanScreenEnabled) return nil;
@@ -14582,17 +14591,21 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c6";
+    self.title = @"LiquidBar 设置 · 1.0.56c8";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
         self.view.backgroundColor = UIColor.whiteColor;
     }
 
-    self.navigationItem.rightBarButtonItem =
-        [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
-                                                     target:self
-                                                     action:@selector(closeSettings)];
+    BOOL nativeSettingsPush =
+        [objc_getAssociatedObject(self, &kAWELiquidSettingsNativePushKey) boolValue];
+    if (!nativeSettingsPush) {
+        self.navigationItem.rightBarButtonItem =
+            [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
+                                                         target:self
+                                                         action:@selector(closeSettings)];
+    }
 
     self.pendingAccentColor = AWEStoredAccentColor();
 
@@ -15392,7 +15405,9 @@ static void AWEClearStoredIconConfigurationForDefinitions(
        dismissal snapshot. Without this, the Home feed can perform one layout
        pass with a zero bottom reserve and its caption briefly touches the
        screen edge underneath the resident LiquidBar. */
-    if (AWEAlbumMorphStyleEnabled() && gAWELastTabBar) {
+    BOOL nativeSettingsPush =
+        [objc_getAssociatedObject(self, &kAWELiquidSettingsNativePushKey) boolValue];
+    if (!nativeSettingsPush && AWEAlbumMorphStyleEnabled() && gAWELastTabBar) {
         UIView *bar = (UIView *)gAWELastTabBar;
         AWESetApplying(bar, YES);
         [UIView performWithoutAnimation:^{
@@ -15541,6 +15556,13 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 }
 
 - (void)closeSettings {
+    BOOL nativeSettingsPush =
+        [objc_getAssociatedObject(self, &kAWELiquidSettingsNativePushKey) boolValue];
+    if (nativeSettingsPush && self.navigationController &&
+        self.navigationController.topViewController == self) {
+        [self.navigationController popViewControllerAnimated:YES];
+        return;
+    }
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
@@ -15899,7 +15921,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c6 image=%@ ==========" ,
+            @"========== START build=1.0.56c8 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15966,7 +15988,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c6 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c8 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15981,7 +16003,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c6_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c8_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16068,29 +16090,37 @@ static void AWEPresentLiquidSettingsFromNativeEntry(UIViewController *host) {
     [feedback impactOccurred];
 
     AWELiquidSettingsController *settings = [AWELiquidSettingsController new];
+    if (@available(iOS 13.0, *)) {
+        settings.overrideUserInterfaceStyle = AWESystemInterfaceStyle();
+    }
+
+    /* Follow DYKiller's stable Settings integration: when the entry is tapped
+       from Douyin Settings, push the plugin controller onto the existing native
+       navigation stack. This is full-screen by construction and, importantly,
+       does not create a transient modal sheet that can leave the hidden native
+       tab bridge in a stale route state after dismissal. */
+    UINavigationController *nativeNavigation = host.navigationController ?: top.navigationController;
+    if ([top isKindOfClass:UINavigationController.class]) {
+        nativeNavigation = (UINavigationController *)top;
+    }
+    if (nativeNavigation) {
+        objc_setAssociatedObject(settings, &kAWELiquidSettingsNativePushKey,
+                                 @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        AWELogBarSnapshot(@"plugin-settings.native-push", top, YES);
+        [nativeNavigation pushViewController:settings animated:YES];
+        return;
+    }
+
+    /* Rare compatibility fallback for a Douyin build whose Settings host is
+       not embedded in a navigation controller. Still use full-screen rather
+       than the old medium/large sheet. */
     UINavigationController *navigation =
         [[UINavigationController alloc] initWithRootViewController:settings];
-    navigation.modalPresentationStyle = UIModalPresentationPageSheet;
-
+    navigation.modalPresentationStyle = UIModalPresentationFullScreen;
     if (@available(iOS 13.0, *)) {
-        UIUserInterfaceStyle systemStyle = AWESystemInterfaceStyle();
-        navigation.overrideUserInterfaceStyle = systemStyle;
-        settings.overrideUserInterfaceStyle = systemStyle;
+        navigation.overrideUserInterfaceStyle = AWESystemInterfaceStyle();
     }
-
-    if (@available(iOS 15.0, *)) {
-        UISheetPresentationController *sheet = navigation.sheetPresentationController;
-        sheet.detents = @[
-            [UISheetPresentationControllerDetent mediumDetent],
-            [UISheetPresentationControllerDetent largeDetent]
-        ];
-        sheet.selectedDetentIdentifier =
-            UISheetPresentationControllerDetentIdentifierMedium;
-        sheet.prefersGrabberVisible = YES;
-        sheet.prefersScrollingExpandsWhenScrolledToEdge = NO;
-    }
-
-    AWELogBarSnapshot(@"plugin-settings.native-entry", top, YES);
+    AWELogBarSnapshot(@"plugin-settings.native-fullscreen-fallback", top, YES);
     [top presentViewController:navigation animated:YES completion:nil];
 }
 
@@ -16284,7 +16314,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c6 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c8 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16427,7 +16457,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c6 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c8 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16453,9 +16483,23 @@ static void AWEFSExpandPlayerOwnedViewTree(UIView *root, int depth) {
     }
 }
 
+static BOOL AWEFSViewIsInDetailContext(UIView *view);
+
 static void AWEFSLayoutKnownPlayerController(UIViewController *controller) {
     if (!AWEInternalFullscreenActive() || !controller || !controller.view) return;
+
     UIView *root = controller.view;
+
+    /* Keep the older stable feed behavior: only expand the explicit player
+       contentView during normal Home/Friends playback. 1.0.56c2 moved the
+       root and descendant one-tab-short correction into viewDidLayoutSubviews,
+       which means every foreground restore and Friends-page relayout can fight
+       Douyin immediately after its native player reconciles pause/play state.
+       The deeper local-tree correction is only needed for profile/detail media. */
+    AWEFSExpandContentViewOfController(controller);
+
+    if (!AWEFSViewIsInDetailContext(root)) return;
+
     if (root.superview) {
         CGRect frame = root.frame;
         CGFloat parentHeight = CGRectGetHeight(root.superview.frame);
@@ -16468,7 +16512,6 @@ static void AWEFSLayoutKnownPlayerController(UIViewController *controller) {
             if (!CGRectEqualToRect(root.frame, frame)) root.frame = frame;
         }
     }
-    AWEFSExpandContentViewOfController(controller);
     AWEFSExpandPlayerOwnedViewTree(root, 0);
 }
 
@@ -16645,7 +16688,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c6 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c8 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17426,7 +17469,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
     AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
     entry.identifier = @"AwemeLiquidBar.Settings";
     entry.title = @"LiquidBar";
-    entry.detail = @"1.0.56c6";
+    entry.detail = @"1.0.56c8";
     entry.type = 0;
     entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
     entry.cellType = 26;
@@ -18273,22 +18316,18 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 }
 
 - (void)setHidden:(BOOL)hidden {
-    BOOL preserveFriendsLayout = hidden && !AWESecondTabIsShop() &&
-        (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched) &&
-        !AWECurrentRouteSuppressesBar() && !gAWESettingsVisible;
-    BOOL effectiveHidden = preserveFriendsLayout ? NO : hidden;
-    BOOL changed = self.hidden != effectiveHidden;
-    %orig(effectiveHidden);
+    BOOL changed = self.hidden != hidden;
+
+    /* 1.0.56c8: never veto Douyin's native hidden transition on Friends.
+       Blocking hidden here was an old layout-footprint workaround, but it also
+       changes the native tab-bar state exactly while the Friends feed decides
+       whether its player is visible/active. The replacement bar already stays
+       visible on Friends through gAWEFriendsTabLatched, while caption clearance
+       is maintained independently by AWEApplyFriendsCaptionBottomReserve(). */
+    %orig(hidden);
+
     AWEInternalFSTabBarUpdate((UIView *)self);
     if (gAWEStableCleanScreenEnabled) AWEStableCleanEnforceBottomBarSuppression();
-    if (preserveFriendsLayout) {
-        /* Keep Douyin's native tab-bar layout footprint alive while our bar
-           remains the only visible bar. This preserves the Friends caption/
-           recommendation safe area instead of letting content fall underneath
-           the custom LiquidBar after the native bar auto-hides. */
-        AWEApplyAlbumMorphOriginalSuppression((UIView *)self, YES);
-        AWEAlbumMorphProbeWrite(@"FRIENDS_NATIVE_HIDE_BLOCKED requested=1");
-    }
     if (!AWEIsApplying((UIView *)self)) {
         AWEStartBarVisibilityDriver();
         AWEAttachNativeBar((UIView *)self);
@@ -18493,29 +18532,6 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
            [className containsString:@"AWEFamiliarSkylightViewController"];
 }
 
-static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
-                                                  NSString *phase) {
-    if (!controller || AWESecondTabIsShop() || !gAWELastTabBar) return;
-    UIView *bar = (UIView *)gAWELastTabBar;
-    if (!bar.superview) return;
-
-    AWESetApplying(bar, YES);
-    [UIView performWithoutAnimation:^{
-        bar.hidden = NO;
-        bar.alpha = 1.0;
-    }];
-    AWESetApplying(bar, NO);
-    AWEApplyAlbumMorphOriginalSuppression(bar, YES);
-
-    [bar.superview setNeedsLayout];
-    [bar.superview layoutIfNeeded];
-    [controller.view setNeedsLayout];
-
-    AWEInteractionDiagnosticWrite(
-        @"FRIENDS_LAYOUT_PRIME phase=%@ class=%@ bar=%@",
-        phase ?: @"unknown", NSStringFromClass(controller.class),
-        AWEInteractionObjectSummary(bar));
-}
 
 /*
  Every completed page appearance is a useful, low-frequency recovery signal.
@@ -18554,8 +18570,12 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
     }
     BOOL friendsRootController = AWEClassNameLooksLikeFriendsRootController(className);
     if (friendsRootController) {
+        /* Keep only the logical Friends latch. Do not force the native tab-bar
+           visible or relayout the Friends root while Douyin is activating its
+           player. The custom LiquidBar already has an explicit Friends steady-
+           visibility rule, and caption clearance is handled separately via
+           additionalSafeAreaInsets. */
         gAWEFriendsTabLatched = YES;
-        AWEPrimeFriendsNativeLayoutFootprint(self, @"willAppear.before");
     }
     BOOL sensitive = AWEClassNameIsSensitiveDestination(className);
     if (self.presentingViewController || sensitive) {
@@ -18589,9 +18609,6 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
     }
 
     %orig(animated);
-    if (friendsRootController) {
-        AWEPrimeFriendsNativeLayoutFootprint(self, @"willAppear.after");
-    }
     if (friendsFeedContent && !AWESecondTabIsShop() &&
         (AWECurrentOriginalMainTabIndex() == 1 || gAWEFriendsTabLatched)) {
         AWEApplyFriendsCaptionBottomReserve(self, YES, @"viewWillAppear.after");
@@ -18636,7 +18653,6 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
     NSString *className = NSStringFromClass(self.class);
     if (AWEClassNameLooksLikeFriendsRootController(className)) {
         gAWEFriendsTabLatched = YES;
-        AWEPrimeFriendsNativeLayoutFootprint(self, @"didAppear");
     }
     if (AWEClassNameLooksLikeFriendsFeedContentController(className) &&
         !AWESecondTabIsShop() &&
@@ -18866,7 +18882,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c6 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c8 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -18880,35 +18896,39 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                /* Give Douyin's native player time to reconcile its own
-                   background pause/resume state before we bias bitrate order. */
-                gAWEPlaybackPreferenceResumeGraceUntil = CACurrentMediaTime() + 2.0;
+                /* 1.0.56c8 foreground rule: Douyin owns player recovery.
+                   During DidBecomeActive do not reattach the native tab bar,
+                   force route recovery, relayout Feed chrome, or steal key
+                   window state. Those operations used to run in the same
+                   lifecycle window as Douyin's native resume decision and can
+                   provoke a second visibility/pause reconciliation. */
+                gAWEPlaybackPreferenceResumeGraceUntil = CACurrentMediaTime() + 5.0;
+
                 if (AWEPluginFeaturesEnabled()) {
                     if (!AWEAlbumMorphStyleEnabled()) {
+                        /* Native-bar mode keeps its original lightweight warmup.
+                           The LiquidBar overlay path below intentionally avoids
+                           touching the native bar host while playback resumes. */
                         AWEScheduleActualNativeBarWarmup();
-                    }
-                    /* Recreate regular glass configurations after returning
-                       from Settings so UIKit immediately re-resolves the
-                       system Clear/Tinted Liquid Glass preference. */
-                    AWEHomeDiagnosticRefreshVisibleUI();
-                    AWEScheduleHomeChromeRecovery(AWEActiveMainWindow());
-                    if (gAWELastTabBar) {
-                        AWEAttachNativeBarWithForce((UIView *)gAWELastTabBar, NO);
-                        if (AWEAlbumMorphStyleEnabled()) {
-                            AWEForceAlbumMorphRouteRecovery(@"applicationDidBecomeActive");
-                        }
-                        if (!AWEAlbumMorphStyleEnabled()) {
-                            UITabBar *nativeBar = objc_getAssociatedObject(
-                                (UIView *)gAWELastTabBar, &kAWENativeBarKey);
-                            if (nativeBar) {
-                                [UIView performWithoutAnimation:^{
-                                    AWEConfigureNativeBarAppearance(
-                                        nativeBar, AWEStoredAccentColor());
-                                    [nativeBar setNeedsLayout];
-                                    [nativeBar layoutIfNeeded];
-                                }];
-                            }
-                        }
+                    } else {
+                        __weak UIView *weakOriginalBar = (UIView *)gAWELastTabBar;
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                            (int64_t)(0.45 * NSEC_PER_SEC)),
+                            dispatch_get_main_queue(), ^{
+                            UIView *originalBar = weakOriginalBar;
+                            if (!originalBar || !originalBar.window ||
+                                !AWEPluginFeaturesEnabled() ||
+                                !AWEAlbumMorphStyleEnabled()) return;
+
+                            /* Overlay-only reconciliation: update our visual
+                               visibility/material after the player has resumed,
+                               without mutating the feed controller, native bar
+                               geometry, or route state. */
+                            AWEUpdateAlbumMorphVisibility(
+                                originalBar, @"applicationDidBecomeActive.overlayOnly");
+                            AWEUpdateAlbumMorphMessageBadge();
+                            AWEApplyHomeOnlyGlassStyleToExistingSurfaces();
+                        });
                     }
                 }
             }];

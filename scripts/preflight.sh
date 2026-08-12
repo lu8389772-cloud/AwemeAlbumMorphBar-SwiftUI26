@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56c6'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c6-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56c6'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56c6'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56c6_interaction.log'),
+    ('control', control, 'Version: 1.0.56c8'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c8-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56c8'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56c8'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56c8_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -39,7 +39,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56c6', 'LiquidBar 设置 · 1.0.56c6',
+    'AwemeLiquidBar 1.0.56c8', 'LiquidBar 设置 · 1.0.56c8',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -117,7 +117,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56c6 intentionally has one custom group for the
+# Logos structural audit. 1.0.56c8 intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -138,7 +138,7 @@ dups = [name for name, count in Counter(hooks).items() if count > 1]
 if dups:
     raise SystemExit('duplicate Logos hook classes: ' + ', '.join(dups))
 
-# 1.0.56c6: hard max-five + real Douyin Settings-page injection.
+# 1.0.56c8: hard max-five + real Douyin Settings-page injection.
 for required in [
     '%hook AWESettingsViewModel',
     '- (NSArray *)sectionDataArray',
@@ -210,7 +210,7 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56c6 clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56c8 clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
@@ -219,7 +219,7 @@ for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isK
     if forbidden_clean in clean_chunk:
         raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-# 1.0.56c6 performance invariants. These are intentionally narrow so future
+# 1.0.56c8 performance invariants. These are intentionally narrow so future
 # feature work cannot silently reintroduce the hottest process-wide paths.
 if re.search(r'^%hook\s+UIView\s*$', objc, re.M):
     raise SystemExit('process-wide %hook UIView was reintroduced')
@@ -243,5 +243,5 @@ for forbidden_reason in [
     if forbidden_reason in objc:
         raise SystemExit('high-frequency clean reapply trigger remains: ' + forbidden_reason)
 
-print('AwemeLiquidBar 1.0.56c6 internal-fullscreen/clean-v2/native-badges preflight passed')
+print('AwemeLiquidBar 1.0.56c8 internal-fullscreen/clean-v2/native-badges preflight passed')
 PY2
