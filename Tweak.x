@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56g — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56h — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -853,7 +853,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56g_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56h_interaction.log"] copy];
     });
     return path;
 }
@@ -922,7 +922,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56g_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56h_probe.log"] copy];
     });
     return path;
 }
@@ -4808,6 +4808,75 @@ AWECurrentBarTransitionCoordinator(void) {
     return top.transitionCoordinator ?: navigation.transitionCoordinator;
 }
 
+/*
+ Native side-drawer geometry must be taken from a real native tab button, not
+ from the whole AWENormalModeTabBar frame.  Current Douyin can keep the bar's
+ model frame at its normal position while an ancestor translates the actual
+ buttons with the profile/settings drawer.  The right-most native Profile
+ button is stable across the four/five-button layouts, so compare its live
+ window position with its local position inside the original bar.  The delta is
+ the exact horizontal translation applied by Douyin.
+
+ Interactive chat returns are deliberately excluded: their proven
+ percentComplete mask remains the sole owner of that transition.
+*/
+static CGFloat AWEAlbumMorphNativeHorizontalOffset(UIView *originalBar,
+                                                    UIWindow *sourceWindow,
+                                                    BOOL *partialExposure) {
+    if (partialExposure) *partialExposure = NO;
+    if (!originalBar || !sourceWindow || !gAWELastController) return 0.0;
+
+    id<UIViewControllerTransitionCoordinator> coordinator =
+        AWECurrentBarTransitionCoordinator();
+    if (coordinator && coordinator.isInteractive) return 0.0;
+
+    NSArray *buttons = AWEControllerButtons(gAWELastController);
+    UIView *profileButton = nil;
+    for (id object in [buttons reverseObjectEnumerator]) {
+        if (![object isKindOfClass:UIView.class]) continue;
+        UIView *candidate = (UIView *)object;
+        if (candidate.superview == originalBar) {
+            profileButton = candidate;
+            break;
+        }
+    }
+    if (!profileButton || !profileButton.window) return 0.0;
+
+    @try {
+        CGRect localFrame = [profileButton convertRect:profileButton.bounds
+                                                  toView:originalBar];
+        CGRect liveFrame = [profileButton convertRect:profileButton.bounds
+                                                 toView:sourceWindow];
+        CGFloat sourceWidth = CGRectGetWidth(sourceWindow.bounds);
+        CGFloat barWidth = CGRectGetWidth(originalBar.bounds);
+        if (sourceWidth <= 1.0 || barWidth <= 1.0 ||
+            CGRectIsNull(localFrame) || CGRectIsEmpty(localFrame) ||
+            CGRectIsNull(liveFrame) || CGRectIsEmpty(liveFrame)) {
+            return 0.0;
+        }
+
+        /* AWENormalModeTabBar is normally full-width.  Keep the centered-bar
+           fallback for builds that report a slightly narrower carrier. */
+        CGFloat normalBarMinX = fabs(barWidth - sourceWidth) <= 12.0
+            ? CGRectGetMinX(sourceWindow.bounds)
+            : CGRectGetMinX(sourceWindow.bounds) +
+              (sourceWidth - barWidth) * 0.5;
+        CGFloat expectedMidX = normalBarMinX + CGRectGetMidX(localFrame);
+        CGFloat liveMidX = CGRectGetMidX(liveFrame);
+        CGFloat deltaX = liveMidX - expectedMidX;
+
+        CGRect visibleBounds = CGRectInset(sourceWindow.bounds, -2.0, -2.0);
+        BOOL profileStillVisible = CGRectIntersectsRect(visibleBounds, liveFrame);
+        BOOL shiftedLeft = deltaX < -12.0 && deltaX > -sourceWidth * 1.20;
+        BOOL profileNowInLeftStrip = CGRectGetMidX(liveFrame) < sourceWidth * 0.48;
+        BOOL partial = profileStillVisible && shiftedLeft && profileNowInLeftStrip;
+        if (partialExposure) *partialExposure = partial;
+        return partial ? deltaX : 0.0;
+    } @catch (__unused NSException *exception) {
+        return 0.0;
+    }
+}
+
 
 static void AWEUpdateFriendsTabLatch(NSInteger index) {
     if (AWESecondTabIsShop()) {
@@ -4840,6 +4909,17 @@ static BOOL AWEAlbumMorphSteadyWantsVisible(UIView *originalBar) {
        chat/comment/settings/share route continues to suppress it through the
        same route matcher, so interactive chat-return reveal remains intact. */
     if (messagesRoot && !AWECurrentRouteSuppressesBar()) return YES;
+
+    /* A Douyin side drawer (notably Settings from the Profile tab) may mark
+       the original bar hidden while its translated right-most Profile button
+       is still visibly exposed in the left source-page strip.  Mirror that
+       native partial exposure instead of hiding the independent LiquidBar. */
+    if (originalBar.window && !AWECurrentRouteSuppressesBar()) {
+        BOOL partialNativeExposure = NO;
+        (void)AWEAlbumMorphNativeHorizontalOffset(
+            originalBar, originalBar.window, &partialNativeExposure);
+        if (partialNativeExposure) return YES;
+    }
 
     if (!originalBar.window) return NO;
     return AWEOriginalBarSteadyWantsVisible(originalBar);
@@ -9044,7 +9124,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56g clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56h clean screen v2 (display-only, persistent across reuse)
 
 static BOOL AWEStableCleanIsDynamicProgressView(UIView *view) {
     if (!view) return NO;
@@ -11248,35 +11328,14 @@ static void AWEAlignAlbumMorphOverlayToOriginalBar(
         gAWEAlbumMorphLastAlignedSourceWindow = sourceWindow;
     }
 
-    /* Follow Douyin's native tab bar horizontally, but let the Swift
-       controller own the transform so the user's vertical offset is composed
-       instead of overwritten.  A Settings drawer shifts the native bar left;
-       mirroring that exact minX naturally leaves the native bar's RIGHT-hand
-       slice visible in the exposed page strip.  Interactive chat returns keep
-       their proven percentComplete mask and force this route offset back to 0. */
-    CGFloat routeOffsetX = 0.0;
-    id<UIViewControllerTransitionCoordinator> routeCoordinator =
-        AWECurrentBarTransitionCoordinator();
-    BOOL interactiveRoute = routeCoordinator && routeCoordinator.isInteractive;
-    if (originalBar && originalBar.window == sourceWindow && !interactiveRoute) {
-        @try {
-            CGRect barFrameInWindow = [originalBar convertRect:originalBar.bounds
-                                                        toView:sourceWindow];
-            CGFloat sourceWidth = CGRectGetWidth(sourceWindow.bounds);
-            CGFloat barWidth = CGRectGetWidth(barFrameInWindow);
-            CGFloat minX = CGRectGetMinX(barFrameInWindow);
-            CGRect intersection = CGRectIntersection(sourceWindow.bounds, barFrameInWindow);
-            CGFloat visibleWidth = (CGRectIsNull(intersection) || CGRectIsEmpty(intersection))
-                ? 0.0 : CGRectGetWidth(intersection);
-            BOOL partialNativeExposure = sourceWidth > 0.0 &&
-                barWidth >= sourceWidth * 0.72 &&
-                visibleWidth > 1.0 &&
-                visibleWidth < sourceWidth - 3.0 &&
-                fabs(minX) >= 3.0 &&
-                fabs(minX) <= sourceWidth * 1.25;
-            if (partialNativeExposure) routeOffsetX = minX;
-        } @catch (__unused NSException *exception) {}
-    }
+    /* Mirror the exact horizontal translation of Douyin's real Profile tab
+       button.  This is the same native state that remains visible as the
+       right-most slice when the Settings drawer covers most of the Profile
+       page.  Do not infer a left/right mask and do not touch the vertical
+       offset; interactive chat returns remain owned by the existing mask. */
+    BOOL partialNativeExposure = NO;
+    CGFloat routeOffsetX = AWEAlbumMorphNativeHorizontalOffset(
+        originalBar, sourceWindow, &partialNativeExposure);
     [gAWEAlbumMorphController setHorizontalRouteOffset:routeOffsetX];
 
     CGFloat savedOffset = AWEStoredVerticalOffset();
@@ -14860,7 +14919,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56g";
+    self.title = @"LiquidBar 设置 · 1.0.56h";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16181,7 +16240,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56g image=%@ ==========" ,
+            @"========== START build=1.0.56h image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16248,7 +16307,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56g diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56h diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16263,7 +16322,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56g_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56h_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16503,7 +16562,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56g internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56h internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16698,10 +16757,12 @@ static void AWEFSClearBarLikePlainSubviews(UIView *root,
         BOOL barHeight = referenceHeight > 0.0 &&
                          height >= referenceHeight * 0.72 &&
                          height <= referenceHeight * 1.20;
-        if (plain && fullWidth && barHeight) {
+        BOOL hairline = fullWidth && height > 0.0 && height <= 2.0;
+        if (plain && fullWidth && (barHeight || hairline)) {
             subview.backgroundColor = UIColor.clearColor;
             subview.layer.backgroundColor = UIColor.clearColor.CGColor;
             subview.opaque = NO;
+            if (hairline) subview.alpha = 0.0;
         }
         AWEFSClearBarLikePlainSubviews(subview, referenceWidth, referenceHeight, depth + 1);
     }
@@ -16980,15 +17041,12 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 %hook AWEPlayInteractionProgressContainerView
 - (void)layoutSubviews {
     %orig;
-    UIView *progressView = (UIView *)self;
-    /* Home fullscreen historically needs its plain backdrop cleared; doing the
-       same in profile/detail removes the real progress track. */
-    if (AWEInternalFullscreenActive() && !AWEFSViewIsInDetailContext(progressView)) {
-        for (UIView *subview in [progressView.subviews copy]) {
-            if ([subview class] == UIView.class) subview.backgroundColor = UIColor.clearColor;
-        }
+    /* Fullscreen must not recolor or delete Douyin's native video progress
+       subtree.  Both Home and profile/detail keep their exact native track;
+       clean-screen alone is allowed to suppress the whole container. */
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
     }
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView(progressView, YES);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -17006,18 +17064,11 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 %hook AWEDPlayerProgressContainerView
 - (void)layoutSubviews {
     %orig;
-    UIView *progressView = (UIView *)self;
-    if (AWEInternalFullscreenActive() && !AWEFSViewIsInDetailContext(progressView)) {
-        for (UIView *subview in [progressView.subviews copy]) {
-            UIColor *background = subview.backgroundColor;
-            if (!background) continue;
-            CGFloat white = 0.0, alpha = 0.0;
-            if ([background getWhite:&white alpha:&alpha] && white < 0.2) {
-                subview.backgroundColor = UIColor.clearColor;
-            }
-        }
+    /* Same rule as AWEPlayInteractionProgressContainerView: fullscreen owns
+       geometry only, never the native progress appearance. */
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanSuppressView((UIView *)self, YES);
     }
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView(progressView, YES);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -19025,7 +19076,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56g os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56h os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56g focused test
+AwemeLiquidBar 1.0.56h focused test
 
 1. Messages root
 - Cold launch Douyin.

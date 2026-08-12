@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56g'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56g-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56g'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56g'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56g_interaction.log'),
+    ('control', control, 'Version: 1.0.56h'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56h-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56h'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56h'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56h_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -39,7 +39,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56g', 'LiquidBar 设置 · 1.0.56g',
+    'AwemeLiquidBar 1.0.56h', 'LiquidBar 设置 · 1.0.56h',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -65,7 +65,7 @@ required_objc = [
     'AWEControllerViewMeaningfullyIntersectsItsWindow',
     'AWEClassNameLooksLikeDirectConversationController',
     '[gAWEAlbumMorphController setHorizontalRouteOffset:routeOffsetX];',
-    'BOOL partialNativeExposure = sourceWidth > 0.0',
+    'AWEAlbumMorphNativeHorizontalOffset',
     'AWEStableCleanShouldSuppressElementStack', 'isKindOfClass:cls',
     'BOOL menuOwnsCategorySwitching = AWETopMenuMorphEnabled();',
     'AWECurrentOriginalSecondBadgeValue', 'AWECurrentOriginalMessagesBadgeValue',
@@ -120,7 +120,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56g intentionally has one custom group for the
+# Logos structural audit. 1.0.56h intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -183,7 +183,7 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56g clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56h clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
@@ -192,5 +192,36 @@ for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isK
     if forbidden_clean in clean_chunk:
         raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-print('AwemeLiquidBar 1.0.56g internal-fullscreen/clean-v2/native-badges preflight passed')
+print('AwemeLiquidBar 1.0.56h internal-fullscreen/clean-v2/native-badges preflight passed')
 PY2
+
+
+python3 - <<'PY_56H'
+from pathlib import Path
+s = Path('Tweak.x').read_text()
+sw = Path('AwemeAlbumMorphBar.swift').read_text()
+required = [
+    'AWEAlbumMorphNativeHorizontalOffset',
+    'right-most native Profile',
+    'partialNativeExposure) return YES;',
+    'geometry only, never the native progress appearance',
+    'Fullscreen must not recolor or delete Douyin\'s native video progress',
+    'BOOL hairline = fullWidth && height > 0.0 && height <= 2.0;',
+]
+for token in required:
+    if token not in s:
+        raise SystemExit(f'missing 1.0.56h token: {token}')
+for forbidden in [
+    'if (AWEInternalFullscreenActive() && !AWEFSViewIsInDetailContext(progressView)) {\n        for (UIView *subview in [progressView.subviews copy])',
+    'partialNativeExposure) routeOffsetX = minX;',
+]:
+    if forbidden in s:
+        raise SystemExit(f'1.0.56h regression remains: {forbidden}')
+# Return architecture and vertical offset must remain intact.
+for token in ['setVisibleFraction(_ fraction: CGFloat, animated: Bool)',
+              'translationX: horizontalRouteOffset, y: verticalOffset',
+              'setVerticalOffset(_ offset: CGFloat)']:
+    if token not in sw:
+        raise SystemExit(f'Swift return/offset path changed unexpectedly: {token}')
+print('AwemeLiquidBar 1.0.56h native-sync/progress reset preflight passed')
+PY_56H
