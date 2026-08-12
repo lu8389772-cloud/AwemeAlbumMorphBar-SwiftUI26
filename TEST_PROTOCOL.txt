@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c8 test protocol
+AwemeLiquidBar 1.0.56c9 test protocol
 
 A. Bottom-entry maximum
 1. Open LiquidBar settings -> 新底栏按钮.

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c8 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56c9 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36 + visual-only bottom-bar toggle
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -251,7 +251,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c8: cache the already-identified native top-category views so the
+/* 1.0.56c9: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -418,6 +418,8 @@ static NSString * const kAWEHomeForceDarkGlassDefaultsKey =
     @"AwemeLiquidBarHomeForceDarkGlassV1";
 static NSString * const kAWEHideBottomTitlesDefaultsKey =
     @"AwemeLiquidBarHideBottomTitlesV1";
+static NSString * const kAWEBottomBarDisplayEnabledDefaultsKey =
+    @"AwemeLiquidBarBottomBarDisplayEnabledV1";
 static NSString * const kAWESettingsGestureMineOnlyDefaultsKey =
     @"AwemeLiquidBarSettingsGestureMineOnlyV1";
 static NSString * const kAWEMessageBadgeEnabledDefaultsKey =
@@ -521,6 +523,15 @@ static BOOL AWEHomeForceDarkGlassEnabled(void) {
 static BOOL AWEHideBottomTitlesEnabled(void) {
     return [NSUserDefaults.standardUserDefaults
         boolForKey:kAWEHideBottomTitlesDefaultsKey];
+}
+
+static BOOL AWEBottomBarDisplayEnabled(void) {
+    id stored = [NSUserDefaults.standardUserDefaults
+        objectForKey:kAWEBottomBarDisplayEnabledDefaultsKey];
+    /* Visual-only preference: fresh installs keep the LiquidBar visible.
+       Turning this off must never uninstall the bridge or revive Douyin's
+       native bar; it only removes our bottom chrome and its hit targets. */
+    return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
 }
 
 static BOOL AWEInternalFullscreenEnabled(void) {
@@ -884,7 +895,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c8_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c9_interaction.log"] copy];
     });
     return path;
 }
@@ -953,7 +964,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c8_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c9_probe.log"] copy];
     });
     return path;
 }
@@ -4818,19 +4829,28 @@ static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
 
     AWEAlbumMorphOverlayWindow *overlay =
         (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+    BOOL bottomBarDisplayEnabled = AWEBottomBarDisplayEnabled();
     overlay.hidden = NO;
     overlay.alpha = 1.0;
     gAWEAlbumMorphController.view.hidden = NO;
     gAWEAlbumMorphController.view.alpha = 1.0;
-    gAWEAlbumMorphController.tabBar.hidden = NO;
-    gAWEAlbumMorphController.tabBar.alpha = 1.0;
+
+    /* Keep the native-tab bridge alive even when the user hides only our
+       bottom chrome. This preserves routing/badges/settings/top/right extras
+       and, critically, does not unsuppress Douyin's original tab bar. */
+    gAWEAlbumMorphController.tabBar.hidden = !bottomBarDisplayEnabled;
+    gAWEAlbumMorphController.tabBar.alpha = bottomBarDisplayEnabled ? 1.0 : 0.0;
+    gAWEAlbumMorphController.tabBar.userInteractionEnabled =
+        bottomBarDisplayEnabled;
 
     [gAWEAlbumMorphController setVisibleFraction:fraction animated:animated];
 
     BOOL hitVisible = fraction > 0.001;
+    /* contentVisible remains the route/lifecycle state so the shared adaptive
+       glass resolver can continue serving the other plugin glass buttons. */
     overlay.contentVisible = hitVisible;
     if (overlay.searchTouchProxy) {
-        BOOL searchInteractive = fraction >= 0.82;
+        BOOL searchInteractive = bottomBarDisplayEnabled && fraction >= 0.82;
         overlay.searchTouchProxy.hidden = !searchInteractive;
         overlay.searchTouchProxy.userInteractionEnabled = searchInteractive;
     }
@@ -8768,7 +8788,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c8 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c9 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -11193,6 +11213,11 @@ static void AWEApplyAlbumMorphResolvedAppearance(
             return downloadHit;
         }
     }
+    /* Bottom-bar hidden mode is true touch passthrough. The overlay UIWindow
+       remains resident for other independent plugin controls, but the entire
+       former tab/search footprint contributes no hit target, so controls from
+       Douyin or another tweak underneath remain clickable. */
+    if (!AWEBottomBarDisplayEnabled()) return nil;
     if (!self.contentVisible) return nil;
     UIView *searchProxy = self.searchTouchProxy;
     if (searchProxy && !searchProxy.hidden &&
@@ -14568,6 +14593,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 @property (nonatomic, retain) UISwitch *transparentGlassSwitch;
 @property (nonatomic, retain) UISwitch *albumMorphStyleSwitch;
 @property (nonatomic, retain) UISwitch *hideBottomTitlesSwitch;
+@property (nonatomic, retain) UISwitch *bottomBarDisplaySwitch;
 @property (nonatomic, retain) UISwitch *internalFullscreenSwitch;
 @property (nonatomic, retain) UISwitch *messageBadgeSwitch;
 @property (nonatomic, retain) UISwitch *avatarMenuDownloadSwitch;
@@ -14591,7 +14617,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c8";
+    self.title = @"LiquidBar 设置 · 1.0.56c9";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15036,6 +15062,30 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     internalFullscreenRow.alignment = UIStackViewAlignmentCenter;
     internalFullscreenRow.distribution = UIStackViewDistributionEqualSpacing;
 
+    UILabel *bottomBarDisplayLabel = [UILabel new];
+    bottomBarDisplayLabel.text = @"显示液态底栏";
+    bottomBarDisplayLabel.font =
+        [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
+    UISwitch *bottomBarDisplaySwitch = [UISwitch new];
+    bottomBarDisplaySwitch.on = AWEBottomBarDisplayEnabled();
+    bottomBarDisplaySwitch.onTintColor = AWEStoredAccentColor();
+    [bottomBarDisplaySwitch addTarget:self
+        action:@selector(bottomBarDisplaySwitchChanged:)
+        forControlEvents:UIControlEventValueChanged];
+    self.bottomBarDisplaySwitch = bottomBarDisplaySwitch;
+    UIStackView *bottomBarDisplayRow = [[UIStackView alloc]
+        initWithArrangedSubviews:@[bottomBarDisplayLabel, bottomBarDisplaySwitch]];
+    bottomBarDisplayRow.axis = UILayoutConstraintAxisHorizontal;
+    bottomBarDisplayRow.alignment = UIStackViewAlignmentCenter;
+    bottomBarDisplayRow.distribution = UIStackViewDistributionEqualSpacing;
+
+    UILabel *bottomBarDisplayHint = [UILabel new];
+    bottomBarDisplayHint.text = @"关闭后仅隐藏底栏和独立搜索按钮；顶部/右侧液态按钮、头像菜单、设置手势等功能继续工作。隐藏区域不拦截触摸。";
+    bottomBarDisplayHint.font =
+        [UIFont systemFontOfSize:11.5 weight:UIFontWeightRegular];
+    bottomBarDisplayHint.textColor = UIColor.tertiaryLabelColor;
+    bottomBarDisplayHint.numberOfLines = 0;
+
     UILabel *hideTitlesLabel = [UILabel new];
     hideTitlesLabel.text = @"隐藏底栏标题";
     hideTitlesLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightMedium];
@@ -15293,6 +15343,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
     UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
         albumStyleRow, newBarIconCenterButton,
+        bottomBarDisplayRow, bottomBarDisplayHint,
         internalFullscreenRow,
         hideTitlesRow, messageBadgeRow, avatarMenuDownloadRow, preferHighestPlaybackRow, forceDarkBottomBarRow,
         topRow, hideTopLeftButtonRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
@@ -15761,6 +15812,26 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
 
+- (void)bottomBarDisplaySwitchChanged:(UISwitch *)sender {
+    [NSUserDefaults.standardUserDefaults setBool:sender.isOn
+        forKey:kAWEBottomBarDisplayEnabledDefaultsKey];
+    [NSUserDefaults.standardUserDefaults synchronize];
+
+    /* Re-evaluate only the resident LiquidBar. Do not touch the native tab
+       bridge, player/feed layout, or route stack. This makes the switch purely
+       visual and avoids stealing taps from Douyin/other tweaks when hidden. */
+    if (gAWELastTabBar) {
+        AWEUpdateAlbumMorphVisibility((UIView *)gAWELastTabBar,
+                                      @"settings.bottom-display");
+    } else if (gAWEAlbumMorphController && gAWEAlbumMorphOverlayWindow) {
+        CGFloat fraction = MAX(gAWEBarLastVisibleFraction, 0.0);
+        AWEApplyAlbumMorphVisibleFraction(fraction,
+                                          @"settings.bottom-display", NO);
+    }
+
+    [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+}
+
 - (void)internalFullscreenSwitchChanged:(UISwitch *)sender {
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWEInternalFullscreenDefaultsKey];
@@ -15921,7 +15992,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c8 image=%@ ==========" ,
+            @"========== START build=1.0.56c9 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15988,7 +16059,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c8 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c9 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16003,7 +16074,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c8_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c9_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16314,7 +16385,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c8 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c9 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16457,7 +16528,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c8 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c9 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16688,7 +16759,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c8 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c9 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17469,7 +17540,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
     AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
     entry.identifier = @"AwemeLiquidBar.Settings";
     entry.title = @"LiquidBar";
-    entry.detail = @"1.0.56c8";
+    entry.detail = @"1.0.56c9";
     entry.type = 0;
     entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
     entry.cellType = 26;
@@ -18318,7 +18389,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 - (void)setHidden:(BOOL)hidden {
     BOOL changed = self.hidden != hidden;
 
-    /* 1.0.56c8: never veto Douyin's native hidden transition on Friends.
+    /* 1.0.56c9: never veto Douyin's native hidden transition on Friends.
        Blocking hidden here was an old layout-footprint workaround, but it also
        changes the native tab-bar state exactly while the Friends feed decides
        whether its player is visible/active. The replacement bar already stays
@@ -18882,7 +18953,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c8 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c9 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -18896,7 +18967,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                /* 1.0.56c8 foreground rule: Douyin owns player recovery.
+                /* 1.0.56c9 foreground rule: Douyin owns player recovery.
                    During DidBecomeActive do not reattach the native tab bar,
                    force route recovery, relayout Feed chrome, or steal key
                    window state. Those operations used to run in the same

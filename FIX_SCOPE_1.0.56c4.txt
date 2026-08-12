@@ -1,4 +1,4 @@
-1.0.56c8 scope lock
+1.0.56c9 scope lock
 
 Allowed changes:
 - native Douyin Settings shortcut entry only (DYYY-style two-layout hook);
