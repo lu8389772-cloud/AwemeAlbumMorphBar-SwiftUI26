@@ -1,37 +1,17 @@
-AwemeLiquidBar 1.0.56c4 focused test
+AwemeLiquidBar 1.0.56c6 test protocol
 
-A. Six-entry bottom bar / settings access
-1. Enable 首页 + 朋友/商城 + 发布 + 消息 + 我 + 搜索.
-2. Confirm no UIKit legacy dead “更多” controller appears.
-3. Confirm the right search capsule opens search normally.
-4. Tap the plugin-owned “更多”; open each overflow destination, especially “我”.
-5. Enable “双指长按仅在‘我’页面触发” and confirm it works on “我”.
-6. Disable the “我” bottom entry while that switch remains enabled; verify two-finger long press still opens settings globally as an emergency fallback.
+A. Bottom-entry maximum
+1. Open LiquidBar settings -> 新底栏按钮.
+2. Enable any five entries.
+3. Confirm the sixth switch becomes grey/disabled.
+4. Disable one entry; confirm the previously grey switch becomes available immediately.
+5. Confirm Search remains direct when enabled and no “更多” tab appears.
 
-B. Background / playback
-1. With “优先最高画质播放” enabled, play a Home video for 5 s.
-2. Background Douyin for 5–10 s, return, and resume/tap the current video.
-3. Verify there is no plugin-induced second pause after playback starts.
-4. Switch to Friends and open/play at least 3 videos; verify playback does not get stuck paused.
-5. Repeat once with highest-quality preference disabled to confirm native behavior is unchanged.
+B. Native Douyin Settings entry
+1. Open Douyin: 我 -> menu -> 设置.
+2. On the real Settings main page (账号/通用 sections), confirm a LiquidBar section/row exists.
+3. Tap LiquidBar and confirm the full existing LiquidBar settings controller opens.
+4. Return/reopen Settings and confirm the row is not duplicated.
 
-C. Friends unread badge
-1. Create a positive Friends unread count and confirm badge appears.
-2. Read/clear it until native count becomes 0.
-3. Confirm the LiquidBar Friends badge disappears instead of remaining as an empty red dot.
-
-D. Regression
-1. Fullscreen Home/profile/live preview geometry.
-2. Clean screen + status bar + comment protection.
-3. Save HUD.
-4. Top menu/category behavior.
-5. 1.0.56c2 performance behavior/no obvious extra heat.
-
-Native Douyin Settings entry (new in c4)
-- Open the Douyin left sidebar.
-- Locate the native "设置" shortcut.
-- A compact "LiquidBar" shortcut should appear beside it.
-- Tap LiquidBar: the existing LiquidBar settings sheet should open.
-- Verify this works even with "双指长按仅在我页面触发" enabled.
-- Close and reopen the sidebar several times; only one LiquidBar shortcut should exist.
-
+C. Regression
+- Fullscreen, clean screen/status bar, playback resume, Friends badge, auth36 unchanged.

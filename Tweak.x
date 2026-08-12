@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c4 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56c6 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -50,6 +50,32 @@
 @end
 
 @interface AWESearchViewController : UIViewController
+@end
+
+/* Minimal declarations for Douyin's native Settings model. DYKiller injects
+   its entry through these runtime classes instead of the sidebar view tree. */
+@interface AWESettingItemModel : NSObject
+@property(nonatomic, copy) NSString *identifier;
+@property(nonatomic, copy) NSString *title;
+@property(nonatomic, copy) NSString *detail;
+@property(nonatomic, assign) NSInteger type;
+@property(nonatomic, assign) NSInteger cellType;
+@property(nonatomic, assign) NSInteger colorStyle;
+@property(nonatomic, assign) BOOL isEnable;
+@property(nonatomic, copy) NSString *svgIconImageName;
+@property(nonatomic, copy) void (^cellTappedBlock)(void);
+@end
+
+@interface AWESettingSectionModel : NSObject
+@property(nonatomic, copy) NSString *sectionHeaderTitle;
+@property(nonatomic, assign) CGFloat sectionHeaderHeight;
+@property(nonatomic, assign) NSInteger type;
+@property(nonatomic, copy) NSArray *itemArray;
+@end
+
+@interface AWESettingsViewModel : NSObject
+@property(nonatomic, copy) NSArray *sectionDataArray;
+@property(nonatomic, weak) id controllerDelegate;
 @end
 
 @interface AWEIMOptimizeAudioInputTouchView : UIView
@@ -225,7 +251,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c4: cache the already-identified native top-category views so the
+/* 1.0.56c6: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -591,9 +617,10 @@ static NSSet<NSString *> *AWEStoredAlbumMorphEnabledItemIdentifiers(void) {
     NSSet<NSString *> *allowed = [NSSet setWithArray:AWEAlbumMorphAllItemIdentifiers()];
     NSMutableSet<NSString *> *result = [NSMutableSet set];
     for (id value in candidate) {
-        if ([value isKindOfClass:NSString.class] && [allowed containsObject:value]) {
-            [result addObject:value];
-        }
+        if (![value isKindOfClass:NSString.class] || ![allowed containsObject:value] ||
+            [result containsObject:value]) continue;
+        if (result.count >= 5) break;
+        [result addObject:value];
     }
     NSUInteger selectableCount = 0;
     for (NSString *identifier in result) {
@@ -632,7 +659,9 @@ static void AWESaveAlbumMorphItemConfiguration(NSArray<NSString *> *order,
 
     NSMutableArray<NSString *> *cleanEnabled = [NSMutableArray array];
     for (NSString *identifier in cleanOrder) {
-        if ([enabled containsObject:identifier]) [cleanEnabled addObject:identifier];
+        if (![enabled containsObject:identifier]) continue;
+        if (cleanEnabled.count >= 5) break;
+        [cleanEnabled addObject:identifier];
     }
     [NSUserDefaults.standardUserDefaults setObject:cleanOrder
         forKey:kAWEAlbumMorphItemOrderDefaultsKey];
@@ -854,7 +883,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c4_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c6_interaction.log"] copy];
     });
     return path;
 }
@@ -923,7 +952,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c4_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c6_probe.log"] copy];
     });
     return path;
 }
@@ -8738,7 +8767,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c4 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c6 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -14365,7 +14394,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     (void)tableView; (void)section;
-    return @"至少保留两个页面按钮。点右上角“编辑”可拖动普通按钮；搜索始终固定为右侧独立圆钮。满配置不会缩放整条底栏或单独压扁左右两端，只由系统等宽分配内部按钮。";
+    return @"最多开启五个底栏入口；当已开启五个时，其余开关会自动变灰。至少保留两个页面按钮。点右上角“编辑”可拖动普通按钮；搜索始终固定为右侧独立圆钮。";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -14384,13 +14413,21 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     cell.imageView.image = [UIImage systemImageNamed:AWEAlbumMorphItemSymbol(identifier)];
 
     UISwitch *toggle = [UISwitch new];
-    toggle.on = [self.enabledIdentifiers containsObject:identifier];
+    BOOL currentlyEnabled = [self.enabledIdentifiers containsObject:identifier];
+    BOOL canEnable = currentlyEnabled || self.enabledIdentifiers.count < 5;
+    toggle.on = currentlyEnabled;
+    toggle.enabled = canEnable;
     toggle.onTintColor = AWEStoredAccentColor();
     toggle.accessibilityIdentifier = identifier;
     [toggle addTarget:self action:@selector(itemSwitchChanged:)
       forControlEvents:UIControlEventValueChanged];
     cell.accessoryView = toggle;
     cell.showsReorderControl = ![identifier isEqualToString:@"search"];
+    if (@available(iOS 13.0, *)) {
+        cell.textLabel.textColor = canEnable ? UIColor.labelColor : UIColor.tertiaryLabelColor;
+        cell.detailTextLabel.textColor = canEnable ? UIColor.secondaryLabelColor : UIColor.tertiaryLabelColor;
+        cell.imageView.tintColor = canEnable ? UIColor.labelColor : UIColor.tertiaryLabelColor;
+    }
     return cell;
 }
 
@@ -14445,6 +14482,21 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     if (!identifier.length) return;
 
     if (sender.isOn) {
+        if (![self.enabledIdentifiers containsObject:identifier] &&
+            self.enabledIdentifiers.count >= 5) {
+            sender.on = NO;
+            UINotificationFeedbackGenerator *feedback = [UINotificationFeedbackGenerator new];
+            [feedback notificationOccurred:UINotificationFeedbackTypeWarning];
+            UIAlertController *alert = [UIAlertController
+                alertControllerWithTitle:@"最多开启五个入口"
+                message:@"请先关闭一个已经启用的底栏入口，再开启当前项目。"
+                preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"知道了"
+                style:UIAlertActionStyleDefault handler:nil]];
+            [self presentViewController:alert animated:YES completion:nil];
+            [self.tableView reloadData];
+            return;
+        }
         [self.enabledIdentifiers addObject:identifier];
     } else {
         [self.enabledIdentifiers removeObject:identifier];
@@ -14466,6 +14518,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     }
 
     [self persistAndApply];
+    [self.tableView reloadData];
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
 
@@ -14529,7 +14582,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c4";
+    self.title = @"LiquidBar 设置 · 1.0.56c6";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15846,7 +15899,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c4 image=%@ ==========" ,
+            @"========== START build=1.0.56c6 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -15913,7 +15966,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c4 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c6 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -15928,7 +15981,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c4_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c6_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16041,117 +16094,8 @@ static void AWEPresentLiquidSettingsFromNativeEntry(UIViewController *host) {
     [top presentViewController:navigation animated:YES completion:nil];
 }
 
-@interface AWELiquidNativeSettingsEntryTarget : NSObject
-+ (instancetype)sharedTarget;
-- (void)openLiquidBarSettings:(UIButton *)sender;
-@end
-
-@implementation AWELiquidNativeSettingsEntryTarget
-
-+ (instancetype)sharedTarget {
-    static AWELiquidNativeSettingsEntryTarget *target = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        target = [AWELiquidNativeSettingsEntryTarget new];
-    });
-    return target;
-}
-
-- (void)openLiquidBarSettings:(UIButton *)sender {
-    UIResponder *responder = sender;
-    UIViewController *host = nil;
-    for (NSUInteger depth = 0; responder && depth < 24; depth++) {
-        if ([responder isKindOfClass:UIViewController.class]) {
-            host = (UIViewController *)responder;
-            break;
-        }
-        responder = responder.nextResponder;
-    }
-    if (!host) {
-        UIWindow *window = sender.window ?: AWEActiveMainWindow();
-        host = window ? AWETopViewControllerFrom(window.rootViewController) : nil;
-    }
-    AWEPresentLiquidSettingsFromNativeEntry(host);
-}
-
-@end
-
-static UIView *AWELiquidNativeSettingsShortcutHost(UIView *settingsView) {
-    if (!settingsView) return nil;
-    UIView *host = settingsView;
-    /* Match DYYY's current hierarchy choice first. */
-    for (NSUInteger i = 0; i < 3 && host.superview; i++) {
-        host = host.superview;
-    }
-    return host ?: settingsView.superview ?: settingsView;
-}
-
-static void AWEInstallLiquidNativeSettingsShortcut(UIView *settingsView) {
-    if (!settingsView || !settingsView.window) return;
-    if (![settingsView.accessibilityLabel isEqualToString:@"设置"]) return;
-
-    UIView *host = AWELiquidNativeSettingsShortcutHost(settingsView);
-    if (!host) return;
-
-    UIButton *button = (UIButton *)[host viewWithTag:kAWELiquidNativeSettingsShortcutTag];
-    if (![button isKindOfClass:UIButton.class]) {
-        button = [UIButton buttonWithType:UIButtonTypeSystem];
-        button.tag = kAWELiquidNativeSettingsShortcutTag;
-        button.accessibilityLabel = @"LiquidBar设置";
-        [button setTitle:@"LiquidBar" forState:UIControlStateNormal];
-        button.titleLabel.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightSemibold];
-        button.layer.cornerRadius = 9.0;
-        button.layer.cornerCurve = kCACornerCurveContinuous;
-        button.clipsToBounds = YES;
-        [button addTarget:[AWELiquidNativeSettingsEntryTarget sharedTarget]
-                   action:@selector(openLiquidBarSettings:)
-         forControlEvents:UIControlEventTouchUpInside];
-        [host addSubview:button];
-    }
-
-    UIColor *textColor = nil;
-    if (@available(iOS 13.0, *)) {
-        textColor = UIColor.labelColor;
-        button.backgroundColor = [UIColor.secondarySystemBackgroundColor colorWithAlphaComponent:0.72];
-    } else {
-        textColor = UIColor.blackColor;
-        button.backgroundColor = [UIColor colorWithWhite:0.92 alpha:0.85];
-    }
-    [button setTitleColor:textColor forState:UIControlStateNormal];
-
-    /* Use the real window-space position of the native Settings host instead of
-       guessing left/right screen halves.  DYYY uses fixed offsets for its two
-       layout variants; converting the live rect keeps the same relationship
-       while tolerating current Douyin spacing changes. */
-    CGRect settingsRect = [settingsView convertRect:settingsView.bounds toView:host];
-    CGFloat width = 72.0;
-    CGFloat height = 32.0;
-    CGFloat gap = 8.0;
-    CGFloat x = CGRectGetMinX(settingsRect) - width - gap;
-    if (x < 8.0) {
-        x = CGRectGetMaxX(settingsRect) + gap;
-    }
-    CGFloat maxX = MAX(8.0, CGRectGetWidth(host.bounds) - width - 8.0);
-    x = MIN(MAX(8.0, x), maxX);
-    CGFloat y = CGRectGetMidY(settingsRect) - height * 0.5;
-    if (!isfinite(y)) y = 8.0;
-    y = MIN(MAX(4.0, y), MAX(4.0, CGRectGetHeight(host.bounds) - height - 4.0));
-    button.frame = CGRectIntegral(CGRectMake(x, y, width, height));
-    button.hidden = NO;
-    button.alpha = 1.0;
-    [host bringSubviewToFront:button];
-}
-
-static void AWEScheduleLiquidNativeSettingsShortcut(UIView *settingsView) {
-    if (!settingsView) return;
-    __weak UIView *weakView = settingsView;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        UIView *strongView = weakView;
-        if (!strongView) return;
-        AWEInstallLiquidNativeSettingsShortcut(strongView);
-    });
-}
+/* The Settings-page entry below calls AWEPresentLiquidSettingsFromNativeEntry
+   directly through AWESettingsViewModel.controllerDelegate. */
 
 @interface AWESettingsGestureTarget : NSObject <UIGestureRecognizerDelegate>
 @end
@@ -16340,7 +16284,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c4 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c6 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16483,7 +16427,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c4 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c6 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16701,7 +16645,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c4 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c6 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17458,46 +17402,55 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 %end
 
 
-/* Native Douyin Settings shortcut. DYYY currently supports both of these
-   sidebar layout classes; keep both without touching the settings table model. */
-%hook AWELeftSideBarTopIconHorizontalView
+/* Native Douyin Settings-page entry. DYKiller hooks AWESettingsViewModel's
+   sectionDataArray, recognizes the real main Settings page by its “账号”
+   section, and inserts a normal AWESettingItemModel section. Mirror that
+   model-level route rather than depending on sidebar accessibility layouts. */
+%hook AWESettingsViewModel
 
-- (void)didMoveToSuperview {
-    %orig;
-    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
-}
+- (NSArray *)sectionDataArray {
+    NSArray *sections = %orig;
+    if (![sections isKindOfClass:NSArray.class]) return sections;
 
-- (void)didMoveToWindow {
-    %orig;
-    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    if ([((UIView *)self).accessibilityLabel isEqualToString:@"设置"]) {
-        AWEInstallLiquidNativeSettingsShortcut((UIView *)self);
+    BOOL isMainSettingsPage = NO;
+    BOOL alreadyInserted = NO;
+    for (id obj in sections) {
+        if (![obj isKindOfClass:%c(AWESettingSectionModel)]) continue;
+        AWESettingSectionModel *section = (AWESettingSectionModel *)obj;
+        NSString *header = section.sectionHeaderTitle;
+        if ([header isEqualToString:@"账号"]) isMainSettingsPage = YES;
+        if ([header isEqualToString:@"LiquidBar"]) alreadyInserted = YES;
     }
-}
+    if (!isMainSettingsPage || alreadyInserted) return sections;
 
-%end
+    AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
+    entry.identifier = @"AwemeLiquidBar.Settings";
+    entry.title = @"LiquidBar";
+    entry.detail = @"1.0.56c6";
+    entry.type = 0;
+    entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
+    entry.cellType = 26;
+    entry.colorStyle = 0;
+    entry.isEnable = YES;
 
-%hook AWELeftSideBarTopRightLayoutView
+    __weak AWESettingsViewModel *weakSelf = self;
+    entry.cellTappedBlock = ^{
+        AWESettingsViewModel *strongSelf = weakSelf;
+        if (!strongSelf) return;
+        UIViewController *host = (UIViewController *)strongSelf.controllerDelegate;
+        if (!host) host = AWETopViewControllerFrom(AWEActiveMainWindow().rootViewController);
+        AWEPresentLiquidSettingsFromNativeEntry(host);
+    };
 
-- (void)didMoveToSuperview {
-    %orig;
-    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
-}
+    AWESettingSectionModel *liquidSection = [[%c(AWESettingSectionModel) alloc] init];
+    liquidSection.itemArray = @[entry];
+    liquidSection.type = 0;
+    liquidSection.sectionHeaderHeight = 40.0;
+    liquidSection.sectionHeaderTitle = @"LiquidBar";
 
-- (void)didMoveToWindow {
-    %orig;
-    AWEScheduleLiquidNativeSettingsShortcut((UIView *)self);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    if ([((UIView *)self).accessibilityLabel isEqualToString:@"设置"]) {
-        AWEInstallLiquidNativeSettingsShortcut((UIView *)self);
-    }
+    NSMutableArray *result = [NSMutableArray arrayWithArray:sections];
+    [result insertObject:liquidSection atIndex:0];
+    return result;
 }
 
 %end
@@ -18913,7 +18866,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c4 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c6 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
