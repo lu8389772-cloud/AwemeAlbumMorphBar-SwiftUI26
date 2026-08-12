@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56e is a narrow regression fix over 1.0.56c.
+AwemeLiquidBar 1.0.56g is a narrow regression fix over 1.0.56c.
 
 Changes only:
 - Messages root is no longer classified as a chat/session detail route.

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56e — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
+ AwemeLiquidBar 1.0.56g — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth36
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -106,6 +106,7 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 - (void)setResolvedInterfaceStyleRaw:(NSInteger)rawValue;
 - (void)setMorphBarVisible:(BOOL)visible animated:(BOOL)animated;
 - (void)setVisibleFraction:(CGFloat)fraction animated:(BOOL)animated;
+- (void)setHorizontalRouteOffset:(CGFloat)offset;
 - (void)setVerticalOffset:(CGFloat)offset;
 - (void)syncSelectedOriginalIndex:(NSInteger)index;
 - (NSInteger)currentOriginalIndex;
@@ -852,7 +853,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56e_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56g_interaction.log"] copy];
     });
     return path;
 }
@@ -921,7 +922,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56e_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56g_probe.log"] copy];
     });
     return path;
 }
@@ -9043,7 +9044,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56e clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56g clean screen v2 (display-only, persistent across reuse)
 
 static BOOL AWEStableCleanIsDynamicProgressView(UIView *view) {
     if (!view) return NO;
@@ -11247,10 +11248,12 @@ static void AWEAlignAlbumMorphOverlayToOriginalBar(
         gAWEAlbumMorphLastAlignedSourceWindow = sourceWindow;
     }
 
-    /* Mirror the horizontal displacement of Douyin's native tab bar. This is
-       what keeps only the exposed slice visible when Settings slides in from
-       the right. Interactive chat returns are still driven solely by the
-       percentComplete visibility mask. */
+    /* Follow Douyin's native tab bar horizontally, but let the Swift
+       controller own the transform so the user's vertical offset is composed
+       instead of overwritten.  A Settings drawer shifts the native bar left;
+       mirroring that exact minX naturally leaves the native bar's RIGHT-hand
+       slice visible in the exposed page strip.  Interactive chat returns keep
+       their proven percentComplete mask and force this route offset back to 0. */
     CGFloat routeOffsetX = 0.0;
     id<UIViewControllerTransitionCoordinator> routeCoordinator =
         AWECurrentBarTransitionCoordinator();
@@ -11262,21 +11265,19 @@ static void AWEAlignAlbumMorphOverlayToOriginalBar(
             CGFloat sourceWidth = CGRectGetWidth(sourceWindow.bounds);
             CGFloat barWidth = CGRectGetWidth(barFrameInWindow);
             CGFloat minX = CGRectGetMinX(barFrameInWindow);
-            if (sourceWidth > 0.0 && barWidth >= sourceWidth * 0.72 &&
-                fabs(minX) >= 3.0 && fabs(minX) <= sourceWidth * 1.25) {
-                routeOffsetX = minX;
-            }
+            CGRect intersection = CGRectIntersection(sourceWindow.bounds, barFrameInWindow);
+            CGFloat visibleWidth = (CGRectIsNull(intersection) || CGRectIsEmpty(intersection))
+                ? 0.0 : CGRectGetWidth(intersection);
+            BOOL partialNativeExposure = sourceWidth > 0.0 &&
+                barWidth >= sourceWidth * 0.72 &&
+                visibleWidth > 1.0 &&
+                visibleWidth < sourceWidth - 3.0 &&
+                fabs(minX) >= 3.0 &&
+                fabs(minX) <= sourceWidth * 1.25;
+            if (partialNativeExposure) routeOffsetX = minX;
         } @catch (__unused NSException *exception) {}
     }
-    CGAffineTransform routeTransform = fabs(routeOffsetX) > 0.5
-        ? CGAffineTransformMakeTranslation(routeOffsetX, 0.0)
-        : CGAffineTransformIdentity;
-    if (!CGAffineTransformEqualToTransform(gAWEAlbumMorphController.view.transform,
-                                            routeTransform)) {
-        [UIView performWithoutAnimation:^{
-            gAWEAlbumMorphController.view.transform = routeTransform;
-        }];
-    }
+    [gAWEAlbumMorphController setHorizontalRouteOffset:routeOffsetX];
 
     CGFloat savedOffset = AWEStoredVerticalOffset();
     static CGFloat lastAppliedOffset = CGFLOAT_MAX;
@@ -14859,7 +14860,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56e";
+    self.title = @"LiquidBar 设置 · 1.0.56g";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16180,7 +16181,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56e image=%@ ==========" ,
+            @"========== START build=1.0.56g image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16247,7 +16248,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56e diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56g diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16262,7 +16263,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56e_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56g_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16502,7 +16503,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56e internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56g internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
     return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
@@ -16821,10 +16822,10 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
    shorter geometry. It also strips the detail comment bar's opaque blocker. */
 %hook UIView
 - (void)setBackgroundColor:(UIColor *)backgroundColor {
-    if (AWEInternalFullscreenActive() && AWEFSViewIsInDetailContext((UIView *)self)) {
-        %orig(UIColor.clearColor);
-        return;
-    }
+    /* Never clear every UIView in profile/detail. That broad 0.5-era rule also
+       erased Douyin's native image/video progress tracks. The opaque comment
+       blocker is handled narrowly by AWECommentInputBackgroundView and the
+       Swift CommentInputContainer hook below. */
     %orig(backgroundColor);
 }
 
@@ -16839,19 +16840,6 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 - (void)layoutSubviews {
     %orig;
     UIView *view = (UIView *)self;
-    if (AWEInternalFullscreenActive() && AWEFSViewIsInDetailContext(view)) {
-        CGFloat tabHeight = AWEFSTabBarHeight();
-        CGFloat height = CGRectGetHeight(view.bounds);
-        CGFloat width = CGRectGetWidth(view.bounds);
-        CGFloat screenWidth = CGRectGetWidth(UIScreen.mainScreen.bounds);
-        BOOL barLike = tabHeight > 0.0 && fabs(height - tabHeight) <= 4.0 &&
-                       width >= screenWidth * 0.88;
-        if (barLike || AWEFSColorIsOpaqueNearBlack(view.backgroundColor)) {
-            view.backgroundColor = UIColor.clearColor;
-            view.layer.backgroundColor = UIColor.clearColor.CGColor;
-            view.opaque = NO;
-        }
-    }
     if (gAWEStableCleanScreenEnabled && AWEStableCleanClassIsExplicitTarget(view)) {
         AWEStableCleanSuppressView(view, YES);
     }
@@ -16925,9 +16913,17 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 
 %hook AWEStoryProgressContainerView
 - (void)setCenter:(CGPoint)center {
-    /* Keep Douyin's native profile/detail image progress geometry. */
+    UIView *progressView = (UIView *)self;
+    /* Keep the original fullscreen correction on the Home feed only. Profile /
+       detail owns different geometry and must retain Douyin's native center. */
+    if (AWEInternalFullscreenActive() && !AWEFSViewIsInDetailContext(progressView)) {
+        UIViewController *vc = AWEFSViewControllerForView(progressView);
+        if ([NSStringFromClass(vc.class) isEqualToString:@"AWEFeedPlayControlImpl.PureModePageCellViewController"]) {
+            center.y -= AWEFSTabBarHeight();
+        }
+    }
     %orig(center);
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView(progressView, YES);
 }
 - (void)layoutSubviews {
     %orig;
@@ -16984,8 +16980,15 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 %hook AWEPlayInteractionProgressContainerView
 - (void)layoutSubviews {
     %orig;
-    /* Do not clear arbitrary native progress subviews in fullscreen mode. */
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+    UIView *progressView = (UIView *)self;
+    /* Home fullscreen historically needs its plain backdrop cleared; doing the
+       same in profile/detail removes the real progress track. */
+    if (AWEInternalFullscreenActive() && !AWEFSViewIsInDetailContext(progressView)) {
+        for (UIView *subview in [progressView.subviews copy]) {
+            if ([subview class] == UIView.class) subview.backgroundColor = UIColor.clearColor;
+        }
+    }
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView(progressView, YES);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -17003,8 +17006,18 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 %hook AWEDPlayerProgressContainerView
 - (void)layoutSubviews {
     %orig;
-    /* Preserve Douyin's native profile/detail video progress track. */
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView((UIView *)self, YES);
+    UIView *progressView = (UIView *)self;
+    if (AWEInternalFullscreenActive() && !AWEFSViewIsInDetailContext(progressView)) {
+        for (UIView *subview in [progressView.subviews copy]) {
+            UIColor *background = subview.backgroundColor;
+            if (!background) continue;
+            CGFloat white = 0.0, alpha = 0.0;
+            if ([background getWhite:&white alpha:&alpha] && white < 0.2) {
+                subview.backgroundColor = UIColor.clearColor;
+            }
+        }
+    }
+    if (gAWEStableCleanScreenEnabled) AWEStableCleanSuppressView(progressView, YES);
 }
 - (void)didMoveToWindow {
     %orig;
@@ -19012,7 +19025,7 @@ static void AWEPrimeFriendsNativeLayoutFootprint(UIViewController *controller,
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56e os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56g os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */

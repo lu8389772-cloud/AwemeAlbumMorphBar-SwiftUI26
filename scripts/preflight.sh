@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56e'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56e-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56e'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56e'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56e_interaction.log'),
+    ('control', control, 'Version: 1.0.56g'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56g-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56g'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56g'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56g_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -33,12 +33,13 @@ for token in [
     'applyUnreadBadges()', 'applyCompactUnreadBadgeScale(in: tabBar)',
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
+    '@objc(setHorizontalRouteOffset:)', 'horizontalRouteOffset',
 ]:
     if token not in swift:
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56e', 'LiquidBar 设置 · 1.0.56e',
+    'AwemeLiquidBar 1.0.56g', 'LiquidBar 设置 · 1.0.56g',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -63,7 +64,8 @@ required_objc = [
     'AWEReturnRevealGraceIsActive()', 'interactiveReveal',
     'AWEControllerViewMeaningfullyIntersectsItsWindow',
     'AWEClassNameLooksLikeDirectConversationController',
-    'CGAffineTransformMakeTranslation(routeOffsetX, 0.0)',
+    '[gAWEAlbumMorphController setHorizontalRouteOffset:routeOffsetX];',
+    'BOOL partialNativeExposure = sourceWidth > 0.0',
     'AWEStableCleanShouldSuppressElementStack', 'isKindOfClass:cls',
     'BOOL menuOwnsCategorySwitching = AWETopMenuMorphEnabled();',
     'AWECurrentOriginalSecondBadgeValue', 'AWECurrentOriginalMessagesBadgeValue',
@@ -118,7 +120,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56e intentionally has one custom group for the
+# Logos structural audit. 1.0.56g intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -181,7 +183,7 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56e clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56g clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
@@ -190,5 +192,5 @@ for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isK
     if forbidden_clean in clean_chunk:
         raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-print('AwemeLiquidBar 1.0.56e internal-fullscreen/clean-v2/native-badges preflight passed')
+print('AwemeLiquidBar 1.0.56g internal-fullscreen/clean-v2/native-badges preflight passed')
 PY2

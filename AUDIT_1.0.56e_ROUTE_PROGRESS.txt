@@ -1,4 +1,4 @@
-1.0.56e targeted regression audit
+1.0.56g targeted regression audit
 
 1) Messages root:
 - steady visibility uses AWECurrentMainTabIndex (resident LiquidBar selection), not stale native selectedIndex.
