@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c13 is a narrow stability follow-up to 1.0.56c2.
+AwemeLiquidBar 1.0.56c14 is a narrow stability follow-up to 1.0.56c2.
 It fixes six-entry bottom-bar overflow/settings lockout, background-resume playback quality interference, and Friends unread badge zero-state.
 All 1.0.56c2 performance/fullscreen/clean-screen behavior is otherwise retained.
 Use the normal Xcode 27 / iOS 27 cloud workflow for the full project.

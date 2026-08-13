@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.56c13
+Version: 1.0.56c14
 Architecture: iphoneos-arm
 Description: Stable auth37 build with article-feed bar recovery, IM/search route isolation, single-category top-label correction, gesture-safe fullscreen feed sizing, compatibility-scoped bottom-bar release, robust clean-screen/status-bar handling, native badges, and Liquid Glass UI.
 Maintainer: xyy

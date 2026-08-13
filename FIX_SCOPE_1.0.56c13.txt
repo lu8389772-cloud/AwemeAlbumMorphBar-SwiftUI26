@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c13 — c12 corrections + clean-screen hard guard
+AwemeLiquidBar 1.0.56c14 — c12 corrections + clean-screen hard guard
 
 Base: 1.0.56c12 route/feed/chat/search fixes.
 
