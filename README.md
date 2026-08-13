@@ -1,4 +1,4 @@
-# AwemeLiquidBar 1.0.56c14
+# AwemeLiquidBar 1.0.56c15
 
 Stable follow-up based on 1.0.56c12, keeping the validated 1.0.56c10 playback lifecycle and bottom-bar release behavior.
 
@@ -11,7 +11,7 @@ Stable follow-up based on 1.0.56c12, keeping the validated 1.0.56c10 playback li
 - “显示液态底栏” remains a true ownership-release mode for the two compatibility accounts only.
 - Foreground/Friends playback lifecycle isolation from 1.0.56c8 remains unchanged.
 
-## 1.0.56c14 corrections
+## 1.0.56c15 corrections
 - Authorization table is corrected to 37 unique users. `Hoeyc_0505` was already in the original table and is no longer duplicated; `0416xxd` remains authorized.
 - The bottom-bar ownership-release option is still visible/usable only for `Hoeyc_0505` and `0416xxd`; all other authorized users are forced to the normal LiquidBar-on path and do not see that setting.
 - Clean screen now has a source-level hard no-show gate. Route/lifecycle/pause/selection callbacks may keep bookkeeping state, but cannot reveal the LiquidBar overlay, tab bar, or search proxy while clean screen is active.

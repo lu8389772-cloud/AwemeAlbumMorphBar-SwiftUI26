@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c14 test protocol
+AwemeLiquidBar 1.0.56c15 test protocol
 
 A. c12 route regressions
 1. Home -> article/read card -> continue swiping: LiquidBar must return/remain available on normal feed cards.

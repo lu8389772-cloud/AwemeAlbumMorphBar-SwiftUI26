@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c14 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth37 + visual-only bottom-bar toggle
+ AwemeLiquidBar 1.0.56c15 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth37 + visual-only bottom-bar toggle
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -254,7 +254,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c14: cache the already-identified native top-category views so the
+/* 1.0.56c15: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -531,7 +531,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEBottomBarDisplayEnabled(void) {
-    /* 1.0.56c14: true bottom-bar ownership release is a two-account
+    /* 1.0.56c15: true bottom-bar ownership release is a two-account
        compatibility entitlement. Everyone else is forced to the normal
        LiquidBar-on path even if an old defaults value was left as OFF. */
     if (!AWECustomBottomBarReleaseAllowed()) return YES;
@@ -901,7 +901,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c14_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c15_interaction.log"] copy];
     });
     return path;
 }
@@ -970,7 +970,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c14_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c15_probe.log"] copy];
     });
     return path;
 }
@@ -3993,7 +3993,7 @@ static void AWEHideOriginalTabBarContents(UIView *tabBar) {
      every direct child here belongs to Douyin. Keep objects alive and enabled
      for programmatic forwarding, but remove only their visual output.
 
-     1.0.56c14 also preserves each child's pre-LiquidBar state so OFF can truly
+     1.0.56c15 also preserves each child's pre-LiquidBar state so OFF can truly
      hand the native host back to Douyin/another tweak instead of leaving the
      original bar visually gutted after our overlay is removed.
     */
@@ -4080,7 +4080,15 @@ static BOOL AWEControllerTreeContainsSearchRoute(UIViewController *controller,
     if (!controller || depth > 12) return NO;
 
     NSString *className = NSStringFromClass(controller.class);
-    if ([className hasPrefix:@"AWESearch"]) return YES;
+    /* 1.0.56c15: Douyin also uses AWESearchFeedArticleViewController as the
+       renderer for article cards reached by ordinary vertical swiping on the
+       Home feed. The class name contains AWESearch even when no Search route
+       owns the controller. Treat that renderer as neutral by itself; a real
+       Search flow is still detected by gAWESearchPageVisible or by another
+       AWESearch controller retained in the navigation stack. */
+    BOOL neutralHomeArticleRenderer =
+        [className hasPrefix:@"AWESearchFeedArticleViewController"];
+    if ([className hasPrefix:@"AWESearch"] && !neutralHomeArticleRenderer) return YES;
 
     UIViewController *presented = controller.presentedViewController;
     if (presented && !presented.isBeingDismissed &&
@@ -4096,7 +4104,9 @@ static BOOL AWEControllerTreeContainsSearchRoute(UIViewController *controller,
            pushed, so keep the bar suppressed for the whole search route. */
         for (UIViewController *item in navigation.viewControllers) {
             NSString *itemName = NSStringFromClass(item.class);
-            if ([itemName hasPrefix:@"AWESearch"]) return YES;
+            BOOL neutralArticle =
+                [itemName hasPrefix:@"AWESearchFeedArticleViewController"];
+            if ([itemName hasPrefix:@"AWESearch"] && !neutralArticle) return YES;
         }
 
         UIViewController *visible = navigation.visibleViewController;
@@ -4368,9 +4378,17 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
        leave the original tab-bar object alive underneath. Since LiquidBar is
        hosted in an independent UIWindow, hierarchy clipping cannot hide it for
        us. Treat editor/crop/preview controllers as explicit non-root routes. */
+    /* 1.0.56c15: AWEProfileAvatarViewController is an unambiguous pushed
+       editor and must suppress the independent overlay regardless of the
+       numeric tab index. Current Douyin builds can report the visible Me tab
+       as index 3 when Publish is not represented as a normal tab, so gating
+       avatar ownership on a hard-coded ==4 left LiquidBar covering the editor. */
+    BOOL exactProfileAvatarDestination =
+        [className isEqualToString:@"AWEProfileAvatarViewController"] ||
+        [lower hasPrefix:@"aweprofileavatarviewcontroller"];
     BOOL profileEditingDestination = controllerLike &&
-        AWECurrentOriginalMainTabIndex() == 4 &&
-        ([lower containsString:@"avatar"] ||
+        (exactProfileAvatarDestination ||
+         ([lower containsString:@"avatar"] ||
          [lower containsString:@"profileedit"] ||
          [lower containsString:@"editprofile"] ||
          [lower containsString:@"userinfoedit"] ||
@@ -4380,7 +4398,7 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
          [lower containsString:@"portraitedit"] ||
          [lower containsString:@"crop"] ||
          [lower containsString:@"imagepicker"] ||
-         [lower containsString:@"photopicker"]);
+         [lower containsString:@"photopicker"]));
 
     return directConversation || imMediaDestination || commentDestination || forwardDestination ||
            systemActivityDestination || systemDocumentDestination ||
@@ -4842,7 +4860,7 @@ static void AWETrackMessagingComposer(UIView *view) {
 }
 
 static BOOL AWECurrentMessagingComposerVisible(void) {
-    /* 1.0.56c14: an IM composer can remain attached to a live UIWindow after
+    /* 1.0.56c15: an IM composer can remain attached to a live UIWindow after
        the user has already switched from Messages back to Home. 1.0.56c13
        treated window attachment alone as route ownership, so that stale view
        suppressed LiquidBar and disabled fullscreen on later Home/article/photo
@@ -5037,7 +5055,7 @@ static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
                                                BOOL animated) {
     if (!gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
 
-    /* 1.0.56c14: hard no-show gate for clean screen. Recovery, route, pause,
+    /* 1.0.56c15: hard no-show gate for clean screen. Recovery, route, pause,
        selection and lifecycle callbacks are allowed to keep their bookkeeping,
        but none of them may make LiquidBar visible for even one compositor frame
        while clean screen is active. This avoids the historical one/two-frame
@@ -9022,7 +9040,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c14 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c15 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -11780,7 +11798,7 @@ static BOOL AWEEnsureAlbumMorphOverlayWindow(UIWindow *sourceWindow) {
 
 static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
                                              BOOL forceVisible) {
-    /* 1.0.56c14: when the visual bottom bar is disabled, LiquidBar no longer
+    /* 1.0.56c15: when the visual bottom bar is disabled, LiquidBar no longer
        owns the native tab-bar host at all. Fully tear down our resident
        UITabBar/overlay and restore the original AWENormalModeTabBar so another
        tweak can attach to the same native host. This is deliberately stronger
@@ -14887,7 +14905,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c14";
+    self.title = @"LiquidBar 设置 · 1.0.56c15";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -16280,7 +16298,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c14 image=%@ ==========" ,
+            @"========== START build=1.0.56c15 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16347,7 +16365,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c14 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c15 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16362,7 +16380,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c14_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c15_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16673,7 +16691,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c14 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c15 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEImmediateSensitiveDestinationBlocksFullscreen(void) {
     for (UIViewController *controller in AWESensitiveVisibleControllers()) {
@@ -16696,7 +16714,7 @@ static BOOL AWEImmediateSensitiveDestinationBlocksFullscreen(void) {
 static BOOL AWEInternalFullscreenActive(void) {
     if (!AWEPluginFeaturesEnabled() || !AWEInternalFullscreenEnabled()) return NO;
 
-    /* 1.0.56c14 route ownership: fullscreen geometry belongs to feed/detail
+    /* 1.0.56c15 route ownership: fullscreen geometry belongs to feed/detail
        media, never to Messages. A forwarded work can temporarily remove its
        text composer while AWEIMAwemeMediaDisplay/RichContent controllers stay
        visible; checking only the composer therefore let fullscreen/recovery
@@ -16853,7 +16871,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c14 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c15 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -17100,7 +17118,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c14 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c15 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17895,7 +17913,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
     AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
     entry.identifier = @"AwemeLiquidBar.Settings";
     entry.title = @"LiquidBar";
-    entry.detail = @"1.0.56c14";
+    entry.detail = @"1.0.56c15";
     entry.type = 0;
     entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
     entry.cellType = 26;
@@ -18762,7 +18780,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 - (void)setHidden:(BOOL)hidden {
     BOOL changed = self.hidden != hidden;
 
-    /* 1.0.56c14: never veto Douyin's native hidden transition on Friends.
+    /* 1.0.56c15: never veto Douyin's native hidden transition on Friends.
        Blocking hidden here was an old layout-footprint workaround, but it also
        changes the native tab-bar state exactly while the Friends feed decides
        whether its player is visible/active. The replacement bar already stays
@@ -19345,7 +19363,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c14 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c15 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -19359,7 +19377,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                /* 1.0.56c14 foreground rule: Douyin owns player recovery.
+                /* 1.0.56c15 foreground rule: Douyin owns player recovery.
                    During DidBecomeActive do not reattach the native tab bar,
                    force route recovery, relayout Feed chrome, or steal key
                    window state. Those operations used to run in the same

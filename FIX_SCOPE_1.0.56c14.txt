@@ -1,4 +1,4 @@
-AwemeLiquidBar 1.0.56c14 — route ownership correction
+AwemeLiquidBar 1.0.56c15 — route ownership correction
 
 Based on 1.0.56c13 logs, this build fixes two concrete ownership bugs:
 1. A stale IM composer can remain in a live window after switching to Home. It no longer suppresses LiquidBar or fullscreen unless Messages is the selected main tab.
