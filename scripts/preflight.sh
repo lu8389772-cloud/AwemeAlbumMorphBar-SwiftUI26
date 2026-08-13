@@ -190,14 +190,14 @@ for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','br
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[36]' not in objc:
-    raise SystemExit('auth36 digest table declaration missing')
-start = objc.index('kAWEAuthorizationDigests[36]')
+if 'kAWEAuthorizationDigests[37]' not in objc:
+    raise SystemExit('auth37 digest table declaration missing')
+start = objc.index('kAWEAuthorizationDigests[37]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
         if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
-if len(rows) != 36:
-    raise SystemExit(f'auth digest row count is {len(rows)}, expected 36')
+if len(rows) != 37:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 37')
 
 for token in [
     '[PHPhotoLibrary sharedPhotoLibrary] performChanges:',

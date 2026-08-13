@@ -1,0 +1,8 @@
+AwemeLiquidBar 1.0.56c10 authorization-only update
+
+Base: 1.0.56c10 bottom_bar_release_ownership
+Added authorized account: 0416xxd
+Authorization entries: 36 -> 37
+
+No other functional code is intentionally changed.
+Package version remains 1.0.56c10.
