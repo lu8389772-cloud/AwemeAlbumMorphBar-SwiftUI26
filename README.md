@@ -1,37 +1,21 @@
-# AwemeLiquidBar 1.0.56c10
+# AwemeLiquidBar 1.0.56c13
 
-Focused stability follow-up based directly on the 1.0.56c2 performance-cleanup build.
+Stable follow-up based on 1.0.56c12, keeping the validated 1.0.56c10 playback lifecycle and bottom-bar release behavior.
 
-Preserved:
-- all 1.0.56c-stage UI/fullscreen/clean-screen/save-HUD behavior;
-- the 1.0.56c1 chat-return rollback scope;
-- the 1.0.56c2 performance cleanup;
-- the existing 36-entry authorization table.
+## Preserved from c12
+- Article-style Home feed cards no longer permanently lose LiquidBar after the card ends.
+- IM/shared-work media routes suppress LiquidBar where the chat composer/media viewer owns the bottom area.
+- Search result navigation is isolated from LiquidBar fullscreen feed geometry.
+- Fullscreen feed sizing does not rewrite the scroll container while tracking/dragging/decelerating.
+- Single-visible-category top label follows the real selected category instead of defaulting to the first label.
+- “显示液态底栏” remains a true ownership-release mode for the two compatibility accounts only.
+- Foreground/Friends playback lifecycle isolation from 1.0.56c8 remains unchanged.
 
-New fixes in 1.0.56c10:
-- adds a DYYY-style native Douyin settings shortcut: both current sidebar Settings layout variants are hooked narrowly, a `LiquidBar` button is attached beside the native `设置` entry, and it opens the existing LiquidBar settings sheet without depending on the two-finger gesture or bottom-bar layout;
-- enforces a hard maximum of five visible bottom entries; once five are enabled, the remaining switch is disabled/greyed so UIKit never enters its broken sixth-tab More path;
-- profile-only two-finger settings gesture now fails open when the `我` entry is disabled, preventing a configuration lockout;
-- highest-quality playback no longer replaces Douyin's adaptive bitrate set with one model and no longer rewrites `playURL` / force-switches a live private player. It preserves every native bitrate model, biases higher bitrate first, and gives native playback a 2-second foreground-resume grace window;
-- Friends unread badge now requires a positive numeric unread count, so a stale native empty badge shell at count 0 no longer becomes a permanent red dot.
+## 1.0.56c13 corrections
+- Authorization table is corrected to 37 unique users. `Hoeyc_0505` was already in the original table and is no longer duplicated; `0416xxd` remains authorized.
+- The bottom-bar ownership-release option is still visible/usable only for `Hoeyc_0505` and `0416xxd`; all other authorized users are forced to the normal LiquidBar-on path and do not see that setting.
+- Clean screen now has a source-level hard no-show gate. Route/lifecycle/pause/selection callbacks may keep bookkeeping state, but cannot reveal the LiquidBar overlay, tab bar, or search proxy while clean screen is active.
+- No new timers, polling loops, process-wide UIView hooks, forced play/pause calls, or chat-return experiments are introduced.
 
-No settings-drawer/chat-return/progress-bar experiments from 1.0.56d+ are reintroduced.
-
-- 1.0.56c10 injects a LiquidBar row into Douyin’s real Settings page through AWESettingsViewModel, matching DYKiller’s model-level approach.
-
-
-## 1.0.56c10
-Playback lifecycle isolation: stop forcing Friends native-tab layout during player activation and make foreground restoration overlay-only. No forced play/pause calls.
-
-
-## 1.0.56c10 bottom-bar visibility
-- New visual-only “显示液态底栏” switch, default ON.
-- OFF hides the LiquidBar tab/search chrome without uninstalling the bridge and makes that footprint pass touches through to Douyin/other tweaks.
-- Top/right glass controls and non-bottom features remain active.
-
-## 1.0.56c10 true release mode
-
-The "显示液态底栏" switch is no longer an alpha/hidden-only switch. OFF calls the
-normal AlbumMorph uninstall path, removes the LiquidBar overlay/tab bar/search proxy,
-and restores Douyin's native AWENormalModeTabBar host. This is intended for users who
-want another tweak to provide the bottom bar while keeping LiquidBar's other features.
+## Build
+Use the existing Xcode 27 / Theos GitHub Actions workflow. The phone-side upload flow does not need to run the Python preflight script.

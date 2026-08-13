@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c10 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth37 + visual-only bottom-bar toggle
+ AwemeLiquidBar 1.0.56c13 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth37 + visual-only bottom-bar toggle
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -175,6 +175,7 @@ static void AWEStableCleanEnforceBottomBarSuppression(void);
 static void AWEInternalFSLayoutInteractionController(UIViewController *vc);
 static void AWEInternalFSHandleElementStackLayout(UIView *stack);
 static void AWEInternalFSTabBarUpdate(UIView *tabBar);
+static BOOL AWECustomBottomBarReleaseAllowed(void);
 
 static char kAWENativeBarKey;
 static char kAWEDelegateKey;
@@ -253,7 +254,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c10: cache the already-identified native top-category views so the
+/* 1.0.56c13: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -475,6 +476,8 @@ static CGRect gAWEAlbumMorphLastAlignedFrame = {{0.0, 0.0}, {0.0, 0.0}};
 static __weak UIWindow *gAWEAlbumMorphLastAlignedSourceWindow = nil;
 static CFTimeInterval gAWESensitiveEntrySuppressionUntil = 0.0;
 static NSHashTable *gAWESensitiveVisibleControllers = nil;
+static NSHashTable<UIView *> *gAWEVisibleMessagingComposers = nil;
+static __weak UIView *gAWEHomeFeedTopContainer = nil;
 static NSHashTable *gAWECommerceProductDetailMarkers = nil;
 static CFTimeInterval gAWECommerceSuppressionUntil = 0.0;
 static BOOL gAWECommentRightRebindPending = NO;
@@ -528,11 +531,12 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEBottomBarDisplayEnabled(void) {
+    /* 1.0.56c13: true bottom-bar ownership release is a two-account
+       compatibility entitlement. Everyone else is forced to the normal
+       LiquidBar-on path even if an old defaults value was left as OFF. */
+    if (!AWECustomBottomBarReleaseAllowed()) return YES;
     id stored = [NSUserDefaults.standardUserDefaults
         objectForKey:kAWEBottomBarDisplayEnabledDefaultsKey];
-    /* Fresh installs keep LiquidBar visible. In 1.0.56c10 OFF means true
-       ownership release: our bottom overlay is uninstalled and Douyin's native
-       tab-bar host is restored so another bottom-bar tweak may take over. */
     return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
 }
 
@@ -897,7 +901,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c10_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c13_interaction.log"] copy];
     });
     return path;
 }
@@ -966,7 +970,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c10_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c13_probe.log"] copy];
     });
     return path;
 }
@@ -1251,7 +1255,12 @@ static uint32_t AWEAuthorizationDigestTag(const uint8_t *bytes) {
 }
 
 static const uint32_t kAWEAuthorizationDigestTags[AWE_AUTHORIZATION_DIGEST_COUNT] = {
-    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u, 0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u, 0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u, 0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u, 0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u, 0x2C934A14u, 0x7D879147u, 0x52083C3Fu, 0xD22A2870u, 0x155CC3CAu, 0x0C57AB18u, 0xC47E6571u, 0xB2B37631u,
+    0x3C8B2C6Fu, 0xCBE3B362u, 0x3B20BEC5u, 0x8C61DCC5u, 0x23F73B69u, 0xEC3F7C89u,
+    0x3206638Au, 0x11ECCCDEu, 0x3871B57Bu, 0x10504AC4u, 0x7CA8DAD5u, 0xB3285104u,
+    0x7A88FD21u, 0xDE48FE8Eu, 0x86E6A2D1u, 0x7488562Au, 0xDFB83DEDu, 0xDD279AE8u,
+    0xB6FE03A6u, 0xBFB4B3DDu, 0xA64F8628u, 0xC9867052u, 0x0D573228u, 0xA3489318u,
+    0x14EEEEC3u, 0x99555471u, 0xB2F28823u, 0xBCBCDE59u, 0x2C934A14u, 0x7D879147u,
+    0x52083C3Fu, 0xD22A2870u, 0x155CC3CAu, 0x0C57AB18u, 0xC47E6571u, 0xB2B37631u,
     0x4B0A02CEu
 };
 
@@ -1374,6 +1383,35 @@ static BOOL AWEAuthorizationValid(void) {
         [proof isEqualToString:expected];
     gAWEAuthorizationCacheLoaded = YES;
     return gAWEAuthorizationCacheValid;
+}
+
+static BOOL AWECustomBottomBarReleaseAllowed(void) {
+    /* Do not embed the two account names. Compare the already-authorized
+       account digest against two independently masked 32-byte digests. */
+    if (!AWEAuthorizationValid()) return NO;
+    NSString *digestHex = [NSUserDefaults.standardUserDefaults
+        stringForKey:AWEAuthorizationDefaultsKey(0)];
+    NSData *digest = AWEDataFromHexString(digestHex);
+    if (digest.length != 32) return NO;
+    const uint8_t *candidate = digest.bytes;
+
+    static const AWEAuthorizationDigestPair allowed[2] = {
+        { { 0x9E, 0x20, 0x2C, 0x15, 0xAE, 0x68, 0x78, 0x7C, 0xE8, 0x3A, 0x93, 0xEB, 0xBC, 0xA4, 0x9A, 0xF7, 0x12, 0x3B, 0xD6, 0x12, 0x48, 0x12, 0x2B, 0x9E, 0x7E, 0x9A, 0xBD, 0x96, 0xC3, 0xE7, 0xC0, 0x64 }, { 0xCE, 0x7A, 0x51, 0x6A, 0xAD, 0xC5, 0x27, 0xB9, 0x1B, 0xBC, 0x21, 0x17, 0x8F, 0x7A, 0xBE, 0xA3, 0x99, 0x95, 0x52, 0xE8, 0xC8, 0xCE, 0xCE, 0x6E, 0x02, 0xD5, 0x5F, 0x5A, 0x57, 0x9D, 0x02, 0xC3 } },
+        { { 0xBD, 0x8E, 0x50, 0xB9, 0x76, 0x28, 0xBA, 0xC2, 0x5A, 0x2C, 0x6C, 0xAC, 0x97, 0x64, 0x99, 0xD8, 0x31, 0xBA, 0x34, 0x09, 0xEC, 0xA0, 0x57, 0xA8, 0x92, 0x67, 0x0A, 0x96, 0x64, 0x16, 0x81, 0x83 }, { 0x18, 0x11, 0x0F, 0x48, 0x52, 0x44, 0xFA, 0xF7, 0x53, 0x7A, 0x61, 0xF2, 0x39, 0x05, 0x05, 0x03, 0x4D, 0x36, 0x92, 0x10, 0x84, 0xB0, 0xE9, 0x16, 0x87, 0x87, 0x86, 0x0F, 0x39, 0x79, 0xFB, 0xE5 } },
+    };
+
+    uint8_t expected[32];
+    for (NSUInteger entry = 0; entry < 2; entry++) {
+        for (NSUInteger index = 0; index < 32; index++) {
+            expected[index] = allowed[entry].mask[index] ^ allowed[entry].value[index];
+        }
+        if (AWEConstantTimeEqual(candidate, expected, 32)) {
+            memset(expected, 0, sizeof(expected));
+            return YES;
+        }
+    }
+    memset(expected, 0, sizeof(expected));
+    return NO;
 }
 
 static BOOL AWEMasterEnabledStored(void) {
@@ -3955,7 +3993,7 @@ static void AWEHideOriginalTabBarContents(UIView *tabBar) {
      every direct child here belongs to Douyin. Keep objects alive and enabled
      for programmatic forwarding, but remove only their visual output.
 
-     1.0.56c10 also preserves each child's pre-LiquidBar state so OFF can truly
+     1.0.56c13 also preserves each child's pre-LiquidBar state so OFF can truly
      hand the native host back to Douyin/another tweak instead of leaving the
      original bar visually gutted after our overlay is removed.
     */
@@ -4248,6 +4286,22 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
         ([lower containsString:@"conversation"] && controllerLike) ||
         ([lower containsString:@"chatroom"] && controllerLike);
 
+    /* IM photo/media viewers can be pushed above the conversation without the
+       text composer remaining in the hierarchy. Keep the independent LiquidBar
+       out of those viewers as well. Limit generic image/preview matching to the
+       real Messages main tab so ordinary feed/profile media is untouched. */
+    BOOL explicitIMMediaDestination = controllerLike &&
+        ([lower hasPrefix:@"aweim"] || [lower containsString:@"immessage"] ||
+         [lower containsString:@"imchat"]) &&
+        ([lower containsString:@"image"] || [lower containsString:@"photo"] ||
+         [lower containsString:@"media"] || [lower containsString:@"preview"] ||
+         [lower containsString:@"picture"]);
+    BOOL messagesTabMediaDestination = controllerLike &&
+        AWECurrentOriginalMainTabIndex() == 3 &&
+        ([lower containsString:@"image"] || [lower containsString:@"photo"] ||
+         [lower containsString:@"preview"] || [lower containsString:@"picture"]);
+    BOOL imMediaDestination = explicitIMMediaDestination || messagesTabMediaDestination;
+
     BOOL commentDestination =
         [className isEqualToString:@"AWECommentContainerViewController"] ||
         [className isEqualToString:@"AWECommentPanelViewController"] ||
@@ -4310,7 +4364,7 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
          [lower containsString:@"privacysetting"] ||
          [lower containsString:@"generalsetting"]);
 
-    return directConversation || commentDestination || forwardDestination ||
+    return directConversation || imMediaDestination || commentDestination || forwardDestination ||
            systemActivityDestination || systemDocumentDestination ||
            publishDestination || transientCommerceDestination ||
            settingsDestination;
@@ -4739,8 +4793,57 @@ static void AWEAttachNativeBar(UIView *tabBar) {
     AWEAttachNativeBarWithForce(tabBar, NO);
 }
 
+static BOOL AWEViewActuallyVisibleInWindow(UIView *view) {
+    if (!view || !view.window || view.hidden || view.alpha < 0.01) return NO;
+    for (UIView *ancestor = view.superview;
+         ancestor && ancestor != view.window;
+         ancestor = ancestor.superview) {
+        if (ancestor.hidden || ancestor.alpha < 0.01) return NO;
+    }
+    CGRect frame = CGRectNull;
+    @try {
+        frame = [view convertRect:view.bounds toView:view.window];
+    } @catch (__unused NSException *exception) {
+        return NO;
+    }
+    return !CGRectIsNull(frame) && !CGRectIsEmpty(frame) &&
+        CGRectIntersectsRect(CGRectInset(view.window.bounds, -8.0, -8.0), frame);
+}
+
+static NSHashTable<UIView *> *AWEVisibleMessagingComposers(void) {
+    if (!gAWEVisibleMessagingComposers) {
+        gAWEVisibleMessagingComposers = [NSHashTable weakObjectsHashTable];
+    }
+    return gAWEVisibleMessagingComposers;
+}
+
+static void AWETrackMessagingComposer(UIView *view) {
+    if (!view) return;
+    if (view.window) [AWEVisibleMessagingComposers() addObject:view];
+    else [AWEVisibleMessagingComposers() removeObject:view];
+}
+
+static BOOL AWECurrentMessagingComposerVisible(void) {
+    /* This predicate sits on hot fullscreen/layout paths, so never search the
+       whole window tree here. The two known composer hooks maintain a tiny weak
+       set and we only validate those live candidates. */
+    for (UIView *view in AWEVisibleMessagingComposers()) {
+        if (AWEViewActuallyVisibleInWindow(view)) return YES;
+    }
+    return NO;
+}
+
+static BOOL AWECurrentHomeFeedSurfaceVisible(void) {
+    if (AWECurrentOriginalMainTabIndex() != 0) return NO;
+    /* AWEAlbumMorphSteadyWantsVisible is sampled frequently. The exact
+       AWEFeedTopBarContainer hook keeps this weak pointer current so this page
+       predicate never performs a recursive view-tree scan on the hot path. */
+    return AWEViewActuallyVisibleInWindow(gAWEHomeFeedTopContainer);
+}
+
 static BOOL AWECurrentRouteSuppressesBar(void) {
     return AWEShouldSuppressBarForSearch() ||
+           AWECurrentMessagingComposerVisible() ||
            AWEShouldSuppressBarForUserDetailRoute() ||
            AWEShouldSuppressBarForSensitiveDestination() ||
            AWEShouldSuppressBarForCommerceProductDetail() ||
@@ -4778,6 +4881,7 @@ static BOOL AWEImmediateCommerceProductDetailVisible(void) {
 
 static BOOL AWEImmediateRouteSuppressesBar(void) {
     return AWEShouldSuppressBarForSearch() ||
+           AWECurrentMessagingComposerVisible() ||
            AWEShouldSuppressBarForUserDetailRoute() ||
            AWEImmediateSensitiveDestinationVisible() ||
            AWEImmediateCommerceProductDetailVisible() ||
@@ -4879,6 +4983,13 @@ static BOOL AWEAlbumMorphSteadyWantsVisible(UIView *originalBar) {
        route suppression still wins for profile/search/comment/share/etc. */
     if (friendsRoot && !AWECurrentRouteSuppressesBar()) return YES;
 
+    /* Article-style Home feed cards can temporarily hide/detach Douyin's
+       original tab bar without actually navigating away from the Home feed.
+       The visible native top-feed container is a stronger page-state signal;
+       keep LiquidBar present and let explicit route suppression still win. */
+    if (AWECurrentHomeFeedSurfaceVisible() &&
+        !AWECurrentRouteSuppressesBar()) return YES;
+
     if (!originalBar.window) return NO;
     return AWEOriginalBarSteadyWantsVisible(originalBar);
 }
@@ -4887,6 +4998,23 @@ static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
                                                NSString *reason,
                                                BOOL animated) {
     if (!gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
+
+    /* 1.0.56c13: hard no-show gate for clean screen. Recovery, route, pause,
+       selection and lifecycle callbacks are allowed to keep their bookkeeping,
+       but none of them may make LiquidBar visible for even one compositor frame
+       while clean screen is active. This avoids the historical one/two-frame
+       flash without adding a timer, polling loop or global UIView hook. */
+    if (gAWEStableCleanScreenEnabled) {
+        AWEAlbumMorphOverlayWindow *cleanOverlay =
+            (AWEAlbumMorphOverlayWindow *)gAWEAlbumMorphOverlayWindow;
+        gAWEBarLastVisibleFraction = 0.0;
+        [gAWEAlbumMorphController setVisibleFraction:0.0 animated:NO];
+        cleanOverlay.contentVisible = NO;
+        gAWEAlbumMorphVisible = NO;
+        AWEStableCleanEnforceBottomBarSuppression();
+        return;
+    }
+
     fraction = MIN(MAX(fraction, 0.0), 1.0);
     /* No recovery caller may resurrect the bottom overlay on top of a modal
        share/publish/commerce route.  This guards against late coordinator and
@@ -8856,7 +8984,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c10 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c13 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -11601,17 +11729,20 @@ static BOOL AWEEnsureAlbumMorphOverlayWindow(UIWindow *sourceWindow) {
     }
 
     overlay.managedTabBar = gAWEAlbumMorphController.tabBar;
+    if (gAWEStableCleanScreenEnabled) {
+        AWEStableCleanEnforceBottomBarSuppression();
+        return YES;
+    }
     overlay.userInteractionEnabled = YES;
     overlay.alpha = 1.0;
     overlay.hidden = NO;
     AWEPrepareAlbumMorphOverlayTransparency();
-    if (gAWEStableCleanScreenEnabled) AWEStableCleanEnforceBottomBarSuppression();
     return YES;
 }
 
 static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
                                              BOOL forceVisible) {
-    /* 1.0.56c10: when the visual bottom bar is disabled, LiquidBar no longer
+    /* 1.0.56c13: when the visual bottom bar is disabled, LiquidBar no longer
        owns the native tab-bar host at all. Fully tear down our resident
        UITabBar/overlay and restore the original AWENormalModeTabBar so another
        tweak can attach to the same native host. This is deliberately stronger
@@ -11679,6 +11810,10 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
      flash/disappear-reappear cycle.
     */
     AWEPrepareAlbumMorphOverlayTransparency();
+    if (gAWEStableCleanScreenEnabled) {
+        AWEApplyAlbumMorphVisibleFraction(0.0, @"install.clean-guard", NO);
+        return YES;
+    }
     [UIView performWithoutAnimation:^{
         overlay.hidden = NO;
         overlay.alpha = 1.0;
@@ -12566,7 +12701,9 @@ static void AWELayoutTopLiquidGroup(AWETopLiquidGroupView *group,
     NSInteger maximumStart = MAX(0, total - visibleCount);
     group.windowStart = MIN(MAX(0, group.windowStart), maximumStart);
 
-    if (visibleCount > 1 && group.selectedIndex != NSNotFound) {
+    if (visibleCount == 1 && group.selectedIndex != NSNotFound) {
+        group.windowStart = MIN(MAX(0, group.selectedIndex), maximumStart);
+    } else if (visibleCount > 1 && group.selectedIndex != NSNotFound) {
         if (group.selectedIndex < group.windowStart) {
             group.windowStart = group.selectedIndex;
         } else if (group.selectedIndex >= group.windowStart + visibleCount) {
@@ -14695,7 +14832,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c10";
+    self.title = @"LiquidBar 设置 · 1.0.56c13";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15419,9 +15556,13 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [exportLogButton addTarget:self action:@selector(exportProbeLogs:)
               forControlEvents:UIControlEventTouchUpInside];
 
-    UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:@[
-        albumStyleRow, newBarIconCenterButton,
-        bottomBarDisplayRow, bottomBarDisplayHint,
+    NSMutableArray<UIView *> *visualItems = [NSMutableArray arrayWithObjects:
+        albumStyleRow, newBarIconCenterButton, nil];
+    if (AWECustomBottomBarReleaseAllowed()) {
+        [visualItems addObject:bottomBarDisplayRow];
+        [visualItems addObject:bottomBarDisplayHint];
+    }
+    [visualItems addObjectsFromArray:@[
         internalFullscreenRow,
         hideTitlesRow, messageBadgeRow, avatarMenuDownloadRow, preferHighestPlaybackRow, forceDarkBottomBarRow,
         topRow, hideTopLeftButtonRow, topCategoryGroupRow, topCategoryCountRow, topMenuMorphRow,
@@ -15430,6 +15571,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         iconCenterButton, diagnosticRow, diagnosticButtons,
         exportLogButton
     ]];
+    UIStackView *visualStack = [[UIStackView alloc] initWithArrangedSubviews:visualItems];
     visualStack.translatesAutoresizingMaskIntoConstraints = NO;
     visualStack.axis = UILayoutConstraintAxisVertical;
     visualStack.spacing = 10.0;
@@ -15891,6 +16033,13 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 }
 
 - (void)bottomBarDisplaySwitchChanged:(UISwitch *)sender {
+    if (!AWECustomBottomBarReleaseAllowed()) {
+        sender.on = YES;
+        [NSUserDefaults.standardUserDefaults setBool:YES
+            forKey:kAWEBottomBarDisplayEnabledDefaultsKey];
+        [NSUserDefaults.standardUserDefaults synchronize];
+        return;
+    }
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
         forKey:kAWEBottomBarDisplayEnabledDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
@@ -16076,7 +16225,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c10 image=%@ ==========" ,
+            @"========== START build=1.0.56c13 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16143,7 +16292,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c10 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c13 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16158,7 +16307,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c10_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c13_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16469,10 +16618,17 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c10 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c13 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEInternalFullscreenActive(void) {
-    return AWEPluginFeaturesEnabled() && AWEInternalFullscreenEnabled();
+    if (!AWEPluginFeaturesEnabled() || !AWEInternalFullscreenEnabled()) return NO;
+    /* Search result/detail navigation and IM forwarded-media viewers have
+       their own bottom input/navigation footprints. Do not apply feed-height
+       fullscreen geometry inside those routes. */
+    if (AWEShouldSuppressBarForSearch() || AWECurrentMessagingComposerVisible()) {
+        return NO;
+    }
+    return YES;
 }
 
 static UIViewController *AWEFSViewControllerForView(UIView *view) {
@@ -16612,7 +16768,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c10 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c13 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16800,17 +16956,33 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 %hook AWEFeedTableView
 - (void)layoutSubviews {
     %orig;
-    if (AWEInternalFullscreenActive()) {
-        UIView *view = (UIView *)self;
-        UIView *superview = view.superview;
-        if (superview) {
-            CGRect frame = view.frame;
-            CGFloat targetHeight = CGRectGetHeight(superview.frame);
-            if (targetHeight > 0.0 && fabs(CGRectGetHeight(frame) - targetHeight) > 0.5) {
-                frame.size.height = targetHeight;
-                view.frame = frame;
-            }
+    if (!AWEInternalFullscreenActive()) return;
+
+    UIView *view = (UIView *)self;
+    UIView *superview = view.superview;
+    if (!superview) return;
+
+    if ([view isKindOfClass:UIScrollView.class]) {
+        UIScrollView *scrollView = (UIScrollView *)view;
+        UIGestureRecognizerState panState = scrollView.panGestureRecognizer.state;
+        if (scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating ||
+            panState == UIGestureRecognizerStateBegan ||
+            panState == UIGestureRecognizerStateChanged) {
+            return;
         }
+    }
+
+    CGRect frame = view.frame;
+    CGFloat targetHeight = CGRectGetHeight(superview.frame);
+    CGFloat currentHeight = CGRectGetHeight(frame);
+    CGFloat delta = targetHeight - currentHeight;
+    CGFloat tabHeight = AWEFSTabBarHeight();
+    BOOL oneTabShort = delta > 0.5 &&
+        ((tabHeight > 0.0 && fabs(delta - tabHeight) <= 14.0) ||
+         (delta >= 38.0 && delta <= 110.0));
+    if (targetHeight > 0.0 && oneTabShort) {
+        frame.size.height = targetHeight;
+        view.frame = frame;
     }
 }
 %end
@@ -16843,7 +17015,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c10 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c13 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -17178,6 +17350,15 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
             AWERefreshAlbumMorphTintFromSystemProbe();
         });
     }
+    /* A few Home article/feed models leave the native bar hidden after reuse.
+       Re-evaluate once after the item switch; the Home-feed visibility rule
+       above decides whether the replacement should be restored. */
+    if (AWEAlbumMorphStyleEnabled()) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            AWEScheduleTransitionRecovery();
+        });
+    }
 }
 - (void)viewWillLayoutSubviews {
     %orig;
@@ -17499,7 +17680,10 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 
 - (void)didMoveToWindow {
     %orig;
-    AWEMarkTopCategorySuppressionCacheDirty((UIView *)self);
+    UIView *container = (UIView *)self;
+    if (container.window) gAWEHomeFeedTopContainer = container;
+    else if (gAWEHomeFeedTopContainer == container) gAWEHomeFeedTopContainer = nil;
+    AWEMarkTopCategorySuppressionCacheDirty(container);
     if (AWETopMenuMorphEnabled())
         AWEApplyTopCategoryVisualSuppression((UIView *)self, YES);
     AWEHomeDiagnosticWrite(NO, @"HOOK AWEFeedTopBarContainer.didMoveToWindow self=%p window=%p", self, ((UIView *)self).window);
@@ -17508,7 +17692,9 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 
 - (void)didMoveToSuperview {
     %orig;
-    AWEMarkTopCategorySuppressionCacheDirty((UIView *)self);
+    UIView *container = (UIView *)self;
+    if (container.window) gAWEHomeFeedTopContainer = container;
+    AWEMarkTopCategorySuppressionCacheDirty(container);
     if (AWETopMenuMorphEnabled())
         AWEApplyTopCategoryVisualSuppression((UIView *)self, YES);
     AWEScheduleTopActionContainerRefresh((UIView *)self);
@@ -17624,7 +17810,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
     AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
     entry.identifier = @"AwemeLiquidBar.Settings";
     entry.title = @"LiquidBar";
-    entry.detail = @"1.0.56c10";
+    entry.detail = @"1.0.56c13";
     entry.type = 0;
     entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
     entry.cellType = 26;
@@ -18007,11 +18193,19 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 
 - (void)didMoveToWindow {
     %orig;
-    if (!AWEPluginFeaturesEnabled()) return;
     UIView *composerView = (UIView *)self;
+    AWETrackMessagingComposer(composerView);
+    if (!AWEPluginFeaturesEnabled()) return;
     AWELogComposerSnapshot(@"composer.didMoveToWindow",
                            composerView, YES, YES);
     [composerView setNeedsLayout];
+    if (composerView.window && AWEAlbumMorphStyleEnabled() &&
+        gAWEAlbumMorphController) {
+        AWEApplyAlbumMorphVisibleFraction(0.0, @"im.composer.visible", NO);
+    } else {
+        AWEScheduleTransitionRecovery();
+    }
+    AWEStartBarVisibilityDriver();
 }
 
 - (void)didMoveToSuperview {
@@ -18100,9 +18294,19 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 - (void)didMoveToWindow {
     %orig;
     UIView *voiceView = (UIView *)self;
+    AWETrackMessagingComposer(voiceView);
     AWEApplyChatCornerToView(voiceView,
                              @"voiceTouch.didMoveToWindow",
                              YES);
+    if (AWEPluginFeaturesEnabled()) {
+        if (voiceView.window && AWEAlbumMorphStyleEnabled() &&
+            gAWEAlbumMorphController) {
+            AWEApplyAlbumMorphVisibleFraction(0.0, @"im.voiceComposer.visible", NO);
+        } else {
+            AWEScheduleTransitionRecovery();
+        }
+        AWEStartBarVisibilityDriver();
+    }
 }
 
 - (void)setFrame:(CGRect)frame {
@@ -18473,7 +18677,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 - (void)setHidden:(BOOL)hidden {
     BOOL changed = self.hidden != hidden;
 
-    /* 1.0.56c10: never veto Douyin's native hidden transition on Friends.
+    /* 1.0.56c13: never veto Douyin's native hidden transition on Friends.
        Blocking hidden here was an old layout-footprint workaround, but it also
        changes the native tab-bar state exactly while the Friends feed decides
        whether its player is visible/active. The replacement bar already stays
@@ -19037,7 +19241,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c10 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c13 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -19051,7 +19255,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                /* 1.0.56c10 foreground rule: Douyin owns player recovery.
+                /* 1.0.56c13 foreground rule: Douyin owns player recovery.
                    During DidBecomeActive do not reattach the native tab bar,
                    force route recovery, relayout Feed chrome, or steal key
                    window state. Those operations used to run in the same
