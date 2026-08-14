@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 /*
- AwemeLiquidBar 1.0.56c16 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth38 + visual-only bottom-bar toggle
+ AwemeLiquidBar 1.0.56c17 — fullscreen + clean/status fixes + adaptive glass save HUD + native badges + auth38 + visual-only bottom-bar toggle
 
  Fullscreen/clean consolidation release:
  - starts from the verified 1.0.55a stable baseline; unrelated layout experiments remain excluded;
@@ -137,6 +137,8 @@ int32_t AWEAlbumMorphRequestNativeMinimized(UIViewController *controller,
 - (NSInteger)currentOriginalIndex;
 - (void)mirrorSourceScrollOffset:(CGFloat)offset;
 - (void)bindSourceScrollView:(UIScrollView *)scrollView;
+- (void)clearNativeMinimizeSourceScrollView;
+- (void)setNativeMinimizeEnabled:(BOOL)enabled;
 - (void)setCompactMode:(BOOL)compact animated:(BOOL)animated;
 @end
 
@@ -255,7 +257,7 @@ static char kAWETopCategoryIndicatorMarkerKey;
 static char kAWETopCategoryIndicatorOriginalAlphaKey;
 static char kAWETopCategoryIndicatorOriginalHiddenKey;
 static char kAWETopCategoryIndicatorOriginalLayerOpacityKey;
-/* 1.0.56c16: cache the already-identified native top-category views so the
+/* 1.0.56c17: cache the already-identified native top-category views so the
    500-node BFS does not run on every AWEFeedTopBarContainer layout pass. */
 static char kAWETopCategorySuppressionCacheKey;
 static char kAWETopCategorySuppressionCacheDirtyKey;
@@ -390,6 +392,8 @@ static NSString * const kAWEVerticalOffsetDefaultsKey =
     @"AwemeLiquidBarVerticalOffset";
 static NSString * const kAWEAlbumMorphCollapseEnabledDefaultsKey =
     @"AwemeLiquidBarAlbumMorphCollapseEnabledV2";
+static NSString * const kAWEAlbumMorphNativeMinimizeProbeDefaultsKey =
+    @"AwemeLiquidBarNativeMinimizeProbeV1";
 static NSString * const kAWEDoubleTapLikeFractionDefaultsKey =
     @"AwemeLiquidBarDoubleTapLikeFraction";
 static NSString * const kAWEWanToWDefaultsKey =
@@ -532,7 +536,7 @@ static BOOL AWEHideBottomTitlesEnabled(void) {
 }
 
 static BOOL AWEBottomBarDisplayEnabled(void) {
-    /* 1.0.56c16: true bottom-bar ownership release is a two-account
+    /* 1.0.56c17: true bottom-bar ownership release is a two-account
        compatibility entitlement. Everyone else is forced to the normal
        LiquidBar-on path even if an old defaults value was left as OFF. */
     if (!AWECustomBottomBarReleaseAllowed()) return YES;
@@ -582,10 +586,18 @@ int32_t AWEAlbumMorphHideTitlesEnabled(void) {
 }
 
 static BOOL AWEAlbumMorphCollapseEnabled(void) {
-    /* 1.0.48a retires the experimental collapse path completely.  Keep the
-       historical preference key only so old installs do not crash while
-       loading settings; no gesture or compact transform is allowed to run. */
+    /* 1.0.48a retires the old manual whole-window pan/scale path completely.
+       c17 keeps it disabled; the new test uses UIKit's public iOS 26 tab-bar
+       minimize API with a transparent in-controller proxy scroll view. */
     return NO;
+}
+
+static BOOL AWEAlbumMorphNativeMinimizeProbeEnabled(void) {
+    id stored = [NSUserDefaults.standardUserDefaults
+        objectForKey:kAWEAlbumMorphNativeMinimizeProbeDefaultsKey];
+    /* Test build: opt in by default. It can be disabled instantly from the
+       position card without reinstalling or touching the old collapse path. */
+    return [stored isKindOfClass:NSNumber.class] ? [(NSNumber *)stored boolValue] : YES;
 }
 
 static BOOL AWESecondTabIsShop(void);
@@ -902,7 +914,7 @@ static NSString *AWEInteractionDiagnosticPath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c16_interaction.log"] copy];
+            @"AwemeLiquidBar_1.0.56c17_interaction.log"] copy];
     });
     return path;
 }
@@ -971,7 +983,7 @@ static NSString *AWEAlbumMorphProbePath(void) {
         NSString *documents = NSSearchPathForDirectoriesInDomains(
             NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         path = [[documents stringByAppendingPathComponent:
-            @"AwemeLiquidBar_1.0.56c16_probe.log"] copy];
+            @"AwemeLiquidBar_1.0.56c17_probe.log"] copy];
     });
     return path;
 }
@@ -3995,7 +4007,7 @@ static void AWEHideOriginalTabBarContents(UIView *tabBar) {
      every direct child here belongs to Douyin. Keep objects alive and enabled
      for programmatic forwarding, but remove only their visual output.
 
-     1.0.56c16 also preserves each child's pre-LiquidBar state so OFF can truly
+     1.0.56c17 also preserves each child's pre-LiquidBar state so OFF can truly
      hand the native host back to Douyin/another tweak instead of leaving the
      original bar visually gutted after our overlay is removed.
     */
@@ -4082,7 +4094,7 @@ static BOOL AWEControllerTreeContainsSearchRoute(UIViewController *controller,
     if (!controller || depth > 12) return NO;
 
     NSString *className = NSStringFromClass(controller.class);
-    /* 1.0.56c16: Douyin also uses AWESearchFeedArticleViewController as the
+    /* 1.0.56c17: Douyin also uses AWESearchFeedArticleViewController as the
        renderer for article cards reached by ordinary vertical swiping on the
        Home feed. The class name contains AWESearch even when no Search route
        owns the controller. Treat that renderer as neutral by itself; a real
@@ -4380,7 +4392,7 @@ static BOOL AWEClassNameIsSensitiveDestination(NSString *className) {
        leave the original tab-bar object alive underneath. Since LiquidBar is
        hosted in an independent UIWindow, hierarchy clipping cannot hide it for
        us. Treat editor/crop/preview controllers as explicit non-root routes. */
-    /* 1.0.56c16: AWEProfileAvatarViewController is an unambiguous pushed
+    /* 1.0.56c17: AWEProfileAvatarViewController is an unambiguous pushed
        editor and must suppress the independent overlay regardless of the
        numeric tab index. Current Douyin builds can report the visible Me tab
        as index 3 when Publish is not represented as a normal tab, so gating
@@ -4862,7 +4874,7 @@ static void AWETrackMessagingComposer(UIView *view) {
 }
 
 static BOOL AWECurrentMessagingComposerVisible(void) {
-    /* 1.0.56c16: an IM composer can remain attached to a live UIWindow after
+    /* 1.0.56c17: an IM composer can remain attached to a live UIWindow after
        the user has already switched from Messages back to Home. 1.0.56c13
        treated window attachment alone as route ownership, so that stale view
        suppressed LiquidBar and disabled fullscreen on later Home/article/photo
@@ -5057,7 +5069,7 @@ static void AWEApplyAlbumMorphVisibleFraction(CGFloat fraction,
                                                BOOL animated) {
     if (!gAWEAlbumMorphController || !gAWEAlbumMorphOverlayWindow) return;
 
-    /* 1.0.56c16: hard no-show gate for clean screen. Recovery, route, pause,
+    /* 1.0.56c17: hard no-show gate for clean screen. Recovery, route, pause,
        selection and lifecycle callbacks are allowed to keep their bookkeeping,
        but none of them may make LiquidBar visible for even one compositor frame
        while clean screen is active. This avoids the historical one/two-frame
@@ -9042,7 +9054,7 @@ static UIAction *AWEAvatarLiveAwemeAction(NSString *title,
         }];
 }
 
-#pragma mark - 1.0.56c16 clean screen v2 (display-only, persistent across reuse)
+#pragma mark - 1.0.56c17 clean screen v2 (display-only, persistent across reuse)
 
 static void AWEStableCleanSuppressView(UIView *view, BOOL disableInteraction) {
     if (!view) return;
@@ -10394,6 +10406,38 @@ static void AWEExpandAlbumMorphBarWithoutAnimation(void) {
     [gAWEAlbumMorphController setCompactMode:NO animated:NO];
 }
 
+/* c17 native-minimize probe. The real AWEFeedTableView remains fully owned by
+   Douyin. We only observe its existing pan recognizer and mirror scroll delta
+   into the transparent proxy collection view inside our real UITabBarController.
+   That proxy is registered with UIViewController's public iOS 26
+   setContentScrollView:for: path in Swift, so UIKit owns the actual tab-bar
+   compact/expand transition instead of a plugin transform. */
+static void AWETryBindAlbumMorphNativeMinimizeSource(UIScrollView *scrollView,
+                                                       NSString *reason) {
+    if (!scrollView || !AWEAlbumMorphNativeMinimizeProbeEnabled() ||
+        !gAWEAlbumMorphController || !gAWEAlbumMorphVisible ||
+        gAWESettingsVisible || gAWEStableCleanScreenEnabled ||
+        AWECurrentRouteSuppressesBar()) {
+        return;
+    }
+    NSInteger tab = AWECurrentMainTabIndex();
+    if (tab != 0 && tab != 1) return;
+    if (!AWEViewActuallyVisibleInWindow((UIView *)scrollView)) return;
+
+    [gAWEAlbumMorphController bindSourceScrollView:scrollView];
+    static __weak UIScrollView *lastLoggedScrollView = nil;
+    static NSInteger lastLoggedTab = NSNotFound;
+    if (lastLoggedScrollView != scrollView || lastLoggedTab != tab) {
+        lastLoggedScrollView = scrollView;
+        lastLoggedTab = tab;
+        AWEAlbumMorphProbeWrite(
+            @"NATIVE_MINIMIZE_SOURCE reason=%@ tab=%ld source=%@ frame=%@ content=%@",
+            reason ?: @"unknown", (long)tab, NSStringFromClass(scrollView.class),
+            NSStringFromCGRect(scrollView.frame),
+            NSStringFromCGSize(scrollView.contentSize));
+    }
+}
+
 static BOOL AWEForwardTopActionOwner(UIView *owner,
                                          AWEHomeTopActionKind kind) {
     if (!owner) return NO;
@@ -11699,6 +11743,9 @@ static void AWEConfigureAlbumMorphSearchTouchProxy(
 
 static void AWEUninstallAlbumMorphBar(void) {
     AWEStopAlbumMorphTintDisplayLink();
+    if (gAWEAlbumMorphController) {
+        [gAWEAlbumMorphController clearNativeMinimizeSourceScrollView];
+    }
     AWERestoreAlbumMorphSearchGesture();
     AWEApplyAlbumMorphOriginalSuppression(
         gAWEAlbumMorphSuppressedOriginalBar, NO);
@@ -11727,6 +11774,8 @@ static BOOL AWEEnsureAlbumMorphController(void) {
     gAWEAlbumMorphCoordinator = [AWEAlbumMorphCoordinator new];
     gAWEAlbumMorphController.actionSink = gAWEAlbumMorphCoordinator;
     [gAWEAlbumMorphController loadViewIfNeeded];
+    [gAWEAlbumMorphController
+        setNativeMinimizeEnabled:AWEAlbumMorphNativeMinimizeProbeEnabled()];
     return gAWEAlbumMorphController.tabBar != nil;
 }
 
@@ -11800,7 +11849,7 @@ static BOOL AWEEnsureAlbumMorphOverlayWindow(UIWindow *sourceWindow) {
 
 static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
                                              BOOL forceVisible) {
-    /* 1.0.56c16: when the visual bottom bar is disabled, LiquidBar no longer
+    /* 1.0.56c17: when the visual bottom bar is disabled, LiquidBar no longer
        owns the native tab-bar host at all. Fully tear down our resident
        UITabBar/overlay and restore the original AWENormalModeTabBar so another
        tweak can attach to the same native host. This is deliberately stronger
@@ -11835,6 +11884,8 @@ static BOOL AWEInstallOrUpdateAlbumMorphBar(UIView *originalBar,
     [gAWEAlbumMorphController configureSecondTabAsShop:AWESecondTabIsShop()];
     [gAWEAlbumMorphController
         configureVisibleItemIdentifiers:AWEAlbumMorphVisibleItemIdentifiers()];
+    [gAWEAlbumMorphController
+        setNativeMinimizeEnabled:AWEAlbumMorphNativeMinimizeProbeEnabled()];
     [gAWEAlbumMorphController updateAccentColor:AWEStoredAccentColor()];
     AWEUpdateAlbumMorphMessageBadge();
 
@@ -14908,7 +14959,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"LiquidBar 设置 · 1.0.56c16";
+    self.title = @"LiquidBar 设置 · 1.0.56c17";
     if (@available(iOS 13.0, *)) {
         self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     } else {
@@ -15064,9 +15115,39 @@ static void AWEClearStoredIconConfigurationForDefinitions(
              forControlEvents:UIControlEventValueChanged];
     self.verticalOffsetSlider = positionSlider;
 
+    UILabel *nativeMinimizeLabel = [UILabel new];
+    nativeMinimizeLabel.text = @"原生滚动收缩（实验）";
+    nativeMinimizeLabel.font =
+        [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+
+    UILabel *nativeMinimizeHint = [UILabel new];
+    nativeMinimizeHint.text = @"使用 iOS 26+ UITabBarController.onScrollDown；不接管抖音手势，关闭即恢复固定底栏。";
+    nativeMinimizeHint.font =
+        [UIFont systemFontOfSize:12.0 weight:UIFontWeightRegular];
+    nativeMinimizeHint.textColor = UIColor.secondaryLabelColor;
+    nativeMinimizeHint.numberOfLines = 0;
+
+    UISwitch *nativeMinimizeSwitch = [UISwitch new];
+    nativeMinimizeSwitch.on = AWEAlbumMorphNativeMinimizeProbeEnabled();
+    nativeMinimizeSwitch.onTintColor = AWEStoredAccentColor();
+    [nativeMinimizeSwitch addTarget:self
+                             action:@selector(collapseSwitchChanged:)
+                   forControlEvents:UIControlEventValueChanged];
+    self.collapseSwitch = nativeMinimizeSwitch;
+
+    UIStackView *nativeMinimizeText = [[UIStackView alloc]
+        initWithArrangedSubviews:@[nativeMinimizeLabel, nativeMinimizeHint]];
+    nativeMinimizeText.axis = UILayoutConstraintAxisVertical;
+    nativeMinimizeText.spacing = 3.0;
+    UIStackView *nativeMinimizeRow = [[UIStackView alloc]
+        initWithArrangedSubviews:@[nativeMinimizeText, nativeMinimizeSwitch]];
+    nativeMinimizeRow.axis = UILayoutConstraintAxisHorizontal;
+    nativeMinimizeRow.alignment = UIStackViewAlignmentCenter;
+    nativeMinimizeRow.spacing = 10.0;
+
     UIStackView *positionStack =
         [[UIStackView alloc] initWithArrangedSubviews:@[
-            positionTitle, positionValue, positionSlider
+            positionTitle, positionValue, positionSlider, nativeMinimizeRow
         ]];
     positionStack.translatesAutoresizingMaskIntoConstraints = NO;
     positionStack.axis = UILayoutConstraintAxisVertical;
@@ -15712,14 +15793,14 @@ static void AWEClearStoredIconConfigurationForDefinitions(
         masterCard, accentCard, positionCard, gestureCard, chatCard, wanCard, homeVisualCard
     ];
     self.themePrimaryLabels = @[
-        masterTitle, headline, positionTitle, gestureTitle, chatTitle,
+        masterTitle, headline, positionTitle, nativeMinimizeLabel, gestureTitle, chatTitle,
         capsuleLabel, separateLabel, wanTitle, settingsGestureMineOnlyLabel,
         albumStyleLabel, hideTitlesLabel, messageBadgeLabel, preferHighestPlaybackLabel,
         forceDarkBottomBarLabel, topLabel, topCategoryGroupLabel,
         topMenuMorphLabel, pngLabel, diagnosticLabel
     ];
     self.themeSecondaryLabels = @[
-        positionValue, splitValue, pngHint, authorizationFooter
+        positionValue, nativeMinimizeHint, splitValue, pngHint, authorizationFooter
     ];
 
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -15999,15 +16080,15 @@ static void AWEClearStoredIconConfigurationForDefinitions(
 
 - (void)collapseSwitchChanged:(UISwitch *)sender {
     [NSUserDefaults.standardUserDefaults setBool:sender.isOn
-        forKey:kAWEAlbumMorphCollapseEnabledDefaultsKey];
+        forKey:kAWEAlbumMorphNativeMinimizeProbeDefaultsKey];
     [NSUserDefaults.standardUserDefaults synchronize];
-    if (sender.isOn) {
-        UIWindow *window = gAWEAlbumMorphSuppressedOriginalBar.window ?:
-            AWEActiveMainWindow();
-        AWEInstallAlbumMorphCollapseGesture(window);
-    } else {
-        AWEExpandAlbumMorphBarWithoutAnimation();
+    if (gAWEAlbumMorphController) {
+        [gAWEAlbumMorphController setNativeMinimizeEnabled:sender.isOn];
+        if (!sender.isOn) {
+            [gAWEAlbumMorphController clearNativeMinimizeSourceScrollView];
+        }
     }
+    AWEAlbumMorphProbeWrite(@"NATIVE_MINIMIZE_SETTING enabled=%d", sender.isOn);
     [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
 }
 
@@ -16301,7 +16382,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
     [NSUserDefaults.standardUserDefaults synchronize];
     if (sender.isOn) {
         AWEInteractionDiagnosticWrite(
-            @"========== START build=1.0.56c16 image=%@ ==========" ,
+            @"========== START build=1.0.56c17 image=%@ ==========" ,
             AWEHomeDiagnosticLoadedImagePath());
     }
 }
@@ -16368,7 +16449,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
                                                                       error:nil] ?: @"<interaction log empty or disabled>\n";
 
             NSString *header = [NSString stringWithFormat:
-                @"AwemeLiquidBar 1.0.56c16 diagnostic export\n"
+                @"AwemeLiquidBar 1.0.56c17 diagnostic export\n"
                  "System: %@\n"
                  "Device: %@\n"
                  "Generated: %@\n\n",
@@ -16383,7 +16464,7 @@ static void AWEClearStoredIconConfigurationForDefinitions(
             NSString *documents = NSSearchPathForDirectoriesInDomains(
                 NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
             NSString *exportPath = [documents stringByAppendingPathComponent:
-                @"AwemeLiquidBar_1.0.56c16_diagnostic_export.txt"];
+                @"AwemeLiquidBar_1.0.56c17_diagnostic_export.txt"];
             NSError *writeError = nil;
             BOOL wrote = [combined writeToFile:exportPath
                                     atomically:YES
@@ -16694,7 +16775,7 @@ static BOOL AWEGetDoubleTapLocation(id sender,
 %end
 
 
-#pragma mark - 1.0.56c16 internal fullscreen (validated 0.5.1 geometry)
+#pragma mark - 1.0.56c17 internal fullscreen (validated 0.5.1 geometry)
 
 static BOOL AWEImmediateSensitiveDestinationBlocksFullscreen(void) {
     for (UIViewController *controller in AWESensitiveVisibleControllers()) {
@@ -16717,7 +16798,7 @@ static BOOL AWEImmediateSensitiveDestinationBlocksFullscreen(void) {
 static BOOL AWEInternalFullscreenActive(void) {
     if (!AWEPluginFeaturesEnabled() || !AWEInternalFullscreenEnabled()) return NO;
 
-    /* 1.0.56c16 route ownership: fullscreen geometry belongs to feed/detail
+    /* 1.0.56c17 route ownership: fullscreen geometry belongs to feed/detail
        media, never to Messages. A forwarded work can temporarily remove its
        text composer while AWEIMAwemeMediaDisplay/RichContent controllers stay
        visible; checking only the composer therefore let fullscreen/recovery
@@ -16874,7 +16955,7 @@ static void AWEFSExpandContentViewOfController(id controller) {
     }
 }
 
-/* 1.0.56c16 performance cleanup: the standalone fullscreen prototype used a
+/* 1.0.56c17 performance cleanup: the standalone fullscreen prototype used a
    process-wide UIView::setFrame hook to catch player-owned surfaces. That
    path is very hot in Douyin. Re-assert the same one-tab-short correction
    only while known player controllers lay out, and only inside their small
@@ -16982,7 +17063,7 @@ static void AWEFSClearBarLikePlainSubviews(UIView *root,
     }
 }
 
-/* 1.0.56c16: comment input/background controllers can remain attached after
+/* 1.0.56c17: comment input/background controllers can remain attached after
    the visible comment sheet is gone. While the sheet is open fullscreen is
    intentionally inactive, so Douyin may rebuild these bottom surfaces opaque.
    If they do not receive another layout pass on dismissal, that opaque strip
@@ -17142,8 +17223,17 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 /* Fullscreen feed/media hooks. These mirror the independently validated 0.5.1
    behavior and are entirely gated by the internal fullscreen preference. */
 %hook AWEFeedTableView
+- (void)didMoveToWindow {
+    %orig;
+    if ([(id)self isKindOfClass:UIScrollView.class]) {
+        AWETryBindAlbumMorphNativeMinimizeSource((UIScrollView *)self, @"didMoveToWindow");
+    }
+}
 - (void)layoutSubviews {
     %orig;
+    if ([(id)self isKindOfClass:UIScrollView.class]) {
+        AWETryBindAlbumMorphNativeMinimizeSource((UIScrollView *)self, @"layout");
+    }
     if (!AWEInternalFullscreenActive()) return;
 
     UIView *view = (UIView *)self;
@@ -17203,7 +17293,7 @@ static void AWEFSAdjustMetalCenterIfNeeded(UIView *view, CGPoint *center) {
 }
 %end
 
-/* 1.0.56c16 intentionally has no process-wide %hook UIView. Detail comment
+/* 1.0.56c17 intentionally has no process-wide %hook UIView. Detail comment
    background cleanup remains on AWECommentInputBackgroundView and Douyin's
    Swift CommentInputContainerView below; clean-screen persistence remains on
    its explicit target hooks plus bounded rescans. */
@@ -18008,7 +18098,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
     AWESettingItemModel *entry = [[%c(AWESettingItemModel) alloc] init];
     entry.identifier = @"AwemeLiquidBar.Settings";
     entry.title = @"LiquidBar";
-    entry.detail = @"1.0.56c16";
+    entry.detail = @"1.0.56c17";
     entry.type = 0;
     entry.svgIconImageName = @"ic_gearsimplify_outlined_20";
     entry.cellType = 26;
@@ -18875,7 +18965,7 @@ static BOOL AWEPlaybackPreferenceCanBiasNow(void) {
 - (void)setHidden:(BOOL)hidden {
     BOOL changed = self.hidden != hidden;
 
-    /* 1.0.56c16: never veto Douyin's native hidden transition on Friends.
+    /* 1.0.56c17: never veto Douyin's native hidden transition on Friends.
        Blocking hidden here was an old layout-footprint workaround, but it also
        changes the native tab-bar state exactly while the Friends feed decides
        whether its player is visible/active. The replacement bar already stays
@@ -19459,7 +19549,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
         }
 
         AWEAlbumMorphProbeClear();
-        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c16 os=%@",
+        AWEAlbumMorphProbeWrite(@"SESSION_START build=1.0.56c17 os=%@",
             NSProcessInfo.processInfo.operatingSystemVersionString);
         /* Preserve the user's grouped-top and iOS 27 force-dark choices
            across upgrades. Defaults are resolved lazily by their getters. */
@@ -19473,7 +19563,7 @@ static BOOL AWEClassNameLooksLikeFriendsRootController(NSString *className) {
                             object:nil
                              queue:[NSOperationQueue mainQueue]
                         usingBlock:^(__unused NSNotification *notification) {
-                /* 1.0.56c16 foreground rule: Douyin owns player recovery.
+                /* 1.0.56c17 foreground rule: Douyin owns player recovery.
                    During DidBecomeActive do not reattach the native tab bar,
                    force route recovery, relayout Feed chrome, or steal key
                    window state. Those operations used to run in the same

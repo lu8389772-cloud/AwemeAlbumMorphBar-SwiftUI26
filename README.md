@@ -1,18 +1,18 @@
-# AwemeLiquidBar 1.0.56c16
+# AwemeLiquidBar 1.0.56c17 — Native Minimize Proxy Probe
 
-Narrow follow-up to 1.0.56c15. It keeps the validated c8 playback lifecycle, c14/c15 article/avatar route fixes, and c10 true bottom-bar ownership release.
+Focused test build based directly on the validated **1.0.56c16 auth38** project.
 
-## 1.0.56c16 changes
-- Adds authorization for `Wake54174`; authorization table now contains 38 unique accounts.
-- The custom “显示液态底栏” ownership-release option remains restricted to the existing two compatibility accounts (`Hoeyc_0505` and `0416xxd`). `Wake54174` does not receive that option.
-- Private-message forwarded works now use LiquidBar's semantic original tab identity. Douyin may report Messages as native selectedIndex 2 when Publish is omitted, so the previous hard-coded native index could leave fullscreen geometry and delayed right-stack recovery active inside IM media. Messages is now treated as semantic index 3 consistently.
-- After closing comments, the plugin tracks only the known comment-input background containers and runs bounded post-dismiss transparency passes. This clears lingering opaque bottom surfaces/native tab backgrounds that otherwise could survive until the next feed item.
-- No permanent timer, process-wide `UIView` hook, forced player control, or broad layout rewrite was added.
+## Only new runtime experiment
 
-## Preserved
-- Article Home-feed route correction.
-- Avatar-editor route suppression.
-- Search-result navigation isolation.
-- Clean-screen hard no-show gate.
-- Max-five bottom-bar entries and native Douyin Settings entry.
-- Foreground/Friends playback lifecycle isolation.
+- Adds **原生滚动收缩（实验）** to the bottom-position card; enabled by default in this test build.
+- Uses the public iOS 26+ `UITabBarController.tabBarMinimizeBehavior = .onScrollDown` path.
+- Registers a transparent proxy collection view, already owned by the real LiquidBar `UITabBarController`, through `UIViewController.setContentScrollView(_:for: .bottom)`.
+- Does **not** attach or reparent Douyin's real feed scroll view to the overlay controller. The existing Home/Friends feed pan recognizer is only observed; its vertical delta is mirrored into the transparent proxy.
+- Does **not** install another pan recognizer and does not use the retired manual scale/translation collapse path.
+- Disabling the switch restores `.never` and removes the source-pan target.
+
+## Intentionally unchanged
+
+All c16 authorization (38 users), custom two-account bottom-bar release, fullscreen/clean-screen, IM/comment routing, article/avatar fixes, badges, download/highest-quality playback, top group, top/right button materials and tint logic are unchanged.
+
+The broader Liquid Glass material work (regular-vs-clear audit, shared glass containers, system transparency/tint adaptation, quieter top/right edges) is **not** mixed into this probe.

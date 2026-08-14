@@ -1,24 +1,14 @@
-AwemeLiquidBar 1.0.56c16 test protocol
+AwemeLiquidBar 1.0.56c17 device test — native minimize probe
 
-A. c12 route regressions
-1. Home -> article/read card -> continue swiping: LiquidBar must return/remain available on normal feed cards.
-2. IM -> open forwarded work: nickname/caption/buttons must not be lifted by LiquidBar fullscreen geometry.
-3. IM -> open a sent image/media viewer: LiquidBar must remain absent.
-4. Search -> tap video/image result: result detail must open normally; no freeze while vertical scrolling remains responsive.
-5. Configure top categories so only one is visible: the label must match the actual selected category.
-6. Rapidly swipe normal videos/Daily feed: no intermittent loss of vertical scrolling.
+0. Confirm Settings shows 1.0.56c17 and “原生滚动收缩（实验）” is ON. Do not change any other settings for the first pass.
+1. Cold-launch Douyin to Home. The bottom bar should start at the same expanded position/height as c16.
+2. Swipe upward through 2–3 normal Home videos. Observe whether the system tab bar itself minimizes. Reverse direction once; it should expand using UIKit's own animation.
+3. Repeat on Home photo posts. Do not use clean screen during this first pass.
+4. Enter Friends, swipe 2–3 items, then reverse. Check the same minimize/expand behavior.
+5. While expanded and while minimized, tap Home/Friends/Messages/Profile and Search. Selection pill, hit testing and search must remain correct.
+6. Open comments and close them; open a profile/detail then return. No c16 route/black-background/progress-bar regression should appear.
+7. Change the existing bottom vertical-position slider by a visible amount. Native minimize must not reset that saved offset.
+8. Turn “原生滚动收缩（实验）” OFF. The bar must remain fixed and normal; Home/Friends swipes must behave exactly like c16.
+9. If Home still refuses to minimize, export the c17 diagnostic log after one upward + one downward swipe. Relevant entries: NATIVE_MINIMIZE_MODE, NATIVE_MINIMIZE_SOURCE, NATIVE_MINIMIZE_BIND, NATIVE_MINIMIZE_PAN_BEGIN/END.
 
-B. Clean-screen no-show guard
-1. Enter clean screen and leave the video playing for 10-20 seconds.
-2. Tap once to pause, once to resume, and swipe to the next item while still in clean screen.
-3. LiquidBar/search must not flash for one/two frames at any point.
-4. Exit clean screen: LiquidBar must restore normally without requiring a page switch.
-
-C. Authorization / compatibility option
-1. Confirm total authorization table = 37 unique entries.
-2. Hoeyc_0505 and 0416xxd: “显示液态底栏” is visible and can release/reacquire bottom-bar ownership.
-3. Any other authorized account: that setting is absent and old OFF state cannot disable/release LiquidBar.
-
-D. Regression
-- Foreground return playback and Friends playback remain normal.
-- Fullscreen, clean-screen status bar, save HUD, native Settings entry, max-five bottom entries and badges remain unchanged.
+Do not evaluate top/right glass edge styling in this build; those materials are intentionally unchanged from c16.

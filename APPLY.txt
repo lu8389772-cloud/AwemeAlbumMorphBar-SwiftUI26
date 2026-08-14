@@ -1,1 +1,1 @@
-AwemeLiquidBar 1.0.56c16 is a narrow IM/comment-background/auth38 follow-up to 1.0.56c15.
+AwemeLiquidBar 1.0.56c17 is a complete test project based on 1.0.56c16. Replace the working tree except .git; do not layer a separate patch.

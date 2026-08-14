@@ -1,0 +1,13 @@
+AwemeLiquidBar 1.0.56c17 native minimize proxy probe
+
+Base: 1.0.56c16 auth38, no unrelated feature changes.
+
+Test mechanism:
+1. LiquidBar remains a real UITabBarController in its resident transparent overlay window.
+2. Each tab already owns a transparent UICollectionViewController proxy.
+3. The active Home/Friends proxy registers its collectionView using the public iOS 26 setContentScrollView(_:for: .bottom) API.
+4. Douyin's AWEFeedTableView is never reparented and receives no new recognizer. We add a target to its existing panGestureRecognizer and mirror only vertical scroll deltas into the proxy.
+5. UITabBarController.tabBarMinimizeBehavior is .onScrollDown while the experimental switch is ON; OFF restores .never and unbinds the source.
+6. The retired whole-window manual collapse recognizer stays hard-disabled.
+
+Diagnostics are low frequency: source bind plus pan begin/end only. No per-frame file logging.

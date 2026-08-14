@@ -1,8 +1,8 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.56c16
+Version: 1.0.56c17
 Architecture: iphoneos-arm
-Description: Stable auth38 build with article-feed bar recovery, IM/search route isolation, single-category top-label correction, gesture-safe fullscreen feed sizing, compatibility-scoped bottom-bar release, robust clean-screen/status-bar handling, native badges, and Liquid Glass UI.
+Description: c17 native iOS 26+ tab-bar minimize probe on the stable c16 auth38 baseline; mirrors Home/Friends feed scroll into an in-controller transparent proxy while preserving c16 route, fullscreen, IM/comment, authorization, native-badge, and Liquid Glass behavior.
 Maintainer: xyy
 Author: xyy
 Section: Tweaks

@@ -254,6 +254,10 @@ private final class AWEAlbumMorphProxyController: UICollectionViewController {
     let originalIndex: Int?
     let representsSearch: Bool
     private weak var boundSourceScrollView: UIScrollView?
+    private var lastSourceContentOffsetY: CGFloat?
+    private var lastSourceTranslationY: CGFloat = 0
+    private var syntheticScrollOffsetY: CGFloat = 0
+    private var nativeObservationInstalled = false
 
     init(originalIndex: Int?, representsSearch: Bool = false) {
         self.originalIndex = originalIndex
@@ -329,18 +333,101 @@ private final class AWEAlbumMorphProxyController: UICollectionViewController {
         return cell
     }
 
-    func bindSourceScrollView(_ scrollView: UIScrollView) {
-        // Stability baseline: do not attach host scroll views to the overlay
-        // controller. Cross-hierarchy binding caused page-dependent state and
-        // visible geometry jumps without reliable native minimization.
-        boundSourceScrollView = nil
+    private func installNativeBottomObservationIfNeeded() {
+        guard !nativeObservationInstalled else { return }
+        loadViewIfNeeded()
+        view.layoutIfNeeded()
+        collectionView.layoutIfNeeded()
+        // Public iOS 26 API: the proxy collection view lives in the same
+        // UITabBarController hierarchy as the LiquidBar, so UIKit owns the
+        // actual minimize/expand animation. The real Douyin feed remains in
+        // its own window and is never reparented.
+        setContentScrollView(collectionView, for: .bottom)
+        nativeObservationInstalled = true
         albumMorphProbe(
-            "SOURCE_BIND_DISABLED proxy=\(originalIndex.map(String.init) ?? "search") " +
-            "scroll=\(type(of: scrollView))"
+            "NATIVE_MINIMIZE_OBSERVER proxy=\(originalIndex.map(String.init) ?? "search") " +
+            "content=\(collectionView.contentSize) bounds=\(collectionView.bounds)"
         )
     }
 
+    func bindSourceScrollView(_ scrollView: UIScrollView) {
+        if boundSourceScrollView === scrollView { return }
+        unbindSourceScrollView()
+        installNativeBottomObservationIfNeeded()
 
+        boundSourceScrollView = scrollView
+        lastSourceContentOffsetY = scrollView.contentOffset.y
+        lastSourceTranslationY = scrollView.panGestureRecognizer.translation(in: scrollView).y
+        syntheticScrollOffsetY = min(max(collectionView.contentOffset.y, 0), 360)
+        scrollView.panGestureRecognizer.addTarget(
+            self, action: #selector(sourcePanChanged(_:))
+        )
+        albumMorphProbe(
+            "NATIVE_MINIMIZE_BIND proxy=\(originalIndex.map(String.init) ?? "search") " +
+            "source=\(type(of: scrollView)) offset=\(scrollView.contentOffset.y)"
+        )
+    }
+
+    func unbindSourceScrollView() {
+        if let source = boundSourceScrollView {
+            source.panGestureRecognizer.removeTarget(
+                self, action: #selector(sourcePanChanged(_:))
+            )
+        }
+        boundSourceScrollView = nil
+        lastSourceContentOffsetY = nil
+        lastSourceTranslationY = 0
+    }
+
+    @objc private func sourcePanChanged(_ recognizer: UIPanGestureRecognizer) {
+        guard let source = boundSourceScrollView, recognizer === source.panGestureRecognizer else {
+            return
+        }
+
+        let currentOffset = source.contentOffset.y
+        let translationY = recognizer.translation(in: source).y
+        switch recognizer.state {
+        case .began:
+            lastSourceContentOffsetY = currentOffset
+            lastSourceTranslationY = translationY
+            albumMorphProbe(
+                "NATIVE_MINIMIZE_PAN_BEGIN proxy=\(originalIndex.map(String.init) ?? "search") " +
+                "sourceY=\(String(format: "%.2f", currentOffset)) " +
+                "proxyY=\(String(format: "%.2f", syntheticScrollOffsetY))"
+            )
+
+        case .changed:
+            let offsetDelta = currentOffset - (lastSourceContentOffsetY ?? currentOffset)
+            let translationDelta = translationY - lastSourceTranslationY
+            // Full-screen paged feeds sometimes report a stable contentOffset
+            // during part of the gesture. Use the real scroll delta when it is
+            // available, otherwise mirror the pan translation. Clamp each
+            // frame so a page-sized jump cannot snap the system animation.
+            var delta = abs(offsetDelta) > 0.15 ? offsetDelta : -translationDelta
+            delta = min(max(delta, -72), 72)
+            if abs(delta) > 0.05 {
+                syntheticScrollOffsetY = min(max(syntheticScrollOffsetY + delta, 0), 360)
+                collectionView.setContentOffset(
+                    CGPoint(x: 0, y: syntheticScrollOffsetY), animated: false
+                )
+            }
+            lastSourceContentOffsetY = currentOffset
+            lastSourceTranslationY = translationY
+
+        case .ended, .cancelled, .failed:
+            lastSourceContentOffsetY = nil
+            lastSourceTranslationY = 0
+            let tabFrame = tabBarController?.tabBar.frame ?? .zero
+            albumMorphProbe(
+                "NATIVE_MINIMIZE_PAN_END proxy=\(originalIndex.map(String.init) ?? "search") " +
+                "proxyY=\(String(format: "%.2f", syntheticScrollOffsetY)) " +
+                "tabFrame=\(tabFrame)"
+            )
+
+        default:
+            break
+        }
+    }
 }
 
 @available(iOS 26.0, *)
@@ -397,6 +484,9 @@ final class AWEAlbumMorphTabController:
     private var visibleItemIdentifiers = ItemKey.defaultVisible
     private var messageBadgeValue: String?
     private var secondBadgeValue: String?
+    private var nativeMinimizeEnabled = false
+    private weak var lastNativeMinimizeSourceScrollView: UIScrollView?
+    private var nativeMinimizeBoundOriginalIndex: Int?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -406,6 +496,9 @@ final class AWEAlbumMorphTabController:
         view.tintColor = .systemCyan
 
         delegate = self
+        // c17 starts from the c16 fixed-bar baseline. Objective-C applies the
+        // experimental preference after the controller is installed; until
+        // then the system bar remains explicitly expanded.
         tabBarMinimizeBehavior = .never
 
         overrideUserInterfaceStyle = .unspecified
@@ -631,7 +724,9 @@ final class AWEAlbumMorphTabController:
     }
 
     private func rebuildTabs(preservingOriginalIndex originalIndex: Int) {
+        for proxy in proxies { proxy.unbindSourceScrollView() }
         proxies.removeAll()
+        nativeMinimizeBoundOriginalIndex = nil
         explicitImagesByIdentifier.removeAll(keepingCapacity: true)
 
         let sourceKeys = Array(visibleItemIdentifiers.prefix(5))
@@ -660,6 +755,7 @@ final class AWEAlbumMorphTabController:
         applyStableVerticalOffset()
         applyFallbackCompactTransform(animated: false)
         applyUnreadBadges()
+        rebindNativeMinimizeSourceIfPossible()
         albumMorphProbe(
             "VISIBLE_ITEMS_APPLIED items=\(visibleItemIdentifiers.joined(separator: ",")) " +
             "selected=\(resolvedIndex) tabFrame=\(tabBar.frame)"
@@ -926,12 +1022,54 @@ final class AWEAlbumMorphTabController:
         cachedOriginalIndex
     }
 
+    private func rebindNativeMinimizeSourceIfPossible() {
+        for proxy in proxies {
+            proxy.unbindSourceScrollView()
+        }
+        nativeMinimizeBoundOriginalIndex = nil
+        guard nativeMinimizeEnabled,
+              (cachedOriginalIndex == 0 || cachedOriginalIndex == 1),
+              let source = lastNativeMinimizeSourceScrollView,
+              let proxy = activeProxy else {
+            return
+        }
+        proxy.bindSourceScrollView(source)
+        nativeMinimizeBoundOriginalIndex = cachedOriginalIndex
+    }
+
+    @objc(setNativeMinimizeEnabled:)
+    func setNativeMinimizeEnabled(_ enabled: Bool) {
+        guard nativeMinimizeEnabled != enabled else { return }
+        nativeMinimizeEnabled = enabled
+        tabBarMinimizeBehavior = enabled ? .onScrollDown : .never
+        if !enabled {
+            for proxy in proxies { proxy.unbindSourceScrollView() }
+            compactMode = false
+            tabBar.transform = .identity
+        } else {
+            rebindNativeMinimizeSourceIfPossible()
+        }
+        albumMorphProbe(
+            "NATIVE_MINIMIZE_MODE enabled=\(enabled) selected=\(cachedOriginalIndex) " +
+            "behavior=\(String(describing: tabBarMinimizeBehavior)) frame=\(tabBar.frame)"
+        )
+    }
+
     @objc(bindSourceScrollView:)
     func bindSourceScrollView(_ scrollView: UIScrollView) {
-        _ = scrollView
-        albumMorphProbe(
-            "TAB_CONTROLLER_SOURCE_BIND_DISABLED selected=\(cachedOriginalIndex)"
-        )
+        if lastNativeMinimizeSourceScrollView === scrollView,
+           nativeMinimizeBoundOriginalIndex == cachedOriginalIndex {
+            return
+        }
+        lastNativeMinimizeSourceScrollView = scrollView
+        rebindNativeMinimizeSourceIfPossible()
+    }
+
+    @objc(clearNativeMinimizeSourceScrollView)
+    func clearNativeMinimizeSourceScrollView() {
+        lastNativeMinimizeSourceScrollView = nil
+        nativeMinimizeBoundOriginalIndex = nil
+        for proxy in proxies { proxy.unbindSourceScrollView() }
     }
 
     private func reassertSelection(
@@ -994,11 +1132,15 @@ final class AWEAlbumMorphTabController:
         guard let target = tabForOriginalIndex(index) else { return }
         cachedOriginalIndex = index
 
-        guard selectedTab !== target else { return }
+        guard selectedTab !== target else {
+            rebindNativeMinimizeSourceIfPossible()
+            return
+        }
         suppressCallbacks = true
         selectedTab = target
         applyExplicitSelectionImages(selectedIdentifier: target.identifier)
         suppressCallbacks = false
+        rebindNativeMinimizeSourceIfPossible()
     }
 
     @objc(mirrorSourceScrollOffset:)
@@ -1036,6 +1178,7 @@ final class AWEAlbumMorphTabController:
 
         cachedOriginalIndex = originalIndex
         applyExplicitSelectionImages(selectedIdentifier: selectedTab.identifier)
+        rebindNativeMinimizeSourceIfPossible()
         albumMorphProbe(
             "TAB_SELECT originalIndex=\(originalIndex) previous=\(previousTab?.identifier ?? "nil")"
         )
