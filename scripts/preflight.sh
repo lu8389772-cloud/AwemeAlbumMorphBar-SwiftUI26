@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56c15'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c15-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56c15'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56c15'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56c15_interaction.log'),
+    ('control', control, 'Version: 1.0.56c16'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c16-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56c16'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56c16'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56c16_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -39,7 +39,7 @@ for token in [
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56c15', 'LiquidBar 设置 · 1.0.56c15',
+    'AwemeLiquidBar 1.0.56c16', 'LiquidBar 设置 · 1.0.56c16',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -117,7 +117,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56c15 intentionally has one custom group for the
+# Logos structural audit. 1.0.56c16 intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -138,7 +138,7 @@ dups = [name for name, count in Counter(hooks).items() if count > 1]
 if dups:
     raise SystemExit('duplicate Logos hook classes: ' + ', '.join(dups))
 
-# 1.0.56c15: hard max-five + real Douyin Settings-page injection.
+# 1.0.56c16: hard max-five + real Douyin Settings-page injection.
 for required in [
     '%hook AWESettingsViewModel',
     '- (NSArray *)sectionDataArray',
@@ -190,17 +190,17 @@ for left, right, name in [('{','}','brace'),('(',')','parenthesis'),('[',']','br
     if objc.count(left) != objc.count(right):
         raise SystemExit(f'Objective-C {name} count mismatch')
 
-if 'kAWEAuthorizationDigests[37]' not in objc:
-    raise SystemExit('auth37 digest table declaration missing')
-start = objc.index('kAWEAuthorizationDigests[37]')
+if 'kAWEAuthorizationDigests[38]' not in objc:
+    raise SystemExit('auth38 digest table declaration missing')
+start = objc.index('kAWEAuthorizationDigests[38]')
 end = objc.index('};', start)
 rows = [line for line in objc[start:end].splitlines()
         if line.strip().startswith('{') and 'kAWEAuthorizationDigests' not in line]
-if len(rows) != 37:
-    raise SystemExit(f'auth digest row count is {len(rows)}, expected 37')
+if len(rows) != 38:
+    raise SystemExit(f'auth digest row count is {len(rows)}, expected 38')
 
 
-# 1.0.56c15 targeted route/feed regressions.
+# 1.0.56c16 targeted route/feed regressions.
 for required in [
     'AWECurrentHomeFeedSurfaceVisible',
     'gAWEHomeFeedTopContainer',
@@ -208,7 +208,7 @@ for required in [
     'imMediaDestination',
     'AWETrackMessagingComposer',
     'if (visibleCount == 1 && group.selectedIndex != NSNotFound)',
-    'if (AWECurrentOriginalMainTabIndex() != 3) return NO;',
+    'if (AWECurrentMainTabIndex() != 3) return NO;',
     'AWEFullscreenRightRecoveryContextEligible',
     'AWEHomeChromeRecoveryContextEligible',
     'AWEImmediateSensitiveDestinationBlocksFullscreen',
@@ -221,9 +221,14 @@ for required in [
     'if (AWECustomBottomBarReleaseAllowed()) {',
     '0x4B0A02CEu',
     '0xC9867052u',
+    '0x991B1FCAu',
+    'AWECurrentMainTabIndex() == 3',
+    'FS_COMMENT_BOTTOM_CLEAR',
+    'AWEFSTrackCommentBottomView',
+    'AWESchedulePostCommentBottomTransparencyRecovery',
 ]:
     if required not in objc:
-        raise SystemExit('missing 1.0.56c15 targeted invariant: ' + required)
+        raise SystemExit('missing 1.0.56c16 targeted invariant: ' + required)
 
 home_start = objc.index('static BOOL AWECurrentHomeFeedSurfaceVisible(void)')
 home_end = objc.index('static BOOL AWECurrentRouteSuppressesBar(void)', home_start)
@@ -253,7 +258,7 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56c15 clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56c16 clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
@@ -262,7 +267,7 @@ for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isK
     if forbidden_clean in clean_chunk:
         raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-# 1.0.56c15 performance invariants. These are intentionally narrow so future
+# 1.0.56c16 performance invariants. These are intentionally narrow so future
 # feature work cannot silently reintroduce the hottest process-wide paths.
 if re.search(r'^%hook\s+UIView\s*$', objc, re.M):
     raise SystemExit('process-wide %hook UIView was reintroduced')
@@ -287,7 +292,7 @@ for forbidden_reason in [
         raise SystemExit('high-frequency clean reapply trigger remains: ' + forbidden_reason)
 
 
-# 1.0.56c15 true bottom-bar ownership-release invariants.
+# 1.0.56c16 true bottom-bar ownership-release invariants.
 for needle in [
     'AwemeLiquidBarBottomBarDisplayEnabledV1',
     '@"显示液态底栏"',
@@ -299,9 +304,9 @@ for needle in [
     '@selector(bottomBarDisplaySwitchChanged:)',
 ]:
     if needle not in objc:
-        raise SystemExit(f'missing 1.0.56c15 bottom-bar release invariant: {needle}')
+        raise SystemExit(f'missing 1.0.56c16 bottom-bar release invariant: {needle}')
 
-# 1.0.56c15: clean screen must block show-at-source rather than reveal then suppress.
+# 1.0.56c16: clean screen must block show-at-source rather than reveal then suppress.
 for required in [
     'hard no-show gate for clean screen',
     'install.clean-guard',
@@ -309,15 +314,15 @@ for required in [
     'if (gAWEStableCleanScreenEnabled) {\n        AWEStableCleanEnforceBottomBarSuppression();\n        return YES;\n    }',
 ]:
     if required not in objc:
-        raise SystemExit('missing 1.0.56c15 clean no-show invariant: ' + required)
+        raise SystemExit('missing 1.0.56c16 clean no-show invariant: ' + required)
 clean_guard_start = objc.index('hard no-show gate for clean screen')
 clean_guard_end = objc.index('fraction = MIN(MAX(fraction, 0.0), 1.0);', clean_guard_start)
 clean_guard = objc[clean_guard_start:clean_guard_end]
 if 'userInteractionEnabled = NO' in clean_guard or 'searchTouchProxy.hidden = YES' in clean_guard:
     raise SystemExit('clean no-show guard mutates restorable interaction/hidden state before suppression')
 
-# Auth table must contain 37 unique decoded digests (Hoeyc_0505 was already present).
-main_auth = objc[objc.index('kAWEAuthorizationDigests[37]'):objc.index('#define AWE_AUTHORIZATION_DIGEST_COUNT')]
+# Auth table must contain 38 unique decoded digests; Wake54174 is the only new account in c16.
+main_auth = objc[objc.index('kAWEAuthorizationDigests[38]'):objc.index('#define AWE_AUTHORIZATION_DIGEST_COUNT')]
 pairs = re.findall(r'\{ \{([^}]*)\}, \{([^}]*)\} \}', main_auth)
 decoded = []
 for left, right in pairs:
@@ -325,8 +330,8 @@ for left, right in pairs:
     b = [int(x, 16) for x in re.findall(r'0x([0-9A-Fa-f]{2})', right)]
     if len(a) == 32 and len(b) == 32:
         decoded.append(bytes(x ^ y for x, y in zip(a, b)))
-if len(decoded) != 37 or len(set(decoded)) != 37:
-    raise SystemExit(f'auth37 uniqueness failed: rows={len(decoded)} unique={len(set(decoded))}')
+if len(decoded) != 38 or len(set(decoded)) != 38:
+    raise SystemExit(f'auth38 uniqueness failed: rows={len(decoded)} unique={len(set(decoded))}')
 
-print('AwemeLiquidBar 1.0.56c15 internal-fullscreen/clean-v2/native-badges preflight passed')
+print('AwemeLiquidBar 1.0.56c16 internal-fullscreen/clean-v2/native-badges preflight passed')
 PY2

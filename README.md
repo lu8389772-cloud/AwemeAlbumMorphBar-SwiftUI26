@@ -1,21 +1,18 @@
-# AwemeLiquidBar 1.0.56c15
+# AwemeLiquidBar 1.0.56c16
 
-Stable follow-up based on 1.0.56c12, keeping the validated 1.0.56c10 playback lifecycle and bottom-bar release behavior.
+Narrow follow-up to 1.0.56c15. It keeps the validated c8 playback lifecycle, c14/c15 article/avatar route fixes, and c10 true bottom-bar ownership release.
 
-## Preserved from c12
-- Article-style Home feed cards no longer permanently lose LiquidBar after the card ends.
-- IM/shared-work media routes suppress LiquidBar where the chat composer/media viewer owns the bottom area.
-- Search result navigation is isolated from LiquidBar fullscreen feed geometry.
-- Fullscreen feed sizing does not rewrite the scroll container while tracking/dragging/decelerating.
-- Single-visible-category top label follows the real selected category instead of defaulting to the first label.
-- “显示液态底栏” remains a true ownership-release mode for the two compatibility accounts only.
-- Foreground/Friends playback lifecycle isolation from 1.0.56c8 remains unchanged.
+## 1.0.56c16 changes
+- Adds authorization for `Wake54174`; authorization table now contains 38 unique accounts.
+- The custom “显示液态底栏” ownership-release option remains restricted to the existing two compatibility accounts (`Hoeyc_0505` and `0416xxd`). `Wake54174` does not receive that option.
+- Private-message forwarded works now use LiquidBar's semantic original tab identity. Douyin may report Messages as native selectedIndex 2 when Publish is omitted, so the previous hard-coded native index could leave fullscreen geometry and delayed right-stack recovery active inside IM media. Messages is now treated as semantic index 3 consistently.
+- After closing comments, the plugin tracks only the known comment-input background containers and runs bounded post-dismiss transparency passes. This clears lingering opaque bottom surfaces/native tab backgrounds that otherwise could survive until the next feed item.
+- No permanent timer, process-wide `UIView` hook, forced player control, or broad layout rewrite was added.
 
-## 1.0.56c15 corrections
-- Authorization table is corrected to 37 unique users. `Hoeyc_0505` was already in the original table and is no longer duplicated; `0416xxd` remains authorized.
-- The bottom-bar ownership-release option is still visible/usable only for `Hoeyc_0505` and `0416xxd`; all other authorized users are forced to the normal LiquidBar-on path and do not see that setting.
-- Clean screen now has a source-level hard no-show gate. Route/lifecycle/pause/selection callbacks may keep bookkeeping state, but cannot reveal the LiquidBar overlay, tab bar, or search proxy while clean screen is active.
-- No new timers, polling loops, process-wide UIView hooks, forced play/pause calls, or chat-return experiments are introduced.
-
-## Build
-Use the existing Xcode 27 / Theos GitHub Actions workflow. The phone-side upload flow does not need to run the Python preflight script.
+## Preserved
+- Article Home-feed route correction.
+- Avatar-editor route suppression.
+- Search-result navigation isolation.
+- Clean-screen hard no-show gate.
+- Max-five bottom-bar entries and native Douyin Settings entry.
+- Foreground/Friends playback lifecycle isolation.
