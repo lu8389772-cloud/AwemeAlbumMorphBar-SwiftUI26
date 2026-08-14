@@ -254,10 +254,6 @@ private final class AWEAlbumMorphProxyController: UICollectionViewController {
     let originalIndex: Int?
     let representsSearch: Bool
     private weak var boundSourceScrollView: UIScrollView?
-    private var lastSourceContentOffsetY: CGFloat?
-    private var lastSourceTranslationY: CGFloat = 0
-    private var syntheticScrollOffsetY: CGFloat = 0
-    private var nativeObservationInstalled = false
 
     init(originalIndex: Int?, representsSearch: Bool = false) {
         self.originalIndex = originalIndex
@@ -305,8 +301,9 @@ private final class AWEAlbumMorphProxyController: UICollectionViewController {
             forCellWithReuseIdentifier: AWEAlbumMorphProxyCell.reuseIdentifier
         )
 
-        // The proxy stays visually inert. The actual user-controlled source
-        // scroll view is bound later through UIKit's public content-scroll API.
+        // The proxy stays visually inert. In c18 UIKit observes Douyin's real
+        // feed scroll view directly; this collection view is no longer used as
+        // a synthetic scrolling bridge.
         albumMorphProbe(
             "PROXY_VIEW_DID_LOAD index=\(originalIndex.map(String.init) ?? "search") " +
             "bounds=\(collectionView.bounds) content=\(collectionView.contentSize)"
@@ -333,101 +330,61 @@ private final class AWEAlbumMorphProxyController: UICollectionViewController {
         return cell
     }
 
-    private func installNativeBottomObservationIfNeeded() {
-        guard !nativeObservationInstalled else { return }
-        loadViewIfNeeded()
-        view.layoutIfNeeded()
-        collectionView.layoutIfNeeded()
-        // Public iOS 26 API: the proxy collection view lives in the same
-        // UITabBarController hierarchy as the LiquidBar, so UIKit owns the
-        // actual minimize/expand animation. The real Douyin feed remains in
-        // its own window and is never reparented.
-        setContentScrollView(collectionView, for: .bottom)
-        nativeObservationInstalled = true
-        albumMorphProbe(
-            "NATIVE_MINIMIZE_OBSERVER proxy=\(originalIndex.map(String.init) ?? "search") " +
-            "content=\(collectionView.contentSize) bounds=\(collectionView.bounds)"
-        )
-    }
-
     func bindSourceScrollView(_ scrollView: UIScrollView) {
         if boundSourceScrollView === scrollView { return }
         unbindSourceScrollView()
-        installNativeBottomObservationIfNeeded()
+        loadViewIfNeeded()
+        view.layoutIfNeeded()
 
+        // c18 A/B test: give UIKit the real, finger-driven Douyin feed scroll
+        // view directly. The scroll view is NOT reparented; this intentionally
+        // tests whether the public bar-observation path works across our
+        // resident overlay UITabBarController boundary.
         boundSourceScrollView = scrollView
-        lastSourceContentOffsetY = scrollView.contentOffset.y
-        lastSourceTranslationY = scrollView.panGestureRecognizer.translation(in: scrollView).y
-        syntheticScrollOffsetY = min(max(collectionView.contentOffset.y, 0), 360)
+        setContentScrollView(scrollView, for: .bottom)
         scrollView.panGestureRecognizer.addTarget(
-            self, action: #selector(sourcePanChanged(_:))
+            self, action: #selector(sourcePanDiagnostic(_:))
         )
         albumMorphProbe(
-            "NATIVE_MINIMIZE_BIND proxy=\(originalIndex.map(String.init) ?? "search") " +
-            "source=\(type(of: scrollView)) offset=\(scrollView.contentOffset.y)"
+            "NATIVE_MINIMIZE_DIRECT_BIND proxy=\(originalIndex.map(String.init) ?? "search") " +
+            "source=\(type(of: scrollView)) sourceWindow=\(String(describing: scrollView.window)) " +
+            "proxyWindow=\(String(describing: view.window)) offset=\(scrollView.contentOffset.y)"
         )
     }
 
     func unbindSourceScrollView() {
         if let source = boundSourceScrollView {
             source.panGestureRecognizer.removeTarget(
-                self, action: #selector(sourcePanChanged(_:))
+                self, action: #selector(sourcePanDiagnostic(_:))
             )
         }
+        // Return observation to UIKit inference so a stale Home/Friends feed
+        // cannot stay registered after a route or selected-tab change.
+        setContentScrollView(nil, for: .bottom)
         boundSourceScrollView = nil
-        lastSourceContentOffsetY = nil
-        lastSourceTranslationY = 0
     }
 
-    @objc private func sourcePanChanged(_ recognizer: UIPanGestureRecognizer) {
-        guard let source = boundSourceScrollView, recognizer === source.panGestureRecognizer else {
-            return
-        }
-
-        let currentOffset = source.contentOffset.y
-        let translationY = recognizer.translation(in: source).y
+    @objc private func sourcePanDiagnostic(_ recognizer: UIPanGestureRecognizer) {
+        guard let source = boundSourceScrollView,
+              recognizer === source.panGestureRecognizer else { return }
         switch recognizer.state {
         case .began:
-            lastSourceContentOffsetY = currentOffset
-            lastSourceTranslationY = translationY
             albumMorphProbe(
-                "NATIVE_MINIMIZE_PAN_BEGIN proxy=\(originalIndex.map(String.init) ?? "search") " +
-                "sourceY=\(String(format: "%.2f", currentOffset)) " +
-                "proxyY=\(String(format: "%.2f", syntheticScrollOffsetY))"
+                "NATIVE_MINIMIZE_DIRECT_PAN_BEGIN proxy=\(originalIndex.map(String.init) ?? "search") " +
+                "sourceY=\(String(format: "%.2f", source.contentOffset.y)) " +
+                "tabFrame=\(tabBarController?.tabBar.frame ?? .zero)"
             )
-
-        case .changed:
-            let offsetDelta = currentOffset - (lastSourceContentOffsetY ?? currentOffset)
-            let translationDelta = translationY - lastSourceTranslationY
-            // Full-screen paged feeds sometimes report a stable contentOffset
-            // during part of the gesture. Use the real scroll delta when it is
-            // available, otherwise mirror the pan translation. Clamp each
-            // frame so a page-sized jump cannot snap the system animation.
-            var delta = abs(offsetDelta) > 0.15 ? offsetDelta : -translationDelta
-            delta = min(max(delta, -72), 72)
-            if abs(delta) > 0.05 {
-                syntheticScrollOffsetY = min(max(syntheticScrollOffsetY + delta, 0), 360)
-                collectionView.setContentOffset(
-                    CGPoint(x: 0, y: syntheticScrollOffsetY), animated: false
-                )
-            }
-            lastSourceContentOffsetY = currentOffset
-            lastSourceTranslationY = translationY
-
         case .ended, .cancelled, .failed:
-            lastSourceContentOffsetY = nil
-            lastSourceTranslationY = 0
-            let tabFrame = tabBarController?.tabBar.frame ?? .zero
             albumMorphProbe(
-                "NATIVE_MINIMIZE_PAN_END proxy=\(originalIndex.map(String.init) ?? "search") " +
-                "proxyY=\(String(format: "%.2f", syntheticScrollOffsetY)) " +
-                "tabFrame=\(tabFrame)"
+                "NATIVE_MINIMIZE_DIRECT_PAN_END proxy=\(originalIndex.map(String.init) ?? "search") " +
+                "sourceY=\(String(format: "%.2f", source.contentOffset.y)) " +
+                "tabFrame=\(tabBarController?.tabBar.frame ?? .zero)"
             )
-
         default:
             break
         }
     }
+
 }
 
 @available(iOS 26.0, *)

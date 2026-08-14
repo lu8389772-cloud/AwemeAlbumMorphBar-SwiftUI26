@@ -1,14 +1,14 @@
-AwemeLiquidBar 1.0.56c17 device test — native minimize probe
+AwemeLiquidBar 1.0.56c18 device test — direct native minimize probe
 
-0. Confirm Settings shows 1.0.56c17 and “原生滚动收缩（实验）” is ON. Do not change any other settings for the first pass.
-1. Cold-launch Douyin to Home. The bottom bar should start at the same expanded position/height as c16.
-2. Swipe upward through 2–3 normal Home videos. Observe whether the system tab bar itself minimizes. Reverse direction once; it should expand using UIKit's own animation.
-3. Repeat on Home photo posts. Do not use clean screen during this first pass.
-4. Enter Friends, swipe 2–3 items, then reverse. Check the same minimize/expand behavior.
-5. While expanded and while minimized, tap Home/Friends/Messages/Profile and Search. Selection pill, hit testing and search must remain correct.
-6. Open comments and close them; open a profile/detail then return. No c16 route/black-background/progress-bar regression should appear.
-7. Change the existing bottom vertical-position slider by a visible amount. Native minimize must not reset that saved offset.
-8. Turn “原生滚动收缩（实验）” OFF. The bar must remain fixed and normal; Home/Friends swipes must behave exactly like c16.
-9. If Home still refuses to minimize, export the c17 diagnostic log after one upward + one downward swipe. Relevant entries: NATIVE_MINIMIZE_MODE, NATIVE_MINIMIZE_SOURCE, NATIVE_MINIMIZE_BIND, NATIVE_MINIMIZE_PAN_BEGIN/END.
+0. Confirm Settings shows 1.0.56c18 and “原生滚动收缩（实验）” is ON.
+1. Cold-launch Douyin to Home. The LiquidBar should start expanded exactly as c16/c17.
+2. Swipe upward through 3–5 Home videos, then reverse through 2–3 items. Watch whether UIKit itself minimizes/expands the bar.
+3. Repeat on Home photo posts.
+4. Enter Friends and repeat the same up/down sequence.
+5. If any minimize occurs, test Home/Friends/Messages/Profile/Search hit testing and selected platter position in both states.
+6. Turn the experiment OFF. The bar must become fixed; the old manual collapse animation must not run.
+7. If nothing moves, export the c18 probe log after one Home and one Friends up/down sequence. Relevant markers: NATIVE_MINIMIZE_MODE, NATIVE_MINIMIZE_SOURCE, NATIVE_MINIMIZE_DIRECT_BIND, NATIVE_MINIMIZE_DIRECT_PAN_BEGIN/END.
 
-Do not evaluate top/right glass edge styling in this build; those materials are intentionally unchanged from c16.
+If DIRECT_BIND and DIRECT_PAN are present while tabFrame never changes, stop testing proxy/gesture variants: the remaining likely constraint is the overlay UITabBarController ownership/window relationship.
+
+Do not evaluate top/right glass edge styling in this build.

@@ -1,6 +1,6 @@
 Package: com.xyy.awemeliquidbar
 Name: AwemeLiquidBar
-Version: 1.0.56c17
+Version: 1.0.56c18
 Architecture: iphoneos-arm
 Description: c17 native iOS 26+ tab-bar minimize probe on the stable c16 auth38 baseline; mirrors Home/Friends feed scroll into an in-controller transparent proxy while preserving c16 route, fullscreen, IM/comment, authorization, native-badge, and Liquid Glass behavior.
 Maintainer: xyy

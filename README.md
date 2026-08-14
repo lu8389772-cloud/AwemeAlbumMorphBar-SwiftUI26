@@ -1,18 +1,24 @@
-# AwemeLiquidBar 1.0.56c17 — Native Minimize Proxy Probe
+# AwemeLiquidBar 1.0.56c18 — Direct Native Minimize Probe
 
-Focused test build based directly on the validated **1.0.56c16 auth38** project.
+Focused A/B test based on the validated **1.0.56c16 auth38** feature set, carrying forward only the c17 diagnostics.
 
 ## Only new runtime experiment
 
-- Adds **原生滚动收缩（实验）** to the bottom-position card; enabled by default in this test build.
+- Keeps **原生滚动收缩（实验）** enabled by default for this probe.
 - Uses the public iOS 26+ `UITabBarController.tabBarMinimizeBehavior = .onScrollDown` path.
-- Registers a transparent proxy collection view, already owned by the real LiquidBar `UITabBarController`, through `UIViewController.setContentScrollView(_:for: .bottom)`.
-- Does **not** attach or reparent Douyin's real feed scroll view to the overlay controller. The existing Home/Friends feed pan recognizer is only observed; its vertical delta is mirrored into the transparent proxy.
-- Does **not** install another pan recognizer and does not use the retired manual scale/translation collapse path.
-- Disabling the switch restores `.never` and removes the source-pan target.
+- Removes c17's synthetic proxy-offset mirroring.
+- The active Home/Friends child controller now calls `setContentScrollView(realAWEFeedTableView, for: .bottom)` with Douyin's actual finger-driven feed scroll view.
+- The real `AWEFeedTableView` stays in Douyin's hierarchy/window; it is never reparented, resized, or given a second recognizer.
+- Its existing pan recognizer gets only a begin/end logging target. No content offset, frame, scale, or transform is changed.
+- Turning the experiment OFF restores `.never` and unregisters the direct source.
+- The retired manual whole-window collapse recognizer remains hard-disabled.
+
+## Why this build exists
+
+c17 proved Home/Friends gesture detection and proxy offset mirroring were correct while the visible tab-bar frame never moved. c18 changes one architectural variable: UIKit observes the **real user-driven feed scroll view** instead of a programmatically scrolled proxy.
 
 ## Intentionally unchanged
 
-All c16 authorization (38 users), custom two-account bottom-bar release, fullscreen/clean-screen, IM/comment routing, article/avatar fixes, badges, download/highest-quality playback, top group, top/right button materials and tint logic are unchanged.
+Authorization (38 unique users), the two-account bottom-bar release option, fullscreen/clean-screen, IM/comment routing, article/avatar fixes, badges, download/highest-quality playback, top group, and top/right glass material logic are unchanged.
 
-The broader Liquid Glass material work (regular-vs-clear audit, shared glass containers, system transparency/tint adaptation, quieter top/right edges) is **not** mixed into this probe.
+The broader Liquid Glass material/adaptive-tint work is not mixed into this probe.

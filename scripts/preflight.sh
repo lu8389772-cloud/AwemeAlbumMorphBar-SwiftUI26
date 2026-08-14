@@ -16,11 +16,11 @@ build_script = Path('build_no_install.sh').read_text()
 makefile = Path('Makefile').read_text()
 
 checks = [
-    ('control', control, 'Version: 1.0.56c17'),
-    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c17-Xcode27-rootless'),
-    ('build', build_script, "EXPECTED_VERSION='1.0.56c17'"),
-    ('build', build_script, 'LiquidBar 设置 · 1.0.56c17'),
-    ('build', build_script, 'AwemeLiquidBar_1.0.56c17_interaction.log'),
+    ('control', control, 'Version: 1.0.56c18'),
+    ('workflow', workflow, 'AwemeLiquidBar-1.0.56c18-Xcode27-rootless'),
+    ('build', build_script, "EXPECTED_VERSION='1.0.56c18'"),
+    ('build', build_script, 'LiquidBar 设置 · 1.0.56c18'),
+    ('build', build_script, 'AwemeLiquidBar_1.0.56c18_interaction.log'),
     ('makefile', makefile, 'UIKit QuartzCore Foundation SwiftUI Photos'),
 ]
 for name, text, token in checks:
@@ -34,16 +34,16 @@ for token in [
     'setResolvedInterfaceStyleRaw', 'setVerticalOffset(_ offset: CGFloat)',
     '@objc(setVisibleFraction:animated:)', 'visibilityMaskView',
     'if result.count > 5', 'Array(visibleItemIdentifiers.prefix(5))',
-    'setContentScrollView(collectionView, for: .bottom)',
+    'setContentScrollView(scrollView, for: .bottom)',
     'tabBarMinimizeBehavior = enabled ? .onScrollDown : .never',
     '@objc(setNativeMinimizeEnabled:)', '@objc(clearNativeMinimizeSourceScrollView)',
-    'NATIVE_MINIMIZE_PAN_BEGIN', 'NATIVE_MINIMIZE_PAN_END',
+    'NATIVE_MINIMIZE_DIRECT_BIND', 'NATIVE_MINIMIZE_DIRECT_PAN_BEGIN', 'NATIVE_MINIMIZE_DIRECT_PAN_END',
 ]:
     if token not in swift:
         raise SystemExit(f'missing Swift token: {token}')
 
 required_objc = [
-    'AwemeLiquidBar 1.0.56c17', 'LiquidBar 设置 · 1.0.56c17',
+    'AwemeLiquidBar 1.0.56c18', 'LiquidBar 设置 · 1.0.56c18',
     '#import <Photos/Photos.h>',
     'AWECurrentAwemeModelForStack', 'AWERobustVideoURLForAweme',
     'AWEDownloadCurrentImageForAweme', 'AWEDownloadAllImagesForAweme',
@@ -121,7 +121,7 @@ for snippet in [
     if snippet not in objc:
         raise SystemExit('floating download disable guard missing')
 
-# Logos structural audit. 1.0.56c17 intentionally has one custom group for the
+# Logos structural audit. 1.0.56c18 intentionally has one custom group for the
 # runtime-resolved Swift CommentInputContainerView; all other hooks are ungrouped.
 hooks = []
 groups = []
@@ -142,7 +142,7 @@ dups = [name for name, count in Counter(hooks).items() if count > 1]
 if dups:
     raise SystemExit('duplicate Logos hook classes: ' + ', '.join(dups))
 
-# 1.0.56c17: hard max-five + real Douyin Settings-page injection.
+# 1.0.56c18: hard max-five + real Douyin Settings-page injection.
 for required in [
     '%hook AWESettingsViewModel',
     '- (NSArray *)sectionDataArray',
@@ -204,7 +204,7 @@ if len(rows) != 38:
     raise SystemExit(f'auth digest row count is {len(rows)}, expected 38')
 
 
-# 1.0.56c17 targeted route/feed regressions.
+# 1.0.56c18 targeted route/feed regressions.
 for required in [
     'AWECurrentHomeFeedSurfaceVisible',
     'gAWEHomeFeedTopContainer',
@@ -232,7 +232,7 @@ for required in [
     'AWESchedulePostCommentBottomTransparencyRecovery',
 ]:
     if required not in objc:
-        raise SystemExit('missing 1.0.56c17 targeted invariant: ' + required)
+        raise SystemExit('missing 1.0.56c18 targeted invariant: ' + required)
 
 home_start = objc.index('static BOOL AWECurrentHomeFeedSurfaceVisible(void)')
 home_end = objc.index('static BOOL AWECurrentRouteSuppressesBar(void)', home_start)
@@ -262,7 +262,7 @@ for token in [
 
 # Clean-screen v2 must not use a permanent polling timer. Short dispatch_after
 # passes are expected, but there should be no NSTimer in the clean subsystem.
-clean_start = objc.index('#pragma mark - 1.0.56c17 clean screen v2 (display-only, persistent across reuse)')
+clean_start = objc.index('#pragma mark - 1.0.56c18 clean screen v2 (display-only, persistent across reuse)')
 clean_end = objc.index('static UIMenu *AWEAvatarBaseMenuForStack', clean_start)
 clean_chunk = objc[clean_start:clean_end]
 if 'scheduledTimerWithTimeInterval' in clean_chunk or 'NSTimer' in clean_chunk:
@@ -271,7 +271,7 @@ for forbidden_clean in ['smallImage =', 'smallControl =', 'BOOL text = [view isK
     if forbidden_clean in clean_chunk:
         raise SystemExit('broad clean-screen heuristic remains: ' + forbidden_clean)
 
-# 1.0.56c17 performance invariants. These are intentionally narrow so future
+# 1.0.56c18 performance invariants. These are intentionally narrow so future
 # feature work cannot silently reintroduce the hottest process-wide paths.
 if re.search(r'^%hook\s+UIView\s*$', objc, re.M):
     raise SystemExit('process-wide %hook UIView was reintroduced')
@@ -296,7 +296,7 @@ for forbidden_reason in [
         raise SystemExit('high-frequency clean reapply trigger remains: ' + forbidden_reason)
 
 
-# 1.0.56c17 true bottom-bar ownership-release invariants.
+# 1.0.56c18 true bottom-bar ownership-release invariants.
 for needle in [
     'AwemeLiquidBarBottomBarDisplayEnabledV1',
     '@"显示液态底栏"',
@@ -308,9 +308,9 @@ for needle in [
     '@selector(bottomBarDisplaySwitchChanged:)',
 ]:
     if needle not in objc:
-        raise SystemExit(f'missing 1.0.56c17 bottom-bar release invariant: {needle}')
+        raise SystemExit(f'missing 1.0.56c18 bottom-bar release invariant: {needle}')
 
-# 1.0.56c17: clean screen must block show-at-source rather than reveal then suppress.
+# 1.0.56c18: clean screen must block show-at-source rather than reveal then suppress.
 for required in [
     'hard no-show gate for clean screen',
     'install.clean-guard',
@@ -318,7 +318,7 @@ for required in [
     'if (gAWEStableCleanScreenEnabled) {\n        AWEStableCleanEnforceBottomBarSuppression();\n        return YES;\n    }',
 ]:
     if required not in objc:
-        raise SystemExit('missing 1.0.56c17 clean no-show invariant: ' + required)
+        raise SystemExit('missing 1.0.56c18 clean no-show invariant: ' + required)
 clean_guard_start = objc.index('hard no-show gate for clean screen')
 clean_guard_end = objc.index('fraction = MIN(MAX(fraction, 0.0), 1.0);', clean_guard_start)
 clean_guard = objc[clean_guard_start:clean_guard_end]
@@ -337,7 +337,7 @@ for left, right in pairs:
 if len(decoded) != 38 or len(set(decoded)) != 38:
     raise SystemExit(f'auth38 uniqueness failed: rows={len(decoded)} unique={len(set(decoded))}')
 
-# 1.0.56c17 native minimize probe: public UIKit behavior + proxy mirroring only.
+# 1.0.56c18 direct native minimize probe: public UIKit behavior + real source only.
 for required in [
     'AwemeLiquidBarNativeMinimizeProbeV1',
     'AWEAlbumMorphNativeMinimizeProbeEnabled',
@@ -349,21 +349,33 @@ for required in [
     'AWEAlbumMorphCollapseEnabled(void)',
 ]:
     if required not in objc:
-        raise SystemExit('missing c17 native-minimize invariant: ' + required)
-# The retired manual whole-window recognizer remains hard-disabled. The c17
-# switch must not resurrect it.
+        raise SystemExit('missing c18 direct-native invariant: ' + required)
+for required in [
+    'setContentScrollView(scrollView, for: .bottom)',
+    'setContentScrollView(nil, for: .bottom)',
+    'NATIVE_MINIMIZE_DIRECT_BIND',
+    'NATIVE_MINIMIZE_DIRECT_PAN_BEGIN',
+    'NATIVE_MINIMIZE_DIRECT_PAN_END',
+]:
+    if required not in swift:
+        raise SystemExit('missing c18 direct Swift invariant: ' + required)
+for forbidden in [
+    'syntheticScrollOffsetY',
+    'collectionView.setContentOffset(',
+    'NATIVE_MINIMIZE_OBSERVER',
+]:
+    if forbidden in swift:
+        raise SystemExit('c17 proxy mirroring leaked into c18: ' + forbidden)
 handler_start = objc.index('- (void)collapseSwitchChanged:(UISwitch *)sender')
 handler_end = objc.index('- (void)doubleTapSplitSliderChanged:', handler_start)
 handler = objc[handler_start:handler_end]
 for forbidden in ['AWEInstallAlbumMorphCollapseGesture', 'AWEExpandAlbumMorphBarWithoutAnimation', 'kAWEAlbumMorphCollapseEnabledDefaultsKey']:
     if forbidden in handler:
-        raise SystemExit('c17 switch accidentally routes to old manual collapse: ' + forbidden)
-# Source-feed hook may add a target to Douyin's existing pan recognizer, but may
-# not allocate a second UIPanGestureRecognizer for the native probe.
+        raise SystemExit('c18 switch accidentally routes to old manual collapse: ' + forbidden)
 probe_start = objc.index('static void AWETryBindAlbumMorphNativeMinimizeSource')
 probe_end = objc.index('static BOOL AWEForwardTopActionOwner', probe_start)
 if 'initWithTarget:' in objc[probe_start:probe_end]:
-    raise SystemExit('c17 native probe installs a new recognizer')
+    raise SystemExit('c18 direct probe installs a new recognizer')
 
-print('AwemeLiquidBar 1.0.56c17 native-minimize-proxy/auth38 preflight passed')
+print('AwemeLiquidBar 1.0.56c18 direct-native-minimize/auth38 preflight passed')
 PY2

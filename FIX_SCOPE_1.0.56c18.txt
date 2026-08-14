@@ -1,0 +1,15 @@
+AwemeLiquidBar 1.0.56c18 direct native minimize probe
+
+Base: 1.0.56c16 auth38 behavior plus c17 diagnostics. No unrelated runtime changes.
+
+A/B from c17:
+1. Remove synthetic proxy contentOffset mirroring.
+2. Keep the real AWEFeedTableView completely owned by Douyin.
+3. Register that exact real scroll view directly on the active LiquidBar child controller via setContentScrollView(_:for: .bottom).
+4. Keep tabBarMinimizeBehavior=.onScrollDown while the experiment is ON.
+5. Use the source's existing pan recognizer only for begin/end logs; no second recognizer and no UI mutation.
+6. OFF restores .never and clears the direct registration.
+
+Decision rule:
+- Works: keep direct binding and retire c17 proxy bridge.
+- DIRECT_BIND + DIRECT_PAN but unchanged tabBar.frame: treat the overlay/controller ownership boundary as the likely system limitation before spending more builds on gesture variants.
